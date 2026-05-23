@@ -4,7 +4,7 @@ use egui::Align;
 use once_cell::sync::OnceCell;
 
 use crate::{
-    core::{gui, Hachimi, Interceptor},
+    core::{Hachimi, Interceptor},
     il2cpp::{
         self,
         types::{
@@ -310,7 +310,7 @@ unsafe extern "C" fn gui_show_notification(message: *const c_char) -> bool {
         let Ok(message) = CStr::from_ptr(message).to_str() else {
             return false;
         };
-        gui::enqueue_plugin_notification(message.to_owned());
+        super::notification::enqueue(message.to_owned());
         true
     }
 }

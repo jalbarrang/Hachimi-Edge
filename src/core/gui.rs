@@ -120,16 +120,6 @@ const PIXELS_PER_POINT_RATIO: f32 = 3.0 / 1080.0;
 static INSTANCE: OnceCell<Mutex<Gui>> = OnceCell::new();
 static IS_CONSUMING_INPUT: AtomicBool = AtomicBool::new(false);
 static DISABLED_GAME_UIS: Lazy<Mutex<FnvHashSet<SendPtr>>> = Lazy::new(|| Mutex::new(FnvHashSet::default()));
-static PLUGIN_NOTIFICATIONS: Lazy<Mutex<Vec<String>>> = Lazy::new(|| Mutex::new(Vec::new()));
-
-pub fn enqueue_plugin_notification(message: String) {
-    PLUGIN_NOTIFICATIONS.lock().expect("lock poisoned").push(message);
-}
-
-fn drain_plugin_notifications() -> Vec<String> {
-    let mut notifications = PLUGIN_NOTIFICATIONS.lock().expect("lock poisoned");
-    std::mem::take(&mut *notifications)
-}
 
 use std::sync::atomic::Ordering;
 
@@ -1024,7 +1014,7 @@ impl Gui {
                 });
         }
 
-        for message in drain_plugin_notifications() {
+        for message in super::plugin::notification::drain() {
             self.show_notification(&message);
         }
 

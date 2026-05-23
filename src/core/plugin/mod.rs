@@ -1,5 +1,6 @@
 pub mod api;
 pub mod menu;
+pub mod notification;
 pub mod overlay;
 pub mod types;
 
