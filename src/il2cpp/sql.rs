@@ -681,21 +681,30 @@ mod tests {
 
     #[test]
     fn column_is_select_idx() {
-        let c = Column { select_idx: Some(2), ..Default::default() };
+        let c = Column {
+            select_idx: Some(2),
+            ..Default::default()
+        };
         assert!(c.is_select_idx(2));
         assert!(!c.is_select_idx(1));
     }
 
     #[test]
     fn column_is_param_idx() {
-        let c = Column { param_idx: Some(1), ..Default::default() };
+        let c = Column {
+            param_idx: Some(1),
+            ..Default::default()
+        };
         assert!(c.is_param_idx(1));
         assert!(!c.is_param_idx(0));
     }
 
     #[test]
     fn column_try_bind_int() {
-        let mut c = Column { param_idx: Some(1), ..Default::default() };
+        let mut c = Column {
+            param_idx: Some(1),
+            ..Default::default()
+        };
         c.try_bind_int(1, 42);
         assert_eq!(c.int_value, Some(42));
         c.try_bind_int(2, 99); // wrong index, should not change

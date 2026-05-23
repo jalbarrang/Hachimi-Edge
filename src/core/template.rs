@@ -288,10 +288,7 @@ mod tests {
     #[test]
     fn multiple_filters() {
         let p = make_parser();
-        assert_eq!(
-            p.eval("$(upper 'a') and $(add 10 20)"),
-            "A and 30"
-        );
+        assert_eq!(p.eval("$(upper 'a') and $(add 10 20)"), "A and 30");
     }
 
     #[test]
@@ -339,7 +336,11 @@ mod tests {
         struct MyCtx;
         impl Context for MyCtx {
             fn on_filter_eval(&mut self, name: &str, _args: &[Token]) -> Option<String> {
-                if name == "upper" { Some("CONTEXT_WINS".into()) } else { None }
+                if name == "upper" {
+                    Some("CONTEXT_WINS".into())
+                } else {
+                    None
+                }
             }
         }
         let p = make_parser();

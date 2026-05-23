@@ -1,4 +1,5 @@
 pub mod api;
+pub mod menu;
 pub mod overlay;
 pub mod types;
 

@@ -1,6 +1,5 @@
 use std::{
     borrow::Cow,
-    collections::HashMap,
     ops::RangeInclusive,
     os::raw::c_void,
     panic::{self, AssertUnwindSafe},
@@ -52,8 +51,8 @@ use super::{
     hachimi::{self, Language, REPO_PATH, WEBSITE_URL},
     http::AsyncRequest,
     plugin::{
+        menu::{get_plugin_menu_icon, get_plugin_menu_items, get_plugin_menu_sections},
         overlay,
-        types::{GuiMenuCallback as PluginMenuCallback, GuiMenuSectionCallback as PluginMenuSectionCallback},
     },
     tl_repo::{self, RepoInfo},
     utils::{self, get_localized_string, SendPtr},
@@ -121,105 +120,10 @@ const PIXELS_PER_POINT_RATIO: f32 = 3.0 / 1080.0;
 static INSTANCE: OnceCell<Mutex<Gui>> = OnceCell::new();
 static IS_CONSUMING_INPUT: AtomicBool = AtomicBool::new(false);
 static DISABLED_GAME_UIS: Lazy<Mutex<FnvHashSet<SendPtr>>> = Lazy::new(|| Mutex::new(FnvHashSet::default()));
-static PLUGIN_MENU_ITEMS: Lazy<Mutex<Vec<PluginMenuItem>>> = Lazy::new(|| Mutex::new(Vec::new()));
-static PLUGIN_MENU_SECTIONS: Lazy<Mutex<Vec<PluginMenuSection>>> = Lazy::new(|| Mutex::new(Vec::new()));
-static PLUGIN_MENU_ICONS: Lazy<Mutex<HashMap<String, PluginMenuIcon>>> = Lazy::new(|| Mutex::new(HashMap::new()));
 static PLUGIN_NOTIFICATIONS: Lazy<Mutex<Vec<String>>> = Lazy::new(|| Mutex::new(Vec::new()));
-
-#[derive(Clone)]
-struct PluginMenuItem {
-    label: String,
-    callback: Option<PluginMenuCallback>,
-    userdata: usize,
-}
-
-#[derive(Clone)]
-struct PluginMenuIcon {
-    uri: String,
-    bytes: Arc<[u8]>,
-}
-
-#[derive(Clone)]
-struct PluginMenuSection {
-    title: Option<String>,
-    icon: Option<PluginMenuIcon>,
-    callback: PluginMenuSectionCallback,
-    userdata: usize,
-}
-
-pub fn register_plugin_menu_item(label: String, callback: Option<PluginMenuCallback>, userdata: *mut c_void) {
-    PLUGIN_MENU_ITEMS.lock().expect("lock poisoned").push(PluginMenuItem {
-        label,
-        callback,
-        userdata: userdata as usize,
-    });
-}
-
-pub fn register_plugin_menu_section(callback: PluginMenuSectionCallback, userdata: *mut c_void) {
-    PLUGIN_MENU_SECTIONS
-        .lock()
-        .expect("lock poisoned")
-        .push(PluginMenuSection {
-            title: None,
-            icon: None,
-            callback,
-            userdata: userdata as usize,
-        });
-}
-
-pub fn register_plugin_menu_section_with_icon(
-    title: String,
-    uri: String,
-    bytes: Vec<u8>,
-    callback: PluginMenuSectionCallback,
-    userdata: *mut c_void,
-) -> bool {
-    if title.is_empty() || uri.is_empty() || bytes.is_empty() {
-        return false;
-    }
-    PLUGIN_MENU_SECTIONS
-        .lock()
-        .expect("lock poisoned")
-        .push(PluginMenuSection {
-            title: Some(title),
-            icon: Some(PluginMenuIcon {
-                uri,
-                bytes: bytes.into(),
-            }),
-            callback,
-            userdata: userdata as usize,
-        });
-    true
-}
-
-pub fn register_plugin_menu_icon(label: String, uri: String, bytes: Vec<u8>) -> bool {
-    if label.is_empty() || uri.is_empty() || bytes.is_empty() {
-        return false;
-    }
-    PLUGIN_MENU_ICONS.lock().expect("lock poisoned").insert(
-        label,
-        PluginMenuIcon {
-            uri,
-            bytes: bytes.into(),
-        },
-    );
-    true
-}
 
 pub fn enqueue_plugin_notification(message: String) {
     PLUGIN_NOTIFICATIONS.lock().expect("lock poisoned").push(message);
-}
-
-fn get_plugin_menu_items() -> Vec<PluginMenuItem> {
-    PLUGIN_MENU_ITEMS.lock().expect("lock poisoned").clone()
-}
-
-fn get_plugin_menu_sections() -> Vec<PluginMenuSection> {
-    PLUGIN_MENU_SECTIONS.lock().expect("lock poisoned").clone()
-}
-
-fn get_plugin_menu_icon(label: &str) -> Option<PluginMenuIcon> {
-    PLUGIN_MENU_ICONS.lock().expect("lock poisoned").get(label).cloned()
 }
 
 fn drain_plugin_notifications() -> Vec<String> {

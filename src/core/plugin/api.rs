@@ -14,7 +14,10 @@ use crate::{
     },
 };
 
-use super::types::{GuiMenuCallback, GuiMenuSectionCallback, GuiUiCallback, HachimiInitFn, InitResult};
+use super::{
+    menu,
+    types::{GuiMenuCallback, GuiMenuSectionCallback, GuiUiCallback, HachimiInitFn, InitResult},
+};
 
 const VERSION: i32 = 3;
 
@@ -282,7 +285,7 @@ unsafe extern "C" fn gui_register_menu_item(
         let Ok(label) = CStr::from_ptr(label).to_str() else {
             return false;
         };
-        gui::register_plugin_menu_item(label.to_owned(), callback, userdata);
+        menu::register_plugin_menu_item(label.to_owned(), callback, userdata);
         true
     }
 }
@@ -294,7 +297,7 @@ unsafe extern "C" fn gui_register_menu_section(
     let Some(callback) = callback else {
         return false;
     };
-    gui::register_plugin_menu_section(callback, userdata);
+    menu::register_plugin_menu_section(callback, userdata);
     true
 }
 
@@ -548,7 +551,7 @@ unsafe extern "C" fn gui_register_menu_item_icon(
             uri.to_owned()
         };
         let bytes = std::slice::from_raw_parts(icon_ptr, icon_len);
-        gui::register_plugin_menu_icon(label.to_owned(), uri, bytes.to_vec())
+        menu::register_plugin_menu_icon(label.to_owned(), uri, bytes.to_vec())
     }
 }
 
@@ -580,7 +583,7 @@ unsafe extern "C" fn gui_register_menu_section_with_icon(
             uri.to_owned()
         };
         let bytes = std::slice::from_raw_parts(icon_ptr, icon_len);
-        gui::register_plugin_menu_section_with_icon(title.to_owned(), uri, bytes.to_vec(), callback, userdata)
+        menu::register_plugin_menu_section_with_icon(title.to_owned(), uri, bytes.to_vec(), callback, userdata)
     }
 }
 
