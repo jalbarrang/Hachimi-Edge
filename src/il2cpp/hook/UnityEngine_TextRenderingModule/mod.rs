@@ -1,5 +1,5 @@
-pub mod TextGenerator;
 pub mod Font;
+pub mod TextGenerator;
 
 #[repr(i32)]
 pub enum TextAnchor {
@@ -11,7 +11,7 @@ pub enum TextAnchor {
     MiddleRight,
     LowerLeft,
     LowerCenter,
-    LowerRight
+    LowerRight,
 }
 
 pub fn init() {

@@ -1,31 +1,48 @@
+use super::{ButtonCommon, DialogCommon, DialogManager, MasterDataUtil};
 use crate::{
-    core::{Hachimi, game::Region, utils::{mul_int, str_visual_len}},
-    il2cpp::{ext::{Il2CppStringExt, StringExt}, hook::{UnityEngine_CoreModule::{Component, Object, UnityAction}, UnityEngine_UI::{EventSystem, Text}}, sql::{self, TextDataQuery}, symbols::{create_delegate, get_field_from_name, get_field_object_value, get_method_addr}, types::*}
+    core::{
+        game::Region,
+        utils::{mul_int, str_visual_len},
+        Hachimi,
+    },
+    il2cpp::{
+        ext::{Il2CppStringExt, StringExt},
+        hook::{
+            UnityEngine_CoreModule::{Component, Object, UnityAction},
+            UnityEngine_UI::{EventSystem, Text},
+        },
+        sql::{self, TextDataQuery},
+        symbols::{create_delegate, get_field_from_name, get_field_object_value, get_method_addr},
+        types::*,
+    },
 };
+use fnv::FnvHashMap;
 use once_cell::sync::Lazy;
 use std::sync::Mutex;
-use fnv::FnvHashMap;
-use super::{ButtonCommon, DialogCommon, DialogManager, MasterDataUtil};
 
-static SKILL_TEXT_CACHE: Lazy<Mutex<FnvHashMap<i32, (String, String)>>> = Lazy::new(|| Mutex::default());
+static SKILL_TEXT_CACHE: Lazy<Mutex<FnvHashMap<i32, (String, String)>>> = Lazy::new(Mutex::default);
 
 // SkillListItem
 static mut NAMETEXT_FIELD: *mut FieldInfo = 0 as _;
 pub fn get__nameText(this: *mut Il2CppObject) -> *mut Il2CppObject {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     get_field_object_value(this, unsafe { NAMETEXT_FIELD })
 }
 static mut DESCTEXT_FIELD: *mut FieldInfo = 0 as _;
 pub fn get__descText(this: *mut Il2CppObject) -> *mut Il2CppObject {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     get_field_object_value(this, unsafe { DESCTEXT_FIELD })
 }
 
 static mut _BGBUTTON_FIELD: *mut FieldInfo = 0 as _;
 pub fn get__bgButton(this: *mut Il2CppObject) -> *mut Il2CppObject {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     get_field_object_value(this, unsafe { _BGBUTTON_FIELD })
 }
 
 static mut INFO_FIELD: *mut FieldInfo = 0 as _;
 pub fn get_info(this: *mut Il2CppObject) -> *mut Il2CppObject {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     get_field_object_value(this, unsafe { INFO_FIELD })
 }
 
@@ -70,7 +87,7 @@ fn UpdateItemCommon(this: *mut Il2CppObject, skill_info: *mut Il2CppObject, orig
         txt_cfg.name = Some(sql::TextFormatting {
             line_len: name_len,
             line_count: name_lines,
-            font_size: Text::get_fontSize(name)
+            font_size: Text::get_fontSize(name),
         });
     }
 
@@ -84,7 +101,7 @@ fn UpdateItemCommon(this: *mut Il2CppObject, skill_info: *mut Il2CppObject, orig
         txt_cfg.desc = Some(sql::TextFormatting {
             line_len: desc_len,
             line_count: 4,
-            font_size: Text::get_fontSize(desc)
+            font_size: Text::get_fontSize(desc),
         });
     }
 
@@ -93,7 +110,7 @@ fn UpdateItemCommon(this: *mut Il2CppObject, skill_info: *mut Il2CppObject, orig
     if txt_cfg.is_localized {
         if !name.is_null() {
             Text::set_horizontalOverflow(name, 1);
-            if txt_cfg.name.map(|opts| opts.line_count).unwrap_or(1) > 1 {
+            if txt_cfg.name.map_or(1, |opts| opts.line_count) > 1 {
                 Text::set_verticalOverflow(name, 1);
             }
         }
@@ -103,14 +120,33 @@ fn UpdateItemCommon(this: *mut Il2CppObject, skill_info: *mut Il2CppObject, orig
     }
 }
 
-type UpdateItemJpFn = extern "C" fn(this: *mut Il2CppObject, skill_info: *mut Il2CppObject, is_plate_effect_enable: bool, adjuster_data: *mut Il2CppObject, resource_hash: i32);
-extern "C" fn UpdateItemJp(this: *mut Il2CppObject, skill_info: *mut Il2CppObject, is_plate_effect_enable: bool, adjuster_data: *mut Il2CppObject, resource_hash: i32) {
+type UpdateItemJpFn = extern "C" fn(
+    this: *mut Il2CppObject,
+    skill_info: *mut Il2CppObject,
+    is_plate_effect_enable: bool,
+    adjuster_data: *mut Il2CppObject,
+    resource_hash: i32,
+);
+extern "C" fn UpdateItemJp(
+    this: *mut Il2CppObject,
+    skill_info: *mut Il2CppObject,
+    is_plate_effect_enable: bool,
+    adjuster_data: *mut Il2CppObject,
+    resource_hash: i32,
+) {
     UpdateItemCommon(this, skill_info, || {
-        get_orig_fn!(UpdateItemJp, UpdateItemJpFn)(this, skill_info, is_plate_effect_enable, adjuster_data, resource_hash);
+        get_orig_fn!(UpdateItemJp, UpdateItemJpFn)(
+            this,
+            skill_info,
+            is_plate_effect_enable,
+            adjuster_data,
+            resource_hash,
+        );
     });
 }
 
-type UpdateItemOtherFn = extern "C" fn(this: *mut Il2CppObject, skill_info: *mut Il2CppObject, is_plate_effect_enable: bool);
+type UpdateItemOtherFn =
+    extern "C" fn(this: *mut Il2CppObject, skill_info: *mut Il2CppObject, is_plate_effect_enable: bool);
 extern "C" fn UpdateItemOther(this: *mut Il2CppObject, skill_info: *mut Il2CppObject, is_plate_effect_enable: bool) {
     UpdateItemCommon(this, skill_info, || {
         get_orig_fn!(UpdateItemOther, UpdateItemOtherFn)(this, skill_info, is_plate_effect_enable);
@@ -118,16 +154,25 @@ extern "C" fn UpdateItemOther(this: *mut Il2CppObject, skill_info: *mut Il2CppOb
 }
 
 fn get_skill_text(skill_id: i32) -> (String, String) {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     let to_s = |opt_ptr: Option<*mut Il2CppString>| unsafe {
         opt_ptr.and_then(|p| p.as_ref()).map(|s| s.as_utf16str().to_string())
     };
 
-    let current_name = to_s(TextDataQuery::get_skill_name(skill_id)).unwrap_or_else(|| to_s(Some(MasterDataUtil::GetSkillName(skill_id))).unwrap());
-    let current_desc = to_s(TextDataQuery::get_skill_desc(skill_id)).unwrap_or_else(|| to_s(
-        Some(Hachimi::instance().skill_info.load().get_desc(skill_id).to_il2cpp_string())
-    ).unwrap());
+    let current_name = to_s(TextDataQuery::get_skill_name(skill_id))
+        .unwrap_or_else(|| to_s(Some(MasterDataUtil::GetSkillName(skill_id))).expect("unexpected failure"));
+    let current_desc = to_s(TextDataQuery::get_skill_desc(skill_id)).unwrap_or_else(|| {
+        to_s(Some(
+            Hachimi::instance()
+                .skill_info
+                .load()
+                .get_desc(skill_id)
+                .to_il2cpp_string(),
+        ))
+        .expect("unexpected failure")
+    });
 
-    let mut cache = SKILL_TEXT_CACHE.lock().unwrap();
+    let mut cache = SKILL_TEXT_CACHE.lock().expect("lock poisoned");
 
     if let Some((cached_name, cached_desc)) = cache.get(&skill_id) {
         if cached_name == &current_name && cached_desc == &current_desc {
@@ -151,16 +196,17 @@ extern "C" fn SetupOnClickSkillButton(this: *mut Il2CppObject, info: *mut Il2Cpp
     Object::set_name(button_obj, format!("HachimiSkill_{}", skill_id).to_il2cpp_string());
     get_skill_text(skill_id);
 
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     let delegate = create_delegate(unsafe { UnityAction::UNITYACTION_CLASS }, 0, || {
         let current_ev = EventSystem::get_current();
         let clicked_obj = EventSystem::get_currentSelectedGameObject(current_ev);
         let object_name = Object::get_name(clicked_obj);
+        // SAFETY: FFI / raw pointer operation required by IL2CPP interop
         let name_str = unsafe { (*object_name).as_utf16str() }.to_string();
 
-        if name_str.starts_with("HachimiSkill_") {
-            let id_str = &name_str["HachimiSkill_".len()..];
+        if let Some(id_str) = name_str.strip_prefix("HachimiSkill_") {
             if let Ok(id) = id_str.parse::<i32>() {
-                if let Some(data) = SKILL_TEXT_CACHE.lock().unwrap().get(&id) {
+                if let Some(data) = SKILL_TEXT_CACHE.lock().expect("lock poisoned").get(&id) {
                     let (name, desc) = data;
                     let typ = if str_visual_len(desc.as_str()) <= 250 {
                         DialogCommon::FormType::SMALL_ONE_BUTTON
@@ -174,7 +220,7 @@ extern "C" fn SetupOnClickSkillButton(this: *mut Il2CppObject, info: *mut Il2Cpp
             }
         }
     });
-    ButtonCommon::SetOnClick(button, delegate.unwrap());
+    ButtonCommon::SetOnClick(button, delegate.expect("unexpected failure"));
 }
 
 pub fn init(umamusume: *const Il2CppImage) {
@@ -184,8 +230,7 @@ pub fn init(umamusume: *const Il2CppImage) {
     if Hachimi::instance().game.region == Region::Japan {
         let UpdateItem_addr = get_method_addr(PartsSingleModeSkillListItem, c"UpdateItem", 4);
         new_hook!(UpdateItem_addr, UpdateItemJp);
-    }
-    else {
+    } else {
         let UpdateItem_addr = get_method_addr(PartsSingleModeSkillListItem, c"UpdateItem", 2);
         new_hook!(UpdateItem_addr, UpdateItemOther);
     }
@@ -193,6 +238,7 @@ pub fn init(umamusume: *const Il2CppImage) {
     let SetupOnClickSkillButton_addr = get_method_addr(PartsSingleModeSkillListItem, c"SetupOnClickSkillButton", 1);
     new_hook!(SetupOnClickSkillButton_addr, SetupOnClickSkillButton);
 
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe {
         // PartsSingleModeSkillListItem
         NAMETEXT_FIELD = get_field_from_name(PartsSingleModeSkillListItem, c"_nameText");

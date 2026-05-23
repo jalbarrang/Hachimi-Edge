@@ -1,11 +1,24 @@
 use fnv::FnvHashSet;
 use widestring::Utf16Str;
 
-use crate::{il2cpp::{api::{il2cpp_class_get_type, il2cpp_type_get_object}, hook::{Plugins::AnimateToUnity::AnRoot, UnityEngine_CoreModule::{GameObject, Object}}, symbols::{IList, get_method_addr}, types::*, ext::Il2CppStringExt}, core::{hachimi::AssetInfo, Hachimi}};
 use super::{TweenAnimationTimelineData, TweenAnimationTimelineSheetData};
+use crate::{
+    core::{hachimi::AssetInfo, Hachimi},
+    il2cpp::{
+        api::{il2cpp_class_get_type, il2cpp_type_get_object},
+        ext::Il2CppStringExt,
+        hook::{
+            Plugins::AnimateToUnity::AnRoot,
+            UnityEngine_CoreModule::{GameObject, Object},
+        },
+        symbols::{get_method_addr, IList},
+        types::*,
+    },
+};
 
 static mut TYPE_OBJECT: *mut Il2CppObject = 0 as _;
 pub fn type_object() -> *mut Il2CppObject {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe { TYPE_OBJECT }
 }
 
@@ -33,6 +46,7 @@ pub fn on_LoadAsset(_bundle: *mut Il2CppObject, this: *mut Il2CppObject, _name: 
             continue;
         }
 
+        // SAFETY: FFI / raw pointer operation required by IL2CPP interop
         let prefab_name = unsafe { Object::get_name(a2u_prefab).as_ref() }
             .map(|s| s.as_utf16str().to_string())
             .unwrap_or_default();
@@ -53,6 +67,7 @@ pub fn on_LoadAsset(_bundle: *mut Il2CppObject, this: *mut Il2CppObject, _name: 
 pub fn init(umamusume: *const Il2CppImage) {
     get_class_or_return!(umamusume, Gallop, TweenAnimationTimelineComponent);
 
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe {
         TYPE_OBJECT = il2cpp_type_get_object(il2cpp_class_get_type(TweenAnimationTimelineComponent));
         GETTIMELINEDATA_ADDR = get_method_addr(TweenAnimationTimelineComponent, c"GetTimelineData", 0);

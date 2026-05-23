@@ -6,6 +6,7 @@ use crate::il2cpp::{
 
 static mut SKILL_ITEM_FIELD: *mut FieldInfo = 0 as _;
 pub fn get_skill_item(this: *mut Il2CppObject) -> *mut Il2CppObject {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     get_field_object_value(this, unsafe { SKILL_ITEM_FIELD })
 }
 
@@ -24,6 +25,7 @@ pub fn init(umamusume: *const Il2CppImage) {
     let setup_addr = get_method_addr(PartsRaceAnalyzeRaceEventListItem, c"Setup", 1);
     new_hook!(setup_addr, Setup);
 
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe {
         SKILL_ITEM_FIELD = get_field_from_name(PartsRaceAnalyzeRaceEventListItem, c"_skillItem");
     }

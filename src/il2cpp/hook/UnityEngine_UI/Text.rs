@@ -35,7 +35,8 @@ impl_addr_wrapper_fn!(get_preferredHeight, GET_PREFERREDHEIGHT_ADDR, f32, this: 
 
 pub fn init(UnityEngine_UI: *const Il2CppImage) {
     get_class_or_return!(UnityEngine_UI, "UnityEngine.UI", Text);
-    
+
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe {
         GET_LINESPACING_ADDR = get_method_addr(Text, c"get_lineSpacing", 0);
         SET_LINESPACING_ADDR = get_method_addr(Text, c"set_lineSpacing", 1);

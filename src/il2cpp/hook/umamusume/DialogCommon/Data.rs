@@ -1,8 +1,14 @@
 use std::ptr::null_mut;
 
-use crate::il2cpp::{api::{il2cpp_object_new, il2cpp_runtime_object_init}, hook::umamusume::DialogCommon::FormType, symbols::get_method_addr, types::*};
+use crate::il2cpp::{
+    api::{il2cpp_object_new, il2cpp_runtime_object_init},
+    hook::umamusume::DialogCommon::FormType,
+    symbols::get_method_addr,
+    types::*,
+};
 static mut CLASS: *mut Il2CppClass = null_mut();
 pub fn class() -> *mut Il2CppClass {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe { CLASS }
 }
 
@@ -22,6 +28,7 @@ impl_addr_wrapper_fn!(SetSimpleOneButtonMessage, SETSIMPLEONEBUTTONMESSAGE_ADDR,
 pub fn init(DialogCommon: *mut Il2CppClass) {
     find_nested_class_or_return!(DialogCommon, Data);
 
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe {
         CLASS = Data;
         SETSIMPLEONEBUTTONMESSAGE_ADDR = get_method_addr(Data, c"SetSimpleOneButtonMessage", 5);

@@ -1,14 +1,12 @@
 use super::{template, Hachimi};
 
-pub static LIST: [(&str, template::Filter); 3] = [
-    ("plural", plural),
-    ("ordinal", ordinal),
-    ("month", month)
-];
+pub static LIST: [(&str, template::Filter); 3] = [("plural", plural), ("ordinal", ordinal), ("month", month)];
 
 // $(plural n 'plural_type_0' 'plural_type_1' ...)
 fn plural(args: &[template::Token]) -> Option<String> {
-    if args.len() < 2 { return None; }
+    if args.len() < 2 {
+        return None;
+    }
 
     if let template::Token::NumberLit(n) = args[0] {
         let hachimi = Hachimi::instance();
@@ -38,7 +36,11 @@ fn ordinal(args: &[template::Token]) -> Option<String> {
 fn month(args: &[template::Token]) -> Option<String> {
     if let template::Token::NumberLit(i) = args[0] {
         let localized_data = Hachimi::instance().localized_data.load();
-        return localized_data.config.months.get((i as usize).saturating_sub(1)).cloned();
+        return localized_data
+            .config
+            .months
+            .get((i as usize).saturating_sub(1))
+            .cloned();
     }
 
     None

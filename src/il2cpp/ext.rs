@@ -11,10 +11,11 @@ use super::{
     hook::{
         UnityEngine_AssetBundleModule::AssetBundle,
         UnityEngine_CoreModule::{HideFlags_DontUnloadUnusedAsset, Object},
-        UnityEngine_TextRenderingModule::Font, Unity_TextMeshPro::TMP_FontAsset
+        UnityEngine_TextRenderingModule::Font,
+        Unity_TextMeshPro::TMP_FontAsset,
     },
     symbols::GCHandle,
-    types::*
+    types::*,
 };
 
 pub trait StringExt {
@@ -24,7 +25,10 @@ pub trait StringExt {
 impl StringExt for str {
     fn to_il2cpp_string(&self) -> *mut Il2CppString {
         let text_utf16 = Utf16String::from_str(self);
-        il2cpp_string_new_utf16(text_utf16.as_ptr(), text_utf16.len().try_into().unwrap())
+        il2cpp_string_new_utf16(
+            text_utf16.as_ptr(),
+            text_utf16.len().try_into().expect("unexpected failure"),
+        )
     }
 }
 
@@ -40,18 +44,24 @@ pub trait LocalizedDataExt {
     fn load_tmp_replacement_font(&self) -> *mut Il2CppObject;
 }
 
-static EXTRA_ASSET_BUNDLE_HANDLE: Lazy<Mutex<Option<GCHandle>>> = Lazy::new(|| Mutex::default());
-static REPLACEMENT_FONT_HANDLE: Lazy<Mutex<Option<GCHandle>>> = Lazy::new(|| Mutex::default());
-static TMP_REPLACEMENT_FONT_HANDLE: Lazy<Mutex<Option<GCHandle>>> = Lazy::new(|| Mutex::default());
+static EXTRA_ASSET_BUNDLE_HANDLE: Lazy<Mutex<Option<GCHandle>>> = Lazy::new(Mutex::default);
+static REPLACEMENT_FONT_HANDLE: Lazy<Mutex<Option<GCHandle>>> = Lazy::new(Mutex::default);
+static TMP_REPLACEMENT_FONT_HANDLE: Lazy<Mutex<Option<GCHandle>>> = Lazy::new(Mutex::default);
 
 impl LocalizedDataExt for LocalizedData {
     fn load_extra_asset_bundle(&self) -> *mut Il2CppObject {
-        let mut handle_opt = EXTRA_ASSET_BUNDLE_HANDLE.lock().unwrap();
+        let mut handle_opt = EXTRA_ASSET_BUNDLE_HANDLE.lock().expect("lock poisoned");
         if let Some(handle) = handle_opt.as_ref() {
             return handle.target();
         }
 
-        let Some(path) = self.config.extra_asset_bundle.as_ref().map(|p| self.get_data_path(p)).unwrap_or_default() else {
+        let Some(path) = self
+            .config
+            .extra_asset_bundle
+            .as_ref()
+            .map(|p| self.get_data_path(p))
+            .unwrap_or_default()
+        else {
             return 0 as _;
         };
 
@@ -71,13 +81,12 @@ impl LocalizedDataExt for LocalizedData {
     }
 
     fn load_replacement_font(&self) -> *mut Il2CppObject {
-        let mut handle_opt = REPLACEMENT_FONT_HANDLE.lock().unwrap();
+        let mut handle_opt = REPLACEMENT_FONT_HANDLE.lock().expect("lock poisoned");
         if let Some(handle) = handle_opt.as_ref() {
             let font = handle.target();
             if Object::IsNativeObjectAlive(font) {
                 return font;
-            }
-            else {
+            } else {
                 debug!("Font destroyed!");
                 *handle_opt = None;
             }
@@ -104,13 +113,12 @@ impl LocalizedDataExt for LocalizedData {
     }
 
     fn load_tmp_replacement_font(&self) -> *mut Il2CppObject {
-        let mut handle_opt = TMP_REPLACEMENT_FONT_HANDLE.lock().unwrap();
+        let mut handle_opt = TMP_REPLACEMENT_FONT_HANDLE.lock().expect("lock poisoned");
         if let Some(handle) = handle_opt.as_ref() {
             let tmp_font = handle.target();
             if Object::IsNativeObjectAlive(tmp_font) {
                 return tmp_font;
-            }
-            else {
+            } else {
                 debug!("TMP font destroyed!");
                 *handle_opt = None;
             }
@@ -145,14 +153,16 @@ impl Il2CppStringExt for Il2CppString {
     }
 
     fn as_utf16str(&self) -> &Utf16Str {
+        // SAFETY: Pointer and length validated by caller
         unsafe { Utf16Str::from_slice_unchecked(std::slice::from_raw_parts(self.chars.as_ptr(), self.length as usize)) }
     }
 
     fn hash(&self) -> u64 {
         let data = self.chars_ptr() as *const u8;
         let len = self.length as usize * std::mem::size_of::<Il2CppChar>();
-        
+
         let mut hasher = FnvHasher::default();
+        // SAFETY: Pointer and length validated by caller
         hasher.write(unsafe { std::slice::from_raw_parts(data, len) });
         hasher.finish()
     }
@@ -164,6 +174,7 @@ pub trait Il2CppObjectExt {
 
 impl Il2CppObjectExt for Il2CppObject {
     fn klass(&self) -> *mut Il2CppClass {
+        // SAFETY: FFI / raw pointer operation required by IL2CPP interop
         unsafe { *self.__bindgen_anon_1.klass.as_ref() }
     }
 }

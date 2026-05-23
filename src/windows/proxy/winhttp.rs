@@ -16,8 +16,14 @@ proxy_proc!(WinHttpDetectAutoProxyConfigUrl, WinHttpDetectAutoProxyConfigUrl_ori
 proxy_proc!(WinHttpFreeProxyResult, WinHttpFreeProxyResult_orig);
 proxy_proc!(WinHttpFreeProxyResultEx, WinHttpFreeProxyResultEx_orig);
 proxy_proc!(WinHttpFreeProxySettings, WinHttpFreeProxySettings_orig);
-proxy_proc!(WinHttpGetDefaultProxyConfiguration, WinHttpGetDefaultProxyConfiguration_orig);
-proxy_proc!(WinHttpGetIEProxyConfigForCurrentUser, WinHttpGetIEProxyConfigForCurrentUser_orig);
+proxy_proc!(
+    WinHttpGetDefaultProxyConfiguration,
+    WinHttpGetDefaultProxyConfiguration_orig
+);
+proxy_proc!(
+    WinHttpGetIEProxyConfigForCurrentUser,
+    WinHttpGetIEProxyConfigForCurrentUser_orig
+);
 proxy_proc!(WinHttpGetProxyForUrl, WinHttpGetProxyForUrl_orig);
 proxy_proc!(WinHttpGetProxyForUrlEx, WinHttpGetProxyForUrlEx_orig);
 proxy_proc!(WinHttpGetProxyForUrlEx2, WinHttpGetProxyForUrlEx2_orig);
@@ -36,7 +42,10 @@ proxy_proc!(WinHttpReceiveResponse, WinHttpReceiveResponse_orig);
 proxy_proc!(WinHttpResetAutoProxy, WinHttpResetAutoProxy_orig);
 proxy_proc!(WinHttpSendRequest, WinHttpSendRequest_orig);
 proxy_proc!(WinHttpSetCredentials, WinHttpSetCredentials_orig);
-proxy_proc!(WinHttpSetDefaultProxyConfiguration, WinHttpSetDefaultProxyConfiguration_orig);
+proxy_proc!(
+    WinHttpSetDefaultProxyConfiguration,
+    WinHttpSetDefaultProxyConfiguration_orig
+);
 proxy_proc!(WinHttpSetOption, WinHttpSetOption_orig);
 proxy_proc!(WinHttpSetStatusCallback, WinHttpSetStatusCallback_orig);
 proxy_proc!(WinHttpSetTimeouts, WinHttpSetTimeouts_orig);
@@ -52,9 +61,10 @@ proxy_proc!(WinHttpWriteData, WinHttpWriteData_orig);
 proxy_proc!(WinHttpWriteProxySettings, WinHttpWriteProxySettings_orig);
 
 pub fn init(system_dir: &Utf16Str) {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe {
         let dll_path = system_dir.to_owned() + "\\winhttp.dll";
-        let dll_path_cstr = U16CString::from_vec(dll_path.into_vec()).unwrap();
+        let dll_path_cstr = U16CString::from_vec(dll_path.into_vec()).expect("unexpected failure");
         let handle = LoadLibraryW(PCWSTR(dll_path_cstr.as_ptr())).expect("winhttp.dll");
 
         WinHttpAddRequestHeaders_orig = utils::get_proc_address(handle, c"WinHttpAddRequestHeaders");
@@ -68,8 +78,10 @@ pub fn init(system_dir: &Utf16Str) {
         WinHttpFreeProxyResult_orig = utils::get_proc_address(handle, c"WinHttpFreeProxyResult");
         WinHttpFreeProxyResultEx_orig = utils::get_proc_address(handle, c"WinHttpFreeProxyResultEx");
         WinHttpFreeProxySettings_orig = utils::get_proc_address(handle, c"WinHttpFreeProxySettings");
-        WinHttpGetDefaultProxyConfiguration_orig = utils::get_proc_address(handle, c"WinHttpGetDefaultProxyConfiguration");
-        WinHttpGetIEProxyConfigForCurrentUser_orig = utils::get_proc_address(handle, c"WinHttpGetIEProxyConfigForCurrentUser");
+        WinHttpGetDefaultProxyConfiguration_orig =
+            utils::get_proc_address(handle, c"WinHttpGetDefaultProxyConfiguration");
+        WinHttpGetIEProxyConfigForCurrentUser_orig =
+            utils::get_proc_address(handle, c"WinHttpGetIEProxyConfigForCurrentUser");
         WinHttpGetProxyForUrl_orig = utils::get_proc_address(handle, c"WinHttpGetProxyForUrl");
         WinHttpGetProxyForUrlEx_orig = utils::get_proc_address(handle, c"WinHttpGetProxyForUrlEx");
         WinHttpGetProxyForUrlEx2_orig = utils::get_proc_address(handle, c"WinHttpGetProxyForUrlEx2");
@@ -88,7 +100,8 @@ pub fn init(system_dir: &Utf16Str) {
         WinHttpResetAutoProxy_orig = utils::get_proc_address(handle, c"WinHttpResetAutoProxy");
         WinHttpSendRequest_orig = utils::get_proc_address(handle, c"WinHttpSendRequest");
         WinHttpSetCredentials_orig = utils::get_proc_address(handle, c"WinHttpSetCredentials");
-        WinHttpSetDefaultProxyConfiguration_orig = utils::get_proc_address(handle, c"WinHttpSetDefaultProxyConfiguration");
+        WinHttpSetDefaultProxyConfiguration_orig =
+            utils::get_proc_address(handle, c"WinHttpSetDefaultProxyConfiguration");
         WinHttpSetOption_orig = utils::get_proc_address(handle, c"WinHttpSetOption");
         WinHttpSetStatusCallback_orig = utils::get_proc_address(handle, c"WinHttpSetStatusCallback");
         WinHttpSetTimeouts_orig = utils::get_proc_address(handle, c"WinHttpSetTimeouts");

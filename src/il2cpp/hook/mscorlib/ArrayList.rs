@@ -9,6 +9,7 @@ impl_addr_wrapper_fn!(set_Item, SET_ITEM_ADDR, (), this: *mut Il2CppObject, inde
 pub fn init(mscorlib: *const Il2CppImage) {
     get_class_or_return!(mscorlib, "System.Collections", ArrayList);
 
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe {
         GET_ITEM_ADDR = get_method_addr(ArrayList, c"get_Item", -1);
         SET_ITEM_ADDR = get_method_addr(ArrayList, c"set_Item", -1);

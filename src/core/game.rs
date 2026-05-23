@@ -1,5 +1,5 @@
+use serde::Deserialize;
 use std::{fmt::Display, path::PathBuf};
-use serde::{Deserialize};
 
 use crate::game_impl;
 
@@ -9,17 +9,18 @@ pub struct Game {
     pub data_dir: PathBuf,
 
     #[cfg(target_os = "windows")]
-    pub is_steam_release: bool
+    pub is_steam_release: bool,
 }
 
-#[derive(PartialEq, Eq, Deserialize)]
+#[derive(PartialEq, Eq, Deserialize, Default)]
 pub enum Region {
     Unknown,
+    #[default]
     Japan,
     Taiwan,
     Korea,
     China,
-    Global
+    Global,
 }
 
 impl Display for Region {
@@ -30,14 +31,8 @@ impl Display for Region {
             Region::Taiwan => "Taiwan",
             Region::Korea => "Korea",
             Region::China => "China",
-            Region::Global => "Global"
+            Region::Global => "Global",
         })
-    }
-}
-
-impl Default for Region {
-    fn default() -> Self {
-        Region::Japan
     }
 }
 
@@ -56,7 +51,7 @@ impl Game {
             data_dir,
 
             #[cfg(target_os = "windows")]
-            is_steam_release
+            is_steam_release,
         }
     }
 }

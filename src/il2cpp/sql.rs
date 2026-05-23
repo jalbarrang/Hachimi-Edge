@@ -1,16 +1,26 @@
-use std::{ptr, sync::atomic::{self, AtomicPtr}};
+use crate::{
+    core::{
+        utils::{fit_text, get_masterdb_path, wrap_fit_text},
+        Hachimi,
+    },
+    il2cpp::{
+        ext::{Il2CppStringExt, StringExt},
+        hook::LibNative_Runtime::Sqlite3::{Connection, Query},
+        types::{Il2CppObject, Il2CppString},
+    },
+};
 use fnv::{FnvHashMap, FnvHashSet};
 use sqlparser::ast;
-use crate::{
-    core::{utils::{get_masterdb_path, fit_text, wrap_fit_text}, Hachimi},
-    il2cpp::{ext::{StringExt, Il2CppStringExt}, hook::LibNative_Runtime::Sqlite3::{Connection, Query}, types::{Il2CppObject, Il2CppString}}
+use std::{
+    ptr,
+    sync::atomic::{self, AtomicPtr},
 };
 
 // public API
 #[derive(Default)]
 pub struct CharacterData {
     pub chara_ids: FnvHashSet<i32>,
-    pub chara_names: FnvHashMap<i32, String>
+    pub chara_names: FnvHashMap<i32, String>,
 }
 
 impl CharacterData {
@@ -22,7 +32,8 @@ impl CharacterData {
         let conn = Connection::new();
 
         if Connection::Open(conn, db_path.to_il2cpp_string(), ptr::null_mut(), ptr::null_mut(), 0) {
-            let sql = "SELECT C.id, T.text FROM chara_data AS C JOIN text_data AS T ON C.id = T.\"index\" WHERE T.id = 6";
+            let sql =
+                "SELECT C.id, T.text FROM chara_data AS C JOIN text_data AS T ON C.id = T.\"index\" WHERE T.id = 6";
             let query = Connection::Query(conn, sql.to_il2cpp_string());
 
             if !query.is_null() {
@@ -30,6 +41,7 @@ impl CharacterData {
                     let id = Query::GetInt(query, 0);
                     let name_ptr = Query::GetText(query, 1);
 
+                    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
                     if let Some(name) = unsafe { name_ptr.as_ref() }.map(|s| s.as_utf16str().to_string()) {
                         chara_ids.insert(id);
                         chara_names.insert(id, name);
@@ -91,6 +103,7 @@ impl SkillInfo {
                     let text_ptr = Query::GetText(query, 1);
                     let category = Query::GetInt(query, 2);
 
+                    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
                     if let Some(text) = unsafe { text_ptr.as_ref() }.map(|s| s.as_utf16str().to_string()) {
                         match category {
                             47 => skill_names.insert(index, text),
@@ -104,7 +117,10 @@ impl SkillInfo {
             Connection::CloseDB(conn);
         }
 
-        SkillInfo { skill_names, skill_descs }
+        SkillInfo {
+            skill_names,
+            skill_descs,
+        }
     }
 
     pub fn get_name(&self, id: i32) -> String {
@@ -129,17 +145,17 @@ impl SkillInfo {
 // All of this add column/param stuff could be simplified to two hash maps, but that's overkill.
 pub trait SelectQueryState {
     /// Adds a column to the query.
-    /// 
+    ///
     /// Implementers are expected to only track the index of columns that they need.
     fn add_column(&mut self, idx: i32, name: &str);
 
     /// Adds a placeholder parameter to the query (WHERE param = ?).
-    /// 
+    ///
     /// Index starts at 1.
     fn add_param(&mut self, idx: i32, name: &str);
 
     /// Bind an int value to a placeholder.
-    /// 
+    ///
     /// Index starts at 1.
     fn bind_int(&mut self, idx: i32, value: i32);
 
@@ -150,25 +166,24 @@ pub trait SelectQueryState {
 #[derive(Default)]
 struct Column {
     /// Index of the column in the SELECT statement.
-    /// 
+    ///
     /// Can be used to query the value later if needed.
     select_idx: Option<i32>,
 
     /// Index of the placeholder param for this column.
-    /// 
+    ///
     /// If this column's value is already binded as a param in the query, we won't need to query it later.
     param_idx: Option<i32>,
 
     /// The int value binded to this column as a parameter.
-    int_value: Option<i32>
+    int_value: Option<i32>,
 }
 
 impl Column {
     fn is_select_idx(&self, idx: i32) -> bool {
         if let Some(i) = self.select_idx {
             idx == i
-        }
-        else {
+        } else {
             false
         }
     }
@@ -176,8 +191,7 @@ impl Column {
     fn is_param_idx(&self, idx: i32) -> bool {
         if let Some(i) = self.param_idx {
             idx == i
-        }
-        else {
+        } else {
             false
         }
     }
@@ -189,23 +203,14 @@ impl Column {
     }
 
     fn try_get_int(&self, query: *mut Il2CppObject) -> Option<i32> {
-        if let Some(idx) = self.select_idx {
-            Some(Query::GetInt(query, idx))
-        }
-        else {
-            None
-        }
+        self.select_idx.map(|idx| Query::GetInt(query, idx))
     }
 
     fn value_or_try_get_int(&self, query: *mut Il2CppObject) -> Option<i32> {
         if let Some(value) = self.int_value {
             Some(value)
-        }
-        else if let Some(value) = self.try_get_int(query) {
-            Some(value)
-        }
-        else {
-            None
+        } else {
+            self.try_get_int(query)
         }
     }
 }
@@ -218,22 +223,22 @@ pub struct TextDataQuery {
 
     // WHERE
     category: Column,
-    index: Column
+    index: Column,
 }
 pub struct TextFormatting {
     pub line_len: i32,
     pub line_count: i32,
-    pub font_size: i32
+    pub font_size: i32,
 }
 
 #[derive(Default)]
 pub struct SkillTextFormatting {
     pub name: Option<TextFormatting>,
     pub desc: Option<TextFormatting>,
-    pub is_localized: bool
+    pub is_localized: bool,
 }
 
-pub static TDQ_SKILL_TEXT_FORMAT:AtomicPtr<SkillTextFormatting> = AtomicPtr::new(ptr::null_mut());
+pub static TDQ_SKILL_TEXT_FORMAT: AtomicPtr<SkillTextFormatting> = AtomicPtr::new(ptr::null_mut());
 
 impl TextDataQuery {
     pub fn with_skill_query(text_cfg: &SkillTextFormatting, callback: impl FnOnce()) {
@@ -249,7 +254,8 @@ impl TextDataQuery {
         if cfg_ptr.is_null() {
             return Err(());
         }
-        Ok(unsafe{&mut *cfg_ptr})
+        // SAFETY: FFI / raw pointer operation required by IL2CPP interop
+        Ok(unsafe { &mut *cfg_ptr })
     }
 
     pub fn get_skill_name(index: i32) -> Option<*mut Il2CppString> {
@@ -267,22 +273,21 @@ impl TextDataQuery {
 
         if let Some(text) = text_opt {
             // Fit text if and as requested.
-            Self::requested_skill_format().ok()
+            Self::requested_skill_format()
+                .ok()
                 .and_then(|cfg| {
                     cfg.is_localized = true;
                     cfg.name.as_ref()
                 })
-                .and_then(|name| { match name.line_count {
+                .and_then(|name| match name.line_count {
                     1 => fit_text(text, name.line_len, name.font_size),
-                    _ => wrap_fit_text(text, name.line_len, name.line_count, name.font_size)
-                    }
+                    _ => wrap_fit_text(text, name.line_len, name.line_count, name.font_size),
                 })
                 .map_or_else(
                     || Some(text.to_il2cpp_string()),
                     |fitted| Some(fitted.to_il2cpp_string()),
                 )
-        }
-        else {
+        } else {
             None
         }
     }
@@ -297,7 +302,8 @@ impl TextDataQuery {
 
         if let Some(text) = text_opt {
             // Fit text if and as requested.
-            Self::requested_skill_format().ok()
+            Self::requested_skill_format()
+                .ok()
                 .and_then(|cfg| {
                     cfg.is_localized = true;
                     cfg.desc.as_ref()
@@ -307,8 +313,7 @@ impl TextDataQuery {
                     || Some(text.to_il2cpp_string()),
                     |fitted| Some(fitted.to_il2cpp_string()),
                 )
-        }
-        else {
+        } else {
             None
         }
     }
@@ -325,7 +330,7 @@ impl SelectQueryState for TextDataQuery {
         match name {
             "category" => self.category.param_idx = Some(idx),
             "index" => self.index.param_idx = Some(idx),
-            _ => ()
+            _ => (),
         }
     }
 
@@ -345,14 +350,16 @@ impl SelectQueryState for TextDataQuery {
                 match category {
                     47 => return Self::get_skill_name(index),
                     48 => return Self::get_skill_desc(index),
-                    _ => ()
+                    _ => (),
                 };
 
-                return Hachimi::instance().localized_data.load()
+                return Hachimi::instance()
+                    .localized_data
+                    .load()
                     .text_data_dict
                     .get(&category)
-                    .map(|c| c.get(&index).map(|s| s.to_il2cpp_string()))
-                    .unwrap_or_default()
+                    .map(|c| c.get(&index).map(super::ext::StringExt::to_il2cpp_string))
+                    .unwrap_or_default();
             }
         }
 
@@ -370,7 +377,7 @@ pub struct CharacterSystemTextQuery {
     character_id: Column,
 
     // may appear in both
-    voice_id: Column
+    voice_id: Column,
 }
 
 impl SelectQueryState for CharacterSystemTextQuery {
@@ -378,7 +385,7 @@ impl SelectQueryState for CharacterSystemTextQuery {
         match name {
             "text" => self.text.select_idx = Some(idx),
             "voice_id" => self.voice_id.select_idx = Some(idx),
-            _ => ()
+            _ => (),
         }
     }
 
@@ -386,7 +393,7 @@ impl SelectQueryState for CharacterSystemTextQuery {
         match name {
             "character_id" => self.character_id.param_idx = Some(idx),
             "voice_id" => self.voice_id.param_idx = Some(idx),
-            _ => ()
+            _ => (),
         }
     }
 
@@ -402,11 +409,13 @@ impl SelectQueryState for CharacterSystemTextQuery {
 
         if let Some(character_id) = self.character_id.int_value {
             if let Some(voice_id) = self.voice_id.value_or_try_get_int(query) {
-                return Hachimi::instance().localized_data.load()
+                return Hachimi::instance()
+                    .localized_data
+                    .load()
                     .character_system_text_dict
                     .get(&character_id)
-                    .map(|c| c.get(&voice_id).map(|s| s.to_il2cpp_string()))
-                    .unwrap_or_default()
+                    .map(|c| c.get(&voice_id).map(super::ext::StringExt::to_il2cpp_string))
+                    .unwrap_or_default();
             }
         }
 
@@ -419,7 +428,7 @@ impl SelectQueryState for CharacterSystemTextQuery {
 pub struct RaceJikkyoCommentQuery {
     // SELECT
     id: Column,
-    message: Column
+    message: Column,
 }
 
 impl SelectQueryState for RaceJikkyoCommentQuery {
@@ -427,7 +436,7 @@ impl SelectQueryState for RaceJikkyoCommentQuery {
         match name {
             "id" => self.id.select_idx = Some(idx),
             "message" => self.message.select_idx = Some(idx),
-            _ => ()
+            _ => (),
         }
     }
 
@@ -441,10 +450,12 @@ impl SelectQueryState for RaceJikkyoCommentQuery {
         }
 
         if let Some(id) = self.id.try_get_int(query) {
-            return Hachimi::instance().localized_data.load()
+            return Hachimi::instance()
+                .localized_data
+                .load()
                 .race_jikkyo_comment_dict
                 .get(&id)
-                .map(|s| s.to_il2cpp_string())
+                .map(super::ext::StringExt::to_il2cpp_string);
         }
 
         None
@@ -456,7 +467,7 @@ impl SelectQueryState for RaceJikkyoCommentQuery {
 pub struct RaceJikkyoMessageQuery {
     // SELECT
     id: Column,
-    message: Column
+    message: Column,
 }
 
 impl SelectQueryState for RaceJikkyoMessageQuery {
@@ -464,7 +475,7 @@ impl SelectQueryState for RaceJikkyoMessageQuery {
         match name {
             "id" => self.id.select_idx = Some(idx),
             "message" => self.message.select_idx = Some(idx),
-            _ => ()
+            _ => (),
         }
     }
 
@@ -478,16 +489,17 @@ impl SelectQueryState for RaceJikkyoMessageQuery {
         }
 
         if let Some(id) = self.id.try_get_int(query) {
-            return Hachimi::instance().localized_data.load()
+            return Hachimi::instance()
+                .localized_data
+                .load()
                 .race_jikkyo_message_dict
                 .get(&id)
-                .map(|s| s.to_il2cpp_string())
+                .map(super::ext::StringExt::to_il2cpp_string);
         }
 
         None
     }
 }
-
 
 // sqlparser extensions
 pub trait SelectExt {
@@ -496,9 +508,9 @@ pub trait SelectExt {
 
 impl SelectExt for ast::Select {
     fn get_first_table_name(&self) -> Option<&String> {
-        if let Some(table_with_joins) = self.from.get(0) {
+        if let Some(table_with_joins) = self.from.first() {
             if let ast::TableFactor::Table { name: object_name, .. } = &table_with_joins.relation {
-                if let Some(ident) = object_name.0.get(0) {
+                if let Some(ident) = object_name.0.first() {
                     return Some(&ident.value);
                 }
             }
@@ -542,24 +554,18 @@ impl ExprExt for ast::Expr {
     }
 
     fn is_placeholder_value(&self) -> bool {
-        if let ast::Expr::Value(value) = self {
-            if let ast::Value::Placeholder(_) = value {
-                return true;
-            }
-        }
-
-        false
+        matches!(self, ast::Expr::Value(ast::Value::Placeholder(_)))
     }
 }
 
 pub struct BinaryOpIter<'a> {
-    stack: Vec<&'a ast::Expr>
+    stack: Vec<&'a ast::Expr>,
 }
 
 pub struct BinaryOpRef<'a> {
-    pub left: &'a Box<ast::Expr>,
+    pub left: &'a ast::Expr,
     pub op: &'a ast::BinaryOperator,
-    pub right: &'a Box<ast::Expr>
+    pub right: &'a ast::Expr,
 }
 
 impl<'a> Iterator for BinaryOpIter<'a> {
@@ -567,9 +573,7 @@ impl<'a> Iterator for BinaryOpIter<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            let Some(expr) = self.stack.pop() else {
-                return None;
-            };
+            let expr = self.stack.pop()?;
 
             let ast::Expr::BinaryOp { left, op, right } = expr else {
                 continue;
@@ -578,7 +582,7 @@ impl<'a> Iterator for BinaryOpIter<'a> {
             self.stack.push(right);
             self.stack.push(left); // left will be pop'd first
 
-            return Some(BinaryOpRef { left, op, right })
+            return Some(BinaryOpRef { left, op, right });
         }
     }
 }

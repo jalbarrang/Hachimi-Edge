@@ -27,8 +27,8 @@ pub fn init(filter_level: log::LevelFilter, file_logging: bool) {
                 FilterBuilder::new()
                     .filter_level(filter_level)
                     .filter_module("sqlparser", log::LevelFilter::Off) // annoying
-                    .build()
+                    .build(),
             )
-            .with_tag("Hachimi")
+            .with_tag("Hachimi"),
     );
 }

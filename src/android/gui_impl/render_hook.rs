@@ -1,11 +1,11 @@
 #![allow(non_snake_case)]
 
+use glow::HasContext;
+use std::cell::OnceCell;
 use std::num::NonZeroU32;
 use std::os::raw::c_char;
 use std::os::raw::{c_uint, c_void};
 use std::sync::Arc;
-use std::cell::OnceCell;
-use glow::HasContext;
 
 use crate::core::{Error, Gui, Hachimi};
 
@@ -18,6 +18,7 @@ const EGL_WIDTH: EGLint = 0x3057;
 const EGL_HEIGHT: EGLint = 0x3056;
 
 fn get_binding_parameter<T>(gl: &Arc<glow::Context>, parameter: u32, create_wrapper: fn(NonZeroU32) -> T) -> Option<T> {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     let v = unsafe { gl.get_parameter_i32(parameter) };
     if let Some(value) = NonZeroU32::new(v as u32) {
         return Some(create_wrapper(value));
@@ -27,8 +28,10 @@ fn get_binding_parameter<T>(gl: &Arc<glow::Context>, parameter: u32, create_wrap
 }
 
 static mut EGLQUERYSURFACE_ADDR: usize = 0;
-type EGLQuerySurfaceFn = extern "C" fn(display: EGLDisplay, surface: EGLSurface, attribute: EGLint, value: *mut EGLint) -> EGLBoolean;
+type EGLQuerySurfaceFn =
+    extern "C" fn(display: EGLDisplay, surface: EGLSurface, attribute: EGLint, value: *mut EGLint) -> EGLBoolean;
 fn eglQuerySurface(display: EGLDisplay, surface: EGLSurface, attribute: EGLint, value: *mut EGLint) -> EGLBoolean {
+    // SAFETY: Transmute required for IL2CPP type conversion
     let orig_fn: EGLQuerySurfaceFn = unsafe { std::mem::transmute(EGLQUERYSURFACE_ADDR) };
     orig_fn(display, surface, attribute, value)
 }
@@ -37,6 +40,7 @@ fn eglQuerySurface(display: EGLDisplay, surface: EGLSurface, attribute: EGLint, 
 static mut EGLSWAPBUFFERS_ADDR: usize = 0;
 type EGLSwapBuffersFn = extern "C" fn(display: EGLDisplay, surface: EGLSurface) -> EGLBoolean;
 extern "C" fn eglSwapBuffers(display: EGLDisplay, surface: EGLSurface) -> EGLBoolean {
+    // SAFETY: Transmute required for IL2CPP type conversion
     let orig_fn: EGLSwapBuffersFn = unsafe { std::mem::transmute(EGLSWAPBUFFERS_ADDR) };
     let mut gui = Gui::instance_or_init("android.menu_open_key").lock().unwrap();
     // Big fat state destroyer, initialize it as soon as possible
@@ -72,32 +76,70 @@ extern "C" fn eglSwapBuffers(display: EGLDisplay, surface: EGLSurface) -> EGLBoo
     let gl = painter.gl().clone();
     let prev_vbo = get_binding_parameter(&gl, glow::ARRAY_BUFFER_BINDING, glow::NativeBuffer);
     let prev_vao = get_binding_parameter(&gl, glow::VERTEX_ARRAY_BINDING, glow::NativeVertexArray);
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     let prev_enable_scissor_test = unsafe { gl.is_enabled(glow::SCISSOR_TEST) };
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     let prev_enable_cull_face = unsafe { gl.is_enabled(glow::CULL_FACE) };
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     let prev_enable_depth_test = unsafe { gl.is_enabled(glow::DEPTH_TEST) };
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     let prev_enable_blend = unsafe { gl.is_enabled(glow::BLEND) };
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     let prev_blend_equation_rgb = unsafe { gl.get_parameter_i32(glow::BLEND_EQUATION_RGB) as _ };
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     let prev_blend_equation_alpha = unsafe { gl.get_parameter_i32(glow::BLEND_EQUATION_ALPHA) as _ };
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     let prev_blend_src_rgb = unsafe { gl.get_parameter_i32(glow::BLEND_SRC_RGB) as _ };
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     let prev_blend_dst_rgb = unsafe { gl.get_parameter_i32(glow::BLEND_DST_RGB) as _ };
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     let prev_blend_src_alpha = unsafe { gl.get_parameter_i32(glow::BLEND_SRC_ALPHA) as _ };
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     let prev_blend_dst_alpha = unsafe { gl.get_parameter_i32(glow::BLEND_DST_ALPHA) as _ };
     let prev_program = get_binding_parameter(&gl, glow::CURRENT_PROGRAM, glow::NativeProgram);
     let prev_texture = get_binding_parameter(&gl, glow::TEXTURE_BINDING_2D, glow::NativeTexture);
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     let prev_active_texture = unsafe { gl.get_parameter_i32(glow::ACTIVE_TEXTURE) as _ };
 
-    painter.paint_and_update_textures(dimensions, output.pixels_per_point, &clipped_primitives, &output.textures_delta);
+    painter.paint_and_update_textures(
+        dimensions,
+        output.pixels_per_point,
+        &clipped_primitives,
+        &output.textures_delta,
+    );
 
     // Restore state
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe {
         gl.bind_buffer(glow::ARRAY_BUFFER, prev_vbo);
         gl.bind_vertex_array(prev_vao);
-        if prev_enable_scissor_test { gl.enable(glow::SCISSOR_TEST) } else { gl.disable(glow::SCISSOR_TEST) }
-        if prev_enable_cull_face    { gl.enable(glow::CULL_FACE) }    else { gl.disable(glow::CULL_FACE) }
-        if prev_enable_depth_test   { gl.enable(glow::DEPTH_TEST) }   else { gl.disable(glow::DEPTH_TEST) }
-        if prev_enable_blend        { gl.enable(glow::BLEND) }        else { gl.disable(glow::BLEND) }
+        if prev_enable_scissor_test {
+            gl.enable(glow::SCISSOR_TEST)
+        } else {
+            gl.disable(glow::SCISSOR_TEST)
+        }
+        if prev_enable_cull_face {
+            gl.enable(glow::CULL_FACE)
+        } else {
+            gl.disable(glow::CULL_FACE)
+        }
+        if prev_enable_depth_test {
+            gl.enable(glow::DEPTH_TEST)
+        } else {
+            gl.disable(glow::DEPTH_TEST)
+        }
+        if prev_enable_blend {
+            gl.enable(glow::BLEND)
+        } else {
+            gl.disable(glow::BLEND)
+        }
         gl.blend_equation_separate(prev_blend_equation_rgb, prev_blend_equation_alpha);
-        gl.blend_func_separate(prev_blend_src_rgb, prev_blend_dst_rgb, prev_blend_src_alpha, prev_blend_dst_alpha);
+        gl.blend_func_separate(
+            prev_blend_src_rgb,
+            prev_blend_dst_rgb,
+            prev_blend_src_alpha,
+            prev_blend_dst_alpha,
+        );
         if prev_program.is_none() || gl.is_program(prev_program.unwrap()) {
             gl.use_program(prev_program);
         }
@@ -111,17 +153,20 @@ extern "C" fn eglSwapBuffers(display: EGLDisplay, surface: EGLSurface) -> EGLBoo
 static mut PAINTER: OnceCell<egui_glow::Painter> = OnceCell::new();
 
 fn init_painter() -> Result<&'static mut egui_glow::Painter, Error> {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     if let Some(painter) = unsafe { PAINTER.get_mut() } {
         return Ok(painter);
     }
 
     let gl = init_gl();
     let painter = egui_glow::Painter::new(Arc::new(gl), "", None, false)?;
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe {
         PAINTER.set(painter).unwrap_unchecked();
     }
 
     info!("Painter initialized");
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     Ok(unsafe { PAINTER.get_mut().unwrap_unchecked() })
 }
 
@@ -134,19 +179,24 @@ impl From<egui_glow::PainterError> for Error {
 type EGLGetProcAddressFn = extern "C" fn(proc_name: *const c_char) -> *mut c_void;
 static mut EGLGETPROCADDRESS_ADDR: usize = 0;
 fn init_gl() -> glow::Context {
+    // SAFETY: Transmute required for IL2CPP type conversion
     let egl_get_proc_address: EGLGetProcAddressFn = unsafe { std::mem::transmute(EGLGETPROCADDRESS_ADDR) };
-    unsafe {
-        glow::Context::from_loader_function_cstr(|s| egl_get_proc_address(s.as_ptr()))
-    }
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
+    unsafe { glow::Context::from_loader_function_cstr(|s| egl_get_proc_address(s.as_ptr())) }
 }
 
 fn init_internal() -> Result<(), Error> {
     info!("Hooking eglSwapBuffers");
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     let egl_handle = unsafe { libc::dlopen(c"libEGL.so".as_ptr(), libc::RTLD_LAZY) };
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     let eglSwapBuffers_addr = unsafe { libc::dlsym(egl_handle, c"eglSwapBuffers".as_ptr()) };
 
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe {
-        EGLSWAPBUFFERS_ADDR = Hachimi::instance().interceptor.hook(eglSwapBuffers_addr as usize, eglSwapBuffers as usize)?;
+        EGLSWAPBUFFERS_ADDR = Hachimi::instance()
+            .interceptor
+            .hook(eglSwapBuffers_addr as usize, eglSwapBuffers as usize)?;
         EGLGETPROCADDRESS_ADDR = libc::dlsym(egl_handle, c"eglGetProcAddress".as_ptr()) as usize;
         EGLQUERYSURFACE_ADDR = libc::dlsym(egl_handle, c"eglQuerySurface".as_ptr()) as usize
     }

@@ -13,7 +13,7 @@ use fnv::FnvHashMap;
 pub enum Token {
     Identifier(String),
     NumberLit(f64),
-    StringLit(String)
+    StringLit(String),
 }
 
 pub type Filter = fn(args: &[Token]) -> Option<String>;
@@ -39,7 +39,7 @@ impl Context for FilterRemovalContext {
 }
 
 pub struct Parser {
-    filters: FnvHashMap<String, Filter>
+    filters: FnvHashMap<String, Filter>,
 }
 
 impl Parser {
@@ -53,15 +53,16 @@ impl Parser {
     }
 
     fn eval_filter(&self, tokens: &Vec<Token>, context: &mut impl Context) -> Option<String> {
-        if tokens.is_empty() { return None; }
+        if tokens.is_empty() {
+            return None;
+        }
 
-        if let Token::Identifier(filter_name) = tokens.first().unwrap() {
+        if let Token::Identifier(filter_name) = tokens.first().expect("non-empty collection") {
             let args = &tokens.as_slice()[1..];
             let context_res = context.on_filter_eval(filter_name, args);
             if context_res.is_some() {
-                return context_res
-            }
-            else if let Some(filter) = self.filters.get(filter_name) {
+                return context_res;
+            } else if let Some(filter) = self.filters.get(filter_name) {
                 return filter(&tokens.as_slice()[1..]);
             }
         }
@@ -71,25 +72,23 @@ impl Parser {
 
     fn parse_token(input: &str) -> Option<Token> {
         let mut iter = input.chars();
-        let start_char = iter.next().unwrap(); // guaranteed to have at least one char
+        let start_char = iter.next().expect("unexpected failure"); // guaranteed to have at least one char
         let end_char = iter.last();
 
-        if start_char == '\'' && end_char.is_some() && end_char.unwrap() == '\'' {
+        if start_char == '\'' && end_char.is_some() && end_char.expect("unexpected failure") == '\'' {
             return Some(Token::StringLit(input[1..input.len() - 1].replace("\\'", "'")));
         }
 
         if start_char.is_numeric() {
             return if let Ok(number) = input.parse::<f64>() {
                 Some(Token::NumberLit(number))
-            }
-            else if let Ok(number) = input.replace(",", "").parse::<f64>() {
+            } else if let Ok(number) = input.replace(",", "").parse::<f64>() {
                 // Allow commas
                 // (not doing in the initial parse; the idea being that numbers with commas are not common)
                 Some(Token::NumberLit(number))
-            }
-            else {
+            } else {
                 None
-            }
+            };
         }
 
         if input.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
@@ -132,7 +131,9 @@ impl Parser {
                 // Check separator and expr close
                 match c {
                     b')' => 'filter_close: {
-                        if in_string { break 'filter_close; }
+                        if in_string {
+                            break 'filter_close;
+                        }
 
                         // Parse token (if it hasnt been terminated by a trailing separator yet)
                         if token_start != 0 {
@@ -140,8 +141,7 @@ impl Parser {
                             if let Some(token) = res {
                                 tokens.push(token);
                                 token_start = 0;
-                            }
-                            else {
+                            } else {
                                 warn!("Invalid token in '{}' (at pos {})", input, token_start);
                                 token_start = 0;
                                 tokens.clear();
@@ -153,44 +153,47 @@ impl Parser {
                         if let Some(res) = self.eval_filter(&tokens, context) {
                             output.truncate(checkpoint);
                             output.extend(res.bytes());
-                        }
-                        else {
+                        } else {
                             warn!("Filter evaluation failed in '{}' (at pos {})", input, i);
                         }
 
                         tokens.clear();
                         in_filter = false;
-                    },
+                    }
 
-                    b' ' | b'\n' | b'\r' | b'\t' => if !in_string && token_start != 0 {
-                        let res = Self::parse_token(&input[token_start..i]);
-                        if let Some(token) = res {
-                            tokens.push(token);
+                    b' ' | b'\n' | b'\r' | b'\t' => {
+                        if !in_string && token_start != 0 {
+                            let res = Self::parse_token(&input[token_start..i]);
+                            if let Some(token) = res {
+                                tokens.push(token);
+                            } else {
+                                warn!("Invalid token in '{}' (at pos {})", input, token_start);
+                                tokens.clear();
+                                in_filter = false;
+                            }
+                            token_start = 0;
                         }
-                        else {
-                            warn!("Invalid token in '{}' (at pos {})", input, token_start);
-                            tokens.clear();
-                            in_filter = false;
-                        }
-                        token_start = 0;
-                    },
+                    }
 
                     b'\'' => {
                         if token_start == 0 {
                             token_start = i;
                             in_string = true;
-                        }
-                        else {
+                        } else {
                             in_string = false;
                         }
                     }
 
-                    b'\\' => if in_string {
-                        start_escape = true;
+                    b'\\' => {
+                        if in_string {
+                            start_escape = true;
+                        }
                     }
 
-                    _ => if token_start == 0 {
-                        token_start = i;
+                    _ => {
+                        if token_start == 0 {
+                            token_start = i;
+                        }
                     }
                 }
                 continue;
@@ -198,7 +201,8 @@ impl Parser {
 
             if start_expr {
                 // Check expression opening
-                if c == b'(' { // Filter expression
+                if c == b'(' {
+                    // Filter expression
                     in_filter = true;
                 }
                 start_expr = false;
@@ -212,6 +216,7 @@ impl Parser {
             }
         }
 
+        // SAFETY: FFI / raw pointer operation required by IL2CPP interop
         unsafe { String::from_utf8_unchecked(output) }
     }
 

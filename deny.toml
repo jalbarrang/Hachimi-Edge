@@ -1,0 +1,96 @@
+# =============================================================================
+# cargo-deny Configuration — Hachimi Edge (cargo-deny v0.19+)
+# Supply chain security: licenses, advisories, bans, and source restrictions.
+#
+# Run:  cargo deny check
+# Docs: https://embarkstudios.github.io/cargo-deny/
+# =============================================================================
+
+[graph]
+# Only check dependencies for platforms we actually target.
+targets = [
+    "x86_64-pc-windows-msvc",
+    "aarch64-linux-android",
+]
+
+# =============================================================================
+# [advisories] — Known vulnerability scanning
+# =============================================================================
+[advisories]
+# Scope for unmaintained crate detection.
+# "workspace" = only flag unmaintained crates that are direct workspace deps.
+unmaintained = "workspace"
+
+# Scope for unsound crate detection (memory safety issues without CVE).
+unsound = "all"
+
+# Ignore specific advisories if needed (with justification).
+ignore = []
+
+# =============================================================================
+# [licenses] — License compliance
+# =============================================================================
+[licenses]
+# High confidence when inferring licenses from text.
+confidence-threshold = 0.93
+
+# Allowed licenses — permissive open-source only.
+# This project is a game mod; copyleft licenses are incompatible.
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BSL-1.0",
+    "ISC",
+    "Zlib",
+    "Unicode-3.0",
+    "Unicode-DFS-2016",
+    "Unlicense",
+    "CDLA-Permissive-2.0",
+]
+
+# Exceptions for crates with unusual but acceptable licenses.
+exceptions = [
+    # The project itself is GPL-3.0 (this is fine — it's our code).
+    { allow = ["GPL-3.0-or-later"], crate = "hachimi" },
+    # egui fonts ship under OFL-1.1 + Ubuntu font license — standard for font crates.
+    { allow = ["OFL-1.1", "Ubuntu-font-1.0"], crate = "epaint_default_fonts" },
+]
+
+# =============================================================================
+# [bans] — Crate bans and duplicate detection
+# =============================================================================
+[bans]
+# Warn on duplicate crate versions — each duplicate adds compile time + binary size.
+multiple-versions = "warn"
+
+# Deny wildcard dependencies — they break reproducibility.
+wildcards = "deny"
+
+# Show all duplicates in output.
+highlight = "all"
+
+# Banned crates — prevent AI from pulling in problematic dependencies.
+deny = [
+    # Prefer rustls over OpenSSL. OpenSSL is a C dependency nightmare.
+    { crate = "openssl", reason = "Use rustls instead of OpenSSL", use-instead = "rustls" },
+    { crate = "openssl-sys", reason = "Use rustls instead of OpenSSL", use-instead = "rustls" },
+]
+
+# =============================================================================
+# [sources] — Allowed dependency sources
+# =============================================================================
+[sources]
+# Deny unknown registries — only crates.io is trusted.
+unknown-registry = "deny"
+
+# Warn on unknown git dependencies (we have two necessary pinned forks).
+unknown-git = "warn"
+
+# Explicitly allow our known git sources.
+allow-git = [
+    "https://github.com/LeadRDRK/dobby-sys.git",
+    "https://github.com/nabijaczleweli/rust-embed-resource.git",
+]

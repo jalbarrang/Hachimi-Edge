@@ -6,6 +6,7 @@ use once_cell::sync::Lazy;
 macro_rules! lazy_fnptr {
     ($name:tt, $ret:ty, $($v:ident: $t:ty),*) => {
         pub static $name: Lazy<extern "C" fn($($v: $t),*) -> $ret> = Lazy::new(||
+            // SAFETY: Transmute required for IL2CPP type conversion
             unsafe { std::mem::transmute(symbols::dlsym(stringify!($name))) }
         );
     }
@@ -13,7 +14,7 @@ macro_rules! lazy_fnptr {
 
 lazy_fnptr!(il2cpp_init, ::std::os::raw::c_int, domain_name: *const ::std::os::raw::c_char);
 lazy_fnptr!(il2cpp_init_utf16, ::std::os::raw::c_int, domain_name: *const Il2CppChar);
-lazy_fnptr!(il2cpp_shutdown, (), );
+lazy_fnptr!(il2cpp_shutdown, (),);
 lazy_fnptr!(il2cpp_set_config_dir, (), config_path: *const ::std::os::raw::c_char);
 lazy_fnptr!(il2cpp_set_data_dir, (), data_path: *const ::std::os::raw::c_char);
 lazy_fnptr!(il2cpp_set_temp_dir, (), temp_path: *const ::std::os::raw::c_char);
@@ -23,8 +24,8 @@ lazy_fnptr!(il2cpp_set_config_utf16, (), executablePath: *const Il2CppChar);
 lazy_fnptr!(il2cpp_set_config, (), executablePath: *const ::std::os::raw::c_char);
 lazy_fnptr!(il2cpp_set_memory_callbacks, (), callbacks: *mut Il2CppMemoryCallbacks);
 lazy_fnptr!(il2cpp_memory_pool_set_region_size, (), size: usize);
-lazy_fnptr!(il2cpp_memory_pool_get_region_size, usize, );
-lazy_fnptr!(il2cpp_get_corlib, *const Il2CppImage, );
+lazy_fnptr!(il2cpp_memory_pool_get_region_size, usize,);
+lazy_fnptr!(il2cpp_get_corlib, *const Il2CppImage,);
 lazy_fnptr!(il2cpp_add_internal_call, (), name: *const ::std::os::raw::c_char, method: Il2CppMethodPointer);
 lazy_fnptr!(il2cpp_resolve_icall, Il2CppMethodPointer, name: *const ::std::os::raw::c_char);
 lazy_fnptr!(il2cpp_alloc, *mut ::std::os::raw::c_void, size: usize);
@@ -88,7 +89,7 @@ lazy_fnptr!(il2cpp_class_get_bitmap_size, usize, klass: *const Il2CppClass);
 lazy_fnptr!(il2cpp_class_get_bitmap, (), klass: *mut Il2CppClass, bitmap: *mut usize);
 lazy_fnptr!(il2cpp_stats_dump_to_file, bool, path: *const ::std::os::raw::c_char);
 lazy_fnptr!(il2cpp_stats_get_value, u64, stat: Il2CppStat);
-lazy_fnptr!(il2cpp_domain_get, *mut Il2CppDomain, );
+lazy_fnptr!(il2cpp_domain_get, *mut Il2CppDomain,);
 lazy_fnptr!(il2cpp_domain_assembly_open, *const Il2CppAssembly, domain: *mut Il2CppDomain, name: *const ::std::os::raw::c_char);
 lazy_fnptr!(il2cpp_domain_get_assemblies, *mut *const Il2CppAssembly, domain: *const Il2CppDomain, size: *mut usize);
 lazy_fnptr!(il2cpp_raise_exception, !, arg1: *mut Il2CppException);
@@ -112,24 +113,24 @@ lazy_fnptr!(il2cpp_field_static_set_value, (), field: *mut FieldInfo, value: *mu
 lazy_fnptr!(il2cpp_field_set_value_object, (), instance: *mut Il2CppObject, field: *mut FieldInfo, value: *mut Il2CppObject);
 lazy_fnptr!(il2cpp_field_is_literal, bool, field: *mut FieldInfo);
 lazy_fnptr!(il2cpp_gc_collect, (), maxGenerations: ::std::os::raw::c_int);
-lazy_fnptr!(il2cpp_gc_collect_a_little, i32, );
-lazy_fnptr!(il2cpp_gc_start_incremental_collection, (), );
-lazy_fnptr!(il2cpp_gc_disable, (), );
-lazy_fnptr!(il2cpp_gc_enable, (), );
-lazy_fnptr!(il2cpp_gc_is_disabled, bool, );
+lazy_fnptr!(il2cpp_gc_collect_a_little, i32,);
+lazy_fnptr!(il2cpp_gc_start_incremental_collection, (),);
+lazy_fnptr!(il2cpp_gc_disable, (),);
+lazy_fnptr!(il2cpp_gc_enable, (),);
+lazy_fnptr!(il2cpp_gc_is_disabled, bool,);
 lazy_fnptr!(il2cpp_gc_set_mode, (), mode: Il2CppGCMode);
-lazy_fnptr!(il2cpp_gc_get_max_time_slice_ns, i64, );
+lazy_fnptr!(il2cpp_gc_get_max_time_slice_ns, i64,);
 lazy_fnptr!(il2cpp_gc_set_max_time_slice_ns, (), maxTimeSlice: i64);
-lazy_fnptr!(il2cpp_gc_is_incremental, bool, );
-lazy_fnptr!(il2cpp_gc_get_used_size, i64, );
-lazy_fnptr!(il2cpp_gc_get_heap_size, i64, );
+lazy_fnptr!(il2cpp_gc_is_incremental, bool,);
+lazy_fnptr!(il2cpp_gc_get_used_size, i64,);
+lazy_fnptr!(il2cpp_gc_get_heap_size, i64,);
 lazy_fnptr!(il2cpp_gc_wbarrier_set_field, (), obj: *mut Il2CppObject, targetAddress: *mut *mut ::std::os::raw::c_void, object: *mut ::std::os::raw::c_void);
-lazy_fnptr!(il2cpp_gc_has_strict_wbarriers, bool, );
+lazy_fnptr!(il2cpp_gc_has_strict_wbarriers, bool,);
 lazy_fnptr!(il2cpp_gc_set_external_allocation_tracker, (), func: ::std::option::Option< unsafe extern "C" fn( arg1: *mut ::std::os::raw::c_void, arg2: usize, arg3: ::std::os::raw::c_int, ), >);
 lazy_fnptr!(il2cpp_gc_set_external_wbarrier_tracker, (), func: ::std::option::Option<unsafe extern "C" fn(arg1: *mut *mut ::std::os::raw::c_void)>);
 lazy_fnptr!(il2cpp_gc_foreach_heap, (), func: ::std::option::Option< unsafe extern "C" fn( data: *mut ::std::os::raw::c_void, userData: *mut ::std::os::raw::c_void, ), >, userData: *mut ::std::os::raw::c_void);
-lazy_fnptr!(il2cpp_stop_gc_world, (), );
-lazy_fnptr!(il2cpp_start_gc_world, (), );
+lazy_fnptr!(il2cpp_stop_gc_world, (),);
+lazy_fnptr!(il2cpp_start_gc_world, (),);
 lazy_fnptr!(il2cpp_gc_alloc_fixed, *mut ::std::os::raw::c_void, size: usize);
 lazy_fnptr!(il2cpp_gc_free_fixed, (), address: *mut ::std::os::raw::c_void);
 lazy_fnptr!(il2cpp_gchandle_new, u32, obj: *mut Il2CppObject, pinned: bool);
@@ -137,11 +138,11 @@ lazy_fnptr!(il2cpp_gchandle_new_weakref, u32, obj: *mut Il2CppObject, track_resu
 lazy_fnptr!(il2cpp_gchandle_get_target, *mut Il2CppObject, gchandle: u32);
 lazy_fnptr!(il2cpp_gchandle_free, (), gchandle: u32);
 lazy_fnptr!(il2cpp_gchandle_foreach_get_target, (), func: ::std::option::Option< unsafe extern "C" fn( data: *mut ::std::os::raw::c_void, userData: *mut ::std::os::raw::c_void, ), >, userData: *mut ::std::os::raw::c_void);
-lazy_fnptr!(il2cpp_object_header_size, u32, );
-lazy_fnptr!(il2cpp_array_object_header_size, u32, );
-lazy_fnptr!(il2cpp_offset_of_array_length_in_array_object_header, u32, );
-lazy_fnptr!(il2cpp_offset_of_array_bounds_in_array_object_header, u32, );
-lazy_fnptr!(il2cpp_allocation_granularity, u32, );
+lazy_fnptr!(il2cpp_object_header_size, u32,);
+lazy_fnptr!(il2cpp_array_object_header_size, u32,);
+lazy_fnptr!(il2cpp_offset_of_array_length_in_array_object_header, u32,);
+lazy_fnptr!(il2cpp_offset_of_array_bounds_in_array_object_header, u32,);
+lazy_fnptr!(il2cpp_allocation_granularity, u32,);
 lazy_fnptr!(il2cpp_unity_liveness_allocate_struct, *mut ::std::os::raw::c_void, filter: *mut Il2CppClass, max_object_count: ::std::os::raw::c_int, callback: il2cpp_register_object_callback, userdata: *mut ::std::os::raw::c_void, reallocate: il2cpp_liveness_reallocate_callback);
 lazy_fnptr!(il2cpp_unity_liveness_calculation_from_root, (), root: *mut Il2CppObject, state: *mut ::std::os::raw::c_void);
 lazy_fnptr!(il2cpp_unity_liveness_calculation_from_statics, (), state: *mut ::std::os::raw::c_void);
@@ -201,7 +202,7 @@ lazy_fnptr!(il2cpp_string_new_utf16, *mut Il2CppString, text: *const Il2CppChar,
 lazy_fnptr!(il2cpp_string_new_wrapper, *mut Il2CppString, str_: *const ::std::os::raw::c_char);
 lazy_fnptr!(il2cpp_string_intern, *mut Il2CppString, str_: *mut Il2CppString);
 lazy_fnptr!(il2cpp_string_is_interned, *mut Il2CppString, str_: *mut Il2CppString);
-lazy_fnptr!(il2cpp_thread_current, *mut Il2CppThread, );
+lazy_fnptr!(il2cpp_thread_current, *mut Il2CppThread,);
 lazy_fnptr!(il2cpp_thread_attach, *mut Il2CppThread, domain: *mut Il2CppDomain);
 lazy_fnptr!(il2cpp_thread_detach, (), thread: *mut Il2CppThread);
 lazy_fnptr!(il2cpp_thread_get_all_attached_threads, *mut *mut Il2CppThread, size: *mut usize);
@@ -212,7 +213,7 @@ lazy_fnptr!(il2cpp_current_thread_get_top_frame, bool, frame: *mut Il2CppStackFr
 lazy_fnptr!(il2cpp_thread_get_top_frame, bool, thread: *mut Il2CppThread, frame: *mut Il2CppStackFrameInfo);
 lazy_fnptr!(il2cpp_current_thread_get_frame_at, bool, offset: i32, frame: *mut Il2CppStackFrameInfo);
 lazy_fnptr!(il2cpp_thread_get_frame_at, bool, thread: *mut Il2CppThread, offset: i32, frame: *mut Il2CppStackFrameInfo);
-lazy_fnptr!(il2cpp_current_thread_get_stack_depth, i32, );
+lazy_fnptr!(il2cpp_current_thread_get_stack_depth, i32,);
 lazy_fnptr!(il2cpp_thread_get_stack_depth, i32, thread: *mut Il2CppThread);
 lazy_fnptr!(il2cpp_override_stack_backtrace, (), stackBacktraceFunc: Il2CppBacktraceFunc);
 lazy_fnptr!(il2cpp_type_get_object, *mut Il2CppObject, type_: *const Il2CppType);
@@ -232,12 +233,12 @@ lazy_fnptr!(il2cpp_image_get_filename, *const ::std::os::raw::c_char, image: *co
 lazy_fnptr!(il2cpp_image_get_entry_point, *const MethodInfo, image: *const Il2CppImage);
 lazy_fnptr!(il2cpp_image_get_class_count, usize, image: *const Il2CppImage);
 lazy_fnptr!(il2cpp_image_get_class, *const Il2CppClass, image: *const Il2CppImage, index: usize);
-lazy_fnptr!(il2cpp_capture_memory_snapshot, *mut Il2CppManagedMemorySnapshot, );
+lazy_fnptr!(il2cpp_capture_memory_snapshot, *mut Il2CppManagedMemorySnapshot,);
 lazy_fnptr!(il2cpp_free_captured_memory_snapshot, (), snapshot: *mut Il2CppManagedMemorySnapshot);
 lazy_fnptr!(il2cpp_set_find_plugin_callback, (), method: Il2CppSetFindPlugInCallback);
 lazy_fnptr!(il2cpp_register_log_callback, (), method: Il2CppLogCallback);
 lazy_fnptr!(il2cpp_debugger_set_agent_options, (), options: *const ::std::os::raw::c_char);
-lazy_fnptr!(il2cpp_is_debugger_attached, bool, );
+lazy_fnptr!(il2cpp_is_debugger_attached, bool,);
 lazy_fnptr!(il2cpp_register_debugger_agent_transport, (), debuggerTransport: *mut Il2CppDebuggerTransport);
 lazy_fnptr!(il2cpp_debug_get_method_info, bool, arg1: *const MethodInfo, methodDebugInfo: *mut Il2CppMethodDebugInfo);
 lazy_fnptr!(il2cpp_unity_install_unitytls_interface, (), unitytlsInterfaceStruct: *const ::std::os::raw::c_void);
@@ -249,6 +250,6 @@ lazy_fnptr!(il2cpp_custom_attrs_has_attr, bool, ainfo: *mut Il2CppCustomAttrInfo
 lazy_fnptr!(il2cpp_custom_attrs_construct, *mut Il2CppArray, cinfo: *mut Il2CppCustomAttrInfo);
 lazy_fnptr!(il2cpp_custom_attrs_free, (), ainfo: *mut Il2CppCustomAttrInfo);
 lazy_fnptr!(il2cpp_class_set_userdata, (), klass: *mut Il2CppClass, userdata: *mut ::std::os::raw::c_void);
-lazy_fnptr!(il2cpp_class_get_userdata_offset, ::std::os::raw::c_int, );
+lazy_fnptr!(il2cpp_class_get_userdata_offset, ::std::os::raw::c_int,);
 lazy_fnptr!(il2cpp_set_default_thread_affinity, (), affinity_mask: i64);
 lazy_fnptr!(il2cpp_unity_set_android_network_up_state_func, (), func: Il2CppAndroidUpStateFunc);

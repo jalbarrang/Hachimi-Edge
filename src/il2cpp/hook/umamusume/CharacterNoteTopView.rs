@@ -9,6 +9,7 @@ impl_addr_wrapper_fn!(get_ButtonTalkGallery, GET_BUTTONTALKGALLERY_ADDR, *mut Il
 pub fn init(umamusume: *const Il2CppImage) {
     get_class_or_return!(umamusume, Gallop, CharacterNoteTopView);
 
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe {
         GET_BUTTONGALLERY_ADDR = get_method_addr(CharacterNoteTopView, c"get_ButtonGallery", 0);
         GET_BUTTONTALKGALLERY_ADDR = get_method_addr(CharacterNoteTopView, c"get_ButtonTalkGallery", 0);

@@ -12,8 +12,7 @@ pub fn is_criware_lib(filename: &str) -> bool {
     filename.ends_with("libcri_ware_unity.so")
 }
 
-pub fn on_hooking_finished(_hachimi: &Hachimi) {
-}
+pub fn on_hooking_finished(_hachimi: &Hachimi) {}
 
 #[derive(Deserialize, Serialize, Clone)]
 pub struct Config {
@@ -24,10 +23,14 @@ pub struct Config {
     #[serde(default)]
     pub load_libraries: Vec<String>,
     #[serde(default)]
-    pub hook_libc_dlopen: bool
+    pub hook_libc_dlopen: bool,
 }
 
 impl Config {
-    fn default_menu_open_key() -> i32 { keymap::KEYCODE_DPAD_RIGHT }
-    fn default_hide_ingame_ui_hotkey_bind() -> i32 { keymap::KEYCODE_INSERT }
+    fn default_menu_open_key() -> i32 {
+        keymap::KEYCODE_DPAD_RIGHT
+    }
+    fn default_hide_ingame_ui_hotkey_bind() -> i32 {
+        keymap::KEYCODE_INSERT
+    }
 }

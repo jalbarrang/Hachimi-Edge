@@ -1,13 +1,12 @@
-use crate::{
-    il2cpp::{
-        api::{il2cpp_class_get_type, il2cpp_type_get_object},
-        symbols::get_method_addr,
-        types::*
-    }
+use crate::il2cpp::{
+    api::{il2cpp_class_get_type, il2cpp_type_get_object},
+    symbols::get_method_addr,
+    types::*,
 };
 
 static mut TYPE_OBJECT: *mut Il2CppObject = 0 as _;
 pub fn type_object() -> *mut Il2CppObject {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe { TYPE_OBJECT }
 }
 
@@ -26,6 +25,7 @@ impl_addr_wrapper_fn!(GetChild, GETCHILD_ADDR, *mut Il2CppObject, this: *mut Il2
 pub fn init(UnityEngine_CoreModule: *const Il2CppImage) {
     get_class_or_return!(UnityEngine_CoreModule, UnityEngine, Transform);
 
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe {
         TYPE_OBJECT = il2cpp_type_get_object(il2cpp_class_get_type(Transform));
         GET_PARENT_ADDR = get_method_addr(Transform, c"get_parent", 0);

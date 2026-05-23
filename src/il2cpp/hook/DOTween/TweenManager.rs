@@ -1,4 +1,7 @@
-use crate::{core::Hachimi, il2cpp::{symbols::get_method_addr, types::*}};
+use crate::{
+    core::Hachimi,
+    il2cpp::{symbols::get_method_addr, types::*},
+};
 
 type UpdateFn = extern "C" fn(update_type: i32, delta_time: f32, independent_time: f32);
 extern "C" fn Update(update_type: i32, mut delta_time: f32, mut independent_time: f32) {

@@ -1,12 +1,18 @@
-use std::{ffi::{CStr, CString}, os::raw::c_void};
 use fnv::FnvHashMap;
 use once_cell::sync::Lazy;
 use pelite::{pe::Pe, pe64::PeFile, FileMap};
+use std::{
+    ffi::{CStr, CString},
+    os::raw::c_void,
+};
 use windows::Win32::Foundation::HMODULE;
 
-use crate::{core::{ext::HashMapExt, Error}, windows::utils};
+use crate::{
+    core::{ext::HashMapExt, Error},
+    windows::utils,
+};
 
-const SYMBOL_LIST: &[&'static str] = &[
+const SYMBOL_LIST: &[&str] = &[
     "il2cpp_init",
     "il2cpp_init_utf16",
     "il2cpp_shutdown",
@@ -240,7 +246,7 @@ const SYMBOL_LIST: &[&'static str] = &[
     "il2cpp_class_set_userdata",
     "il2cpp_class_get_userdata_offset",
     "il2cpp_set_default_thread_affinity",
-    "il2cpp_unity_set_android_network_up_state_func"
+    "il2cpp_unity_set_android_network_up_state_func",
 ];
 
 const START_RVA: u32 = 0x782c92;
@@ -256,8 +262,9 @@ fn generate_symbol_map() -> Result<FnvHashMap<&'static str, CString>, Error> {
     let mut rva = START_RVA;
     for symbol in SYMBOL_LIST {
         let offset = pe.rva_to_file_offset(rva)?;
-        let rip_offset = u32::from_le_bytes(image[offset..offset+4].try_into().unwrap());
+        let rip_offset = u32::from_le_bytes(image[offset..offset + 4].try_into().expect("unexpected failure"));
         let name_offset = pe.rva_to_file_offset(rva + 0x4 + rip_offset)?;
+        // SAFETY: Pointer from IL2CPP runtime is valid
         let name = unsafe { CStr::from_ptr(image[name_offset..].as_ptr() as _) };
         map.insert(*symbol, name.to_owned());
         rva += if rva == START_RVA { 0x28 } else { 0x26 };
@@ -272,13 +279,11 @@ impl From<pelite::Error> for Error {
     }
 }
 
-static SYMBOL_MAP: Lazy<FnvHashMap<&'static str, CString>> = Lazy::new(|| {
-    match generate_symbol_map() {
-        Ok(v) => v,
-        Err(e) => {
-            error!("{}", e);
-            panic!();
-        }
+static SYMBOL_MAP: Lazy<FnvHashMap<&'static str, CString>> = Lazy::new(|| match generate_symbol_map() {
+    Ok(v) => v,
+    Err(e) => {
+        error!("{}", e);
+        panic!();
     }
 });
 

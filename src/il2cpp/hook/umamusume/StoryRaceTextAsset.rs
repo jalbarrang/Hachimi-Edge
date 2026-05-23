@@ -5,23 +5,29 @@ use widestring::Utf16Str;
 use crate::{
     core::{ext::Utf16StringExt, Hachimi},
     il2cpp::{
-        ext::{Il2CppObjectExt, StringExt}, hook::UnityEngine_AssetBundleModule::AssetBundle::ASSET_PATH_PREFIX, symbols::{get_field_from_name, get_field_object_value, set_field_object_value, Array}, types::*
-    }
+        ext::{Il2CppObjectExt, StringExt},
+        hook::UnityEngine_AssetBundleModule::AssetBundle::ASSET_PATH_PREFIX,
+        symbols::{get_field_from_name, get_field_object_value, set_field_object_value, Array},
+        types::*,
+    },
 };
 
 static mut CLASS: *mut Il2CppClass = null_mut();
 pub fn class() -> *mut Il2CppClass {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe { CLASS }
 }
 
 static mut TEXT_DATA_FIELD: *mut FieldInfo = null_mut();
 fn get_textData(this: *mut Il2CppObject) -> Array {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     Array::from(get_field_object_value(this, unsafe { TEXT_DATA_FIELD }))
 }
 
 // I'd move this out to its own module, but there's only a single function we need rn sooooo...
 static mut KEY_TEXT_FIELD: *mut FieldInfo = null_mut();
 fn Key_set_text(key: *mut Il2CppObject, value: *mut Il2CppString) {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe {
         if KEY_TEXT_FIELD.is_null() {
             KEY_TEXT_FIELD = get_field_from_name((*key).klass(), c"text");
@@ -46,6 +52,7 @@ pub fn on_LoadAsset(_bundle: *mut Il2CppObject, this: *mut Il2CppObject, name: &
     };
 
     let text_data = get_textData(this);
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     for (i, key) in unsafe { text_data.as_slice().iter().enumerate() } {
         let Some(text) = dict.get(i) else { continue };
         Key_set_text(*key, text.to_il2cpp_string());
@@ -55,6 +62,7 @@ pub fn on_LoadAsset(_bundle: *mut Il2CppObject, this: *mut Il2CppObject, name: &
 pub fn init(umamusume: *const Il2CppImage) {
     get_class_or_return!(umamusume, Gallop, StoryRaceTextAsset);
 
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe {
         CLASS = StoryRaceTextAsset;
         TEXT_DATA_FIELD = get_field_from_name(StoryRaceTextAsset, c"textData")

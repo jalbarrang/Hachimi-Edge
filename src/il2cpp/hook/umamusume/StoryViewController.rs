@@ -1,4 +1,7 @@
-use crate::{core::Hachimi, il2cpp::{symbols::get_method_addr, types::*}};
+use crate::{
+    core::Hachimi,
+    il2cpp::{symbols::get_method_addr, types::*},
+};
 
 use super::StoryChoiceController;
 

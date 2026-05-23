@@ -6,6 +6,7 @@ impl_addr_wrapper_fn!(LoadImage, LOADIMAGE_ADDR, bool, this_tex: *mut Il2CppObje
 pub fn init(UnityEngine_ImageConversionModule: *const Il2CppImage) {
     get_class_or_return!(UnityEngine_ImageConversionModule, UnityEngine, ImageConversion);
 
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe {
         LOADIMAGE_ADDR = get_method_addr(ImageConversion, c"LoadImage", 3);
     }

@@ -1,22 +1,23 @@
 use std::sync::{Condvar, Mutex};
 
+use super::{Error, Gui, Hachimi};
+use crate::{
+    core::utils::notify_error,
+    il2cpp::{
+        hook::umamusume::{GameSystem, StoryTimelineController, StoryTimelineData},
+        symbols::{IList, Thread},
+    },
+};
 use rust_i18n::t;
 use serde::{Deserialize, Serialize};
 use tiny_http::{Header, Method, Request, Response, Server};
-use crate::{core::utils::notify_error, il2cpp::{hook::umamusume::{GameSystem, StoryTimelineController, StoryTimelineData}, symbols::{IList, Thread}}};
-use super::{Error, Gui, Hachimi};
 
 pub fn start_http(listen_all: bool) {
     std::thread::spawn(move || http_thread(listen_all));
 }
 
 fn http_thread(listen_all: bool) {
-    let address = if listen_all {
-        "0.0.0.0:50433"
-    }
-    else {
-        "127.0.0.1:50433"
-    };
+    let address = if listen_all { "0.0.0.0:50433" } else { "127.0.0.1:50433" };
 
     let server = match Server::http(address) {
         Ok(v) => v,
@@ -34,24 +35,20 @@ fn http_thread(listen_all: bool) {
             Err(e) => {
                 error!("Error occurred while processing command: {}", e);
                 CommandResponse::error(e.to_string())
-            },
+            }
         };
 
-        let response_data = serde_json::to_string(&command_response).unwrap_or_else(|_|
-            serde_json::to_string(&CommandResponse::error(
-                "Failed to encode response".to_owned()
-            )).unwrap()
-        );
+        let response_data = serde_json::to_string(&command_response).unwrap_or_else(|_| {
+            serde_json::to_string(&CommandResponse::error("Failed to encode response".to_owned())).expect("valid UTF-8")
+        });
 
         if let Err(e) = request.respond(
             Response::from_string(response_data)
-                .with_header(Header::from_bytes("content-type", "application/json").unwrap())
-                .with_status_code(
-                    match command_response {
-                        CommandResponse::Error { .. } => 400,
-                        _ => 200
-                    }
-                )
+                .with_header(Header::from_bytes("content-type", "application/json").expect("unexpected failure"))
+                .with_status_code(match command_response {
+                    CommandResponse::Error { .. } => 400,
+                    _ => 200,
+                }),
         ) {
             error!("Failed to send HTTP response: {}", e);
         }
@@ -64,14 +61,20 @@ static STORY_GOTO_BLOCK_CVAR: Condvar = Condvar::new();
 fn on_http_request(request: &mut Request) -> Result<CommandResponse, Error> {
     let method = request.method();
     if *method == Method::Get {
-        return Ok(CommandResponse::HelloWorld { message: "Hachimi's IPC server is working!" });
-    }
-    else if *method != Method::Post {
+        return Ok(CommandResponse::HelloWorld {
+            message: "Hachimi's IPC server is working!",
+        });
+    } else if *method != Method::Post {
         return Ok(CommandResponse::error("Invalid request method".to_owned()));
     }
 
-    let headers = Headers { headers: request.headers() };
-    if !headers.get("content-type").map(|t| t.eq_ignore_ascii_case("application/json")).unwrap_or(false) {
+    let headers = Headers {
+        headers: request.headers(),
+    };
+    if !headers
+        .get("content-type")
+        .is_some_and(|t| t.eq_ignore_ascii_case("application/json"))
+    {
         return Ok(CommandResponse::error("Invalid content type".to_owned()));
     }
 
@@ -82,16 +85,17 @@ fn on_http_request(request: &mut Request) -> Result<CommandResponse, Error> {
                 return Ok(CommandResponse::error("Block ID cannot be smaller than -1".to_owned()));
             }
 
-            let mut params = STORY_GOTO_BLOCK_PARAMS.lock().unwrap();
+            let mut params = STORY_GOTO_BLOCK_PARAMS.lock().expect("lock poisoned");
             *params = (block_id, incremental);
 
             Thread::main_thread().schedule(|| {
-                let (ref mut block_id, incremental) = *STORY_GOTO_BLOCK_PARAMS.lock().unwrap();
+                let (ref mut block_id, incremental) = *STORY_GOTO_BLOCK_PARAMS.lock().expect("lock poisoned");
 
                 fn exec(block_id: i32, incremental: bool) -> i32 {
-                    let mut handle_guard = StoryTimelineController::CURRENT.lock().unwrap();
-                    let Some(controller) = (*handle_guard).as_ref()
-                        .map(|h| h.target())
+                    let mut handle_guard = StoryTimelineController::CURRENT.lock().expect("lock poisoned");
+                    let Some(controller) = (*handle_guard)
+                        .as_ref()
+                        .map(super::super::il2cpp::symbols::GCHandle::target)
                         .filter(|c| !c.is_null() && !StoryTimelineController::get_IsFinished(*c))
                     else {
                         *handle_guard = None;
@@ -122,8 +126,7 @@ fn on_http_request(request: &mut Request) -> Result<CommandResponse, Error> {
                         for i in start..=block_id {
                             StoryTimelineController::GotoBlock(controller, i, false, false, false);
                         }
-                    }
-                    else {
+                    } else {
                         StoryTimelineController::GotoBlock(controller, block_id, false, false, false);
                     }
                     -2
@@ -135,21 +138,24 @@ fn on_http_request(request: &mut Request) -> Result<CommandResponse, Error> {
             });
 
             // Block until thread finishes
-            while (*params).0 > -2 {
-                params = STORY_GOTO_BLOCK_CVAR.wait(params).unwrap();
+            while params.0 > -2 {
+                params = STORY_GOTO_BLOCK_CVAR.wait(params).expect("unexpected failure");
             }
 
-            if (*params).0 == -3 {
+            if params.0 == -3 {
                 return Ok(CommandResponse::error(None));
             }
-        },
+        }
 
         Command::ReloadLocalizedData => {
             Hachimi::instance().load_localized_data();
             if let Some(mutex) = Gui::instance() {
-                mutex.lock().unwrap().show_notification(&t!("notification.localized_data_reloaded"));
+                mutex
+                    .lock()
+                    .expect("unexpected failure")
+                    .show_notification(&t!("notification.localized_data_reloaded"));
             }
-        },
+        }
 
         Command::SoftReset { exec } => {
             if exec {
@@ -157,9 +163,14 @@ fn on_http_request(request: &mut Request) -> Result<CommandResponse, Error> {
                     GameSystem::SoftwareReset(GameSystem::instance());
                 });
                 if let Some(mutex) = Gui::instance() {
-                    mutex.lock().unwrap().show_notification(&t!("notification.ipc_softreset_exec"));
+                    mutex
+                        .lock()
+                        .expect("unexpected failure")
+                        .show_notification(&t!("notification.ipc_softreset_exec"));
                 }
-            } else { notify_error("SoftReset needs exec=true"); }
+            } else {
+                notify_error("SoftReset needs exec=true");
+            }
         }
     }
 
@@ -167,7 +178,7 @@ fn on_http_request(request: &mut Request) -> Result<CommandResponse, Error> {
 }
 
 struct Headers<'a> {
-    headers: &'a [Header]
+    headers: &'a [Header],
 }
 
 impl<'a> Headers<'a> {
@@ -177,7 +188,7 @@ impl<'a> Headers<'a> {
                 return Some(header.value.as_str());
             }
         }
-    
+
         None
     }
 }
@@ -188,12 +199,12 @@ enum Command {
     StoryGotoBlock {
         block_id: i32,
         #[serde(default)]
-        incremental: bool
+        incremental: bool,
     },
     ReloadLocalizedData,
     SoftReset {
-        exec: bool
-    }
+        exec: bool,
+    },
 }
 
 #[derive(Serialize)]
@@ -201,17 +212,15 @@ enum Command {
 enum CommandResponse {
     Ok,
 
-    Error {
-        message: Option<String>
-    },
+    Error { message: Option<String> },
 
-    HelloWorld {
-        message: &'static str
-    }
+    HelloWorld { message: &'static str },
 }
 
 impl CommandResponse {
     fn error(message: impl Into<Option<String>>) -> Self {
-        Self::Error { message: message.into() }
+        Self::Error {
+            message: message.into(),
+        }
     }
 }

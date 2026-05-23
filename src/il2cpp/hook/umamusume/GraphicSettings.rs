@@ -1,6 +1,9 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{core::Hachimi, il2cpp::{symbols::{get_method_addr}, types::*}};
+use crate::{
+    core::Hachimi,
+    il2cpp::{symbols::get_method_addr, types::*},
+};
 
 use super::{LowResolutionCamera, SingleModeStartResultCharaViewer};
 
@@ -8,6 +11,7 @@ use super::{LowResolutionCamera, SingleModeStartResultCharaViewer};
 static mut CLASS: *mut Il2CppClass = 0 as _;
 #[cfg(target_os = "windows")]
 pub fn class() -> *mut Il2CppClass {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe { CLASS }
 }
 
@@ -33,9 +37,9 @@ type GetVirtualResolution3DFn = extern "C" fn(this: *mut Il2CppObject, is_forced
 extern "C" fn GetVirtualResolution3D(this: *mut Il2CppObject, is_forced_wide_aspect: bool) -> Vector2Int_t {
     let mut res = get_orig_fn!(GetVirtualResolution3D, GetVirtualResolution3DFn)(this, is_forced_wide_aspect);
     let mult = Hachimi::instance().config.load().virtual_res_mult;
-    if mult != 1.0 &&
-        !SingleModeStartResultCharaViewer::setting_up_image_effect() &&
-        !LowResolutionCamera::creating_render_texture()
+    if mult != 1.0
+        && !SingleModeStartResultCharaViewer::setting_up_image_effect()
+        && !LowResolutionCamera::creating_render_texture()
     {
         res *= mult;
     }
@@ -60,22 +64,24 @@ impl_addr_wrapper_fn!(Update3DRenderTexture, UPDATE3DRENDERTEXTURE_ADDR, (), thi
 #[derive(Default, Copy, Clone, Serialize, Deserialize, Eq, PartialEq)]
 #[repr(i32)]
 pub enum GraphicsQuality {
-    #[default] Default = -1,
+    #[default]
+    Default = -1,
     Toon1280 = 0,
     Toon1280x2,
     Toon1280x4,
     ToonFull,
-    Max
+    Max,
 }
 
-// UnityEngine.Rendering.Universal 
+// UnityEngine.Rendering.Universal
 #[derive(Default, Copy, Clone, Serialize, Deserialize, Eq, PartialEq)]
 #[repr(i32)]
 pub enum MsaaQuality {
-    #[default] Disabled = 1,
+    #[default]
+    Disabled = 1,
     _2x = 2,
     _4x = 4,
-    _8x = 8
+    _8x = 8,
 }
 
 type get_IsMSAAFn = extern "C" fn(this: *mut Il2CppObject) -> bool;
@@ -143,6 +149,7 @@ pub fn init(umamusume: *const Il2CppImage) {
     new_hook!(Get3DAntiAliasingLevel_addr, Get3DAntiAliasingLevel);
 
     #[cfg(target_os = "windows")]
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe {
         CLASS = GraphicSettings;
         UPDATE3DRENDERTEXTURE_ADDR = get_method_addr(GraphicSettings, c"Update3DRenderTexture", 0);

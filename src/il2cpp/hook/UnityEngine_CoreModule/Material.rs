@@ -9,6 +9,7 @@ impl_addr_wrapper_fn!(set_mainTexture, SET_MAINTEXTURE_ADDR, (), this: *mut Il2C
 pub fn init(UnityEngine_CoreModule: *const Il2CppImage) {
     get_class_or_return!(UnityEngine_CoreModule, UnityEngine, Material);
 
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe {
         GET_MAINTEXTURE_ADDR = get_method_addr(Material, c"get_mainTexture", 0);
         SET_MAINTEXTURE_ADDR = get_method_addr(Material, c"set_mainTexture", 1);

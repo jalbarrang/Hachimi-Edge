@@ -6,6 +6,7 @@ impl_addr_wrapper_fn!(CreateFontAsset, CREATEFONTASSET_ADDR, *mut Il2CppObject, 
 pub fn init(Unity_TextMeshPro: *const Il2CppImage) {
     get_class_or_return!(Unity_TextMeshPro, TMPro, TMP_FontAsset);
 
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe {
         CREATEFONTASSET_ADDR = get_method_addr(TMP_FontAsset, c"CreateFontAsset", 1);
     }

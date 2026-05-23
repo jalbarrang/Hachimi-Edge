@@ -3,16 +3,17 @@ use std::path::Path;
 use fnv::FnvHashMap;
 
 use crate::{
-    core::{ext::Utf16StringExt, Hachimi, game::Region},
+    core::{ext::Utf16StringExt, game::Region, Hachimi},
     il2cpp::{
         ext::{Il2CppStringExt, StringExt},
         symbols::{get_field_from_name, get_field_object_value, get_method_addr, Array, Dictionary},
-        types::*
-    }
+        types::*,
+    },
 };
 
 static mut LYRICSDATADIC_FIELD: *mut FieldInfo = 0 as _;
 fn get__lyricsDataDic(this: *mut Il2CppObject) -> Dictionary<i32, Array<u8>> {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     Dictionary::from(get_field_object_value(this, unsafe { LYRICSDATADIC_FIELD }))
 }
 
@@ -21,7 +22,7 @@ fn get__lyricsDataDic(this: *mut Il2CppObject) -> Dictionary<i32, Array<u8>> {
 #[allow(dead_code)]
 enum AdditionalSetting {
     None = 0,
-    SheetVariationId = 1
+    SheetVariationId = 1,
 }
 
 trait LyricsDataCommon {
@@ -38,7 +39,7 @@ struct LyricsDataJP {
     time: f32,
     lyrics: *mut Il2CppString,
     additionalsetting_type: AdditionalSetting,
-    additionalsetting_value: i32
+    additionalsetting_value: i32,
 }
 
 #[repr(C)]
@@ -48,13 +49,21 @@ struct LyricsDataGlobal {
 }
 
 impl LyricsDataCommon for LyricsDataJP {
-    fn time(&self) -> f32 { self.time }
-    fn lyrics_mut(&mut self) -> &mut *mut Il2CppString { &mut self.lyrics }
+    fn time(&self) -> f32 {
+        self.time
+    }
+    fn lyrics_mut(&mut self) -> &mut *mut Il2CppString {
+        &mut self.lyrics
+    }
 }
 
 impl LyricsDataCommon for LyricsDataGlobal {
-    fn time(&self) -> f32 { self.time }
-    fn lyrics_mut(&mut self) -> &mut *mut Il2CppString { &mut self.lyrics }
+    fn time(&self) -> f32 {
+        self.time
+    }
+    fn lyrics_mut(&mut self) -> &mut *mut Il2CppString {
+        &mut self.lyrics
+    }
 }
 
 type LoadLyricsFn = extern "C" fn(this: *mut Il2CppObject, id: i32, path: *mut Il2CppString) -> bool;
@@ -64,6 +73,7 @@ extern "C" fn LoadLyrics(this: *mut Il2CppObject, id: i32, path: *mut Il2CppStri
     }
 
     // Live/MusicScores/mXXXX/mXXXX_lyrics
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     let path_str = unsafe { (*path).as_utf16str() };
 
     let mut dict_path = Path::new("lyrics").join(path_str.path_filename().to_string());
@@ -73,8 +83,9 @@ extern "C" fn LoadLyrics(this: *mut Il2CppObject, id: i32, path: *mut Il2CppStri
         return true;
     };
     // dont let pbork interactive know about this
-    let secs_dict: FnvHashMap<i32, String> = dict.into_iter()
-        .map(|(time, lyrics)| (f32::to_bits(time as f32 / 1000.0).cast_signed(), lyrics) )
+    let secs_dict: FnvHashMap<i32, String> = dict
+        .into_iter()
+        .map(|(time, lyrics)| (f32::to_bits(time as f32 / 1000.0).cast_signed(), lyrics))
         .collect();
 
     let lyrics_data_dict = get__lyricsDataDic(this);
@@ -89,13 +100,13 @@ extern "C" fn LoadLyrics(this: *mut Il2CppObject, id: i32, path: *mut Il2CppStri
         }
     };
 
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe {
         let raw_array: *mut Il2CppArray = lyrics_data_array.this;
 
         let length = (*raw_array).max_length;
 
-        let klass_ref: &mut *mut Il2CppClass =
-            (&mut (*raw_array).obj.__bindgen_anon_1.klass).as_mut();
+        let klass_ref: &mut *mut Il2CppClass = (*raw_array).obj.__bindgen_anon_1.klass.as_mut();
 
         let element_size = (*(*klass_ref)).element_size as usize;
 
@@ -136,6 +147,7 @@ pub fn init(umamusume: *const Il2CppImage) {
 
     new_hook!(LoadLyrics_addr, LoadLyrics);
 
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe {
         LYRICSDATADIC_FIELD = get_field_from_name(LyricsController, c"_lyricsDataDic");
     }

@@ -26,8 +26,8 @@
     SOFTWARE.
 */
 
-use super::Error;
 use self::Resolver::*;
+use super::Error;
 
 #[derive(Clone, Debug)]
 pub enum Resolver {
@@ -47,31 +47,28 @@ impl Default for Resolver {
 /// Finds the index of a pattern, outside of parenthesis
 fn index_of(src: &str, pat: &str) -> Option<usize> {
     src.chars()
-        .fold(
-            (None, 0, 0, 0),
-            |(match_index, i, n_matches, paren_level), ch| {
-                if let Some(x) = match_index {
-                    (Some(x), i, n_matches, paren_level)
-                } else {
-                    let new_par_lvl = match ch {
-                        '(' => paren_level + 1,
-                        ')' => paren_level - 1,
-                        _ => paren_level,
-                    };
+        .fold((None, 0, 0, 0), |(match_index, i, n_matches, paren_level), ch| {
+            if let Some(x) = match_index {
+                (Some(x), i, n_matches, paren_level)
+            } else {
+                let new_par_lvl = match ch {
+                    '(' => paren_level + 1,
+                    ')' => paren_level - 1,
+                    _ => paren_level,
+                };
 
-                    if Some(ch) == pat.chars().nth(n_matches) {
-                        let length = n_matches + 1;
-                        if length == pat.len() && new_par_lvl == 0 {
-                            (Some(i - n_matches), i + 1, length, new_par_lvl)
-                        } else {
-                            (match_index, i + 1, length, new_par_lvl)
-                        }
+                if Some(ch) == pat.chars().nth(n_matches) {
+                    let length = n_matches + 1;
+                    if length == pat.len() && new_par_lvl == 0 {
+                        (Some(i - n_matches), i + 1, length, new_par_lvl)
                     } else {
-                        (match_index, i + 1, 0, new_par_lvl)
+                        (match_index, i + 1, length, new_par_lvl)
                     }
+                } else {
+                    (match_index, i + 1, 0, new_par_lvl)
                 }
-            },
-        )
+            }
+        })
         .0
 }
 
@@ -107,7 +104,7 @@ pub enum Operator {
     Minus,
     Divide,
     Multiply,
-    Modulo
+    Modulo,
 }
 
 impl Ast {
@@ -351,7 +348,7 @@ impl Ast {
     }
 
     fn parse_int(src: &str) -> Result<Ast, Error> {
-        if let Ok(x) = u64::from_str_radix(src, 10) {
+        if let Ok(x) = src.parse::<u64>() {
             Ok(Ast::Integer(x))
         } else {
             Self::parse_n(src.trim())

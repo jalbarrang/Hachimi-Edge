@@ -1,21 +1,28 @@
-use std::{cell::LazyCell, collections::{hash_map::Entry, BTreeMap}};
+use std::{
+    cell::LazyCell,
+    collections::{hash_map::Entry, BTreeMap},
+};
 
 use fnv::FnvHashMap;
 
 use crate::{
     core::{utils, Hachimi, SugoiClient},
-    il2cpp::{ext::{Il2CppStringExt, StringExt}, symbols::{get_method_overload_addr, unbox}, types::*}
+    il2cpp::{
+        ext::{Il2CppStringExt, StringExt},
+        symbols::{get_method_overload_addr, unbox},
+        types::*,
+    },
 };
 
 use super::TextId;
 
 // SAFETY: Localize::Get is only called from the Unity main thread.
-static mut TEXTID_NAME_CACHE: LazyCell<FnvHashMap<i32, String>> = LazyCell::new(|| FnvHashMap::default());
+static mut TEXTID_NAME_CACHE: LazyCell<FnvHashMap<i32, String>> = LazyCell::new(FnvHashMap::default);
 
 /**
  * Gallop::Localize::Get
  * Used by the game to get localized strings for builtin text (mostly UI).
- * 
+ *
  * id is a value of the TextId enum
  * cy devs likes to insert stuff at arbitrary locations within the enum, changing their values
  * so we'll just map them to their actual name instead
@@ -28,25 +35,29 @@ pub extern "C" fn Get(id: i32) -> *mut Il2CppString {
         return get_orig_fn!(Get, GetFn)(id);
     }
 
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     let name = match unsafe { TEXTID_NAME_CACHE.entry(id) } {
         Entry::Occupied(e) => &*e.into_mut(),
         Entry::Vacant(e) => {
             let name = TextId::get_name(id);
+            // SAFETY: FFI / raw pointer operation required by IL2CPP interop
             let name_str = unsafe { (*name).as_utf16str().to_string() };
             e.insert(name_str)
-        },
+        }
     };
 
     if let Some(text) = localized_data.localize_dict.get(name) {
         text.to_il2cpp_string()
-    }
-    else {
+    } else {
         let str = get_orig_fn!(Get, GetFn)(id);
         if Hachimi::instance().config.load().translator_mode && id != 1109 && id != 1032 {
             // 1109 and 1032 seems to be debugging strings (they're annoying)
+            // SAFETY: FFI / raw pointer operation required by IL2CPP interop
             utils::print_json_entry(name, unsafe { &(*str).as_utf16str().to_string() });
         }
+        // SAFETY: FFI / raw pointer operation required by IL2CPP interop
         if hachimi.config.load().auto_translate_localize && !str.is_null() && unsafe { (*str).length > 0 } {
+            // SAFETY: FFI / raw pointer operation required by IL2CPP interop
             let s = unsafe { (*str).as_utf16str().to_string() };
             if let Ok(res) = SugoiClient::instance().translate_one(s) {
                 return res.to_il2cpp_string();
@@ -59,13 +70,21 @@ pub extern "C" fn Get(id: i32) -> *mut Il2CppString {
 pub fn dump_strings() -> BTreeMap<String, String> {
     let mut map = BTreeMap::new();
 
-    for obj in TextId::get_values().enumerator().map(|e| e.iter()).unwrap_or_default().expect("enum values enumerator") {
+    for obj in TextId::get_values()
+        .enumerator()
+        .map(|e| e.iter())
+        .unwrap_or_default()
+        .expect("enum values enumerator")
+    {
+        // SAFETY: FFI / raw pointer operation required by IL2CPP interop
         let value: i32 = unsafe { unbox(obj) };
         let name = TextId::get_name(value);
+        // SAFETY: FFI / raw pointer operation required by IL2CPP interop
         let name_str = unsafe { (*name).as_utf16str() };
 
         let res = get_orig_fn!(Get, GetFn)(value);
         if !res.is_null() {
+            // SAFETY: FFI / raw pointer operation required by IL2CPP interop
             let res_str = unsafe { (*res).as_utf16str() };
             map.insert(name_str.to_string(), res_str.to_string());
         }

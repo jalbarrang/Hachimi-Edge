@@ -1,7 +1,9 @@
 use std::ptr::null_mut;
 
 use crate::il2cpp::{
-    ext::Il2CppObjectExt, symbols::{get_field_from_name, get_field_object_value, get_field_value, set_field_value, IList}, types::*
+    ext::Il2CppObjectExt,
+    symbols::{get_field_from_name, get_field_object_value, get_field_value, set_field_value, IList},
+    types::*,
 };
 
 use super::{StoryTimelineTextClipData, StoryTimelineTrackData};
@@ -9,27 +11,32 @@ use super::{StoryTimelineTextClipData, StoryTimelineTrackData};
 // StoryTimelineTextTrackData (derived class of StoryTimelineTrackData)
 static mut TEXTTRACK_FIELD: *mut FieldInfo = null_mut();
 pub fn get_TextTrack(this: *mut Il2CppObject) -> *mut Il2CppObject {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     get_field_object_value(this, unsafe { TEXTTRACK_FIELD })
 }
 
 static mut BLOCKLENGTH_FIELD: *mut FieldInfo = null_mut();
 pub fn get_BlockLength(this: *mut Il2CppObject) -> i32 {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     get_field_value(this, unsafe { BLOCKLENGTH_FIELD })
 }
 
 pub fn set_BlockLength(this: *mut Il2CppObject, value: i32) {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     set_field_value(this, unsafe { BLOCKLENGTH_FIELD }, &value)
 }
 
 // List<StoryTimelineCharaTrackData>
 static mut CHARACTERTRACKLIST_FIELD: *mut FieldInfo = null_mut();
 pub fn get_CharacterTrackList(this: *mut Il2CppObject) -> *mut Il2CppObject {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     get_field_object_value(this, unsafe { CHARACTERTRACKLIST_FIELD })
 }
 
 // List<StoryTimelineScreenEffectTrackData>
 static mut SCREENEFFECTTRACKLIST_FIELD: *mut FieldInfo = null_mut();
 pub fn get_ScreenEffectTrackList(this: *mut Il2CppObject) -> *mut Il2CppObject {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     get_field_object_value(this, unsafe { SCREENEFFECTTRACKLIST_FIELD })
 }
 
@@ -44,6 +51,7 @@ pub fn get_text_clip(this: *mut Il2CppObject) -> Option<*mut Il2CppObject> {
     // There should be a single text clip per track
     let clip_data = clip_list.get(0)?;
 
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     let class = unsafe { (*clip_data).klass() };
     if class != StoryTimelineTextClipData::class() {
         return None;
@@ -55,6 +63,7 @@ pub fn get_text_clip(this: *mut Il2CppObject) -> Option<*mut Il2CppObject> {
 pub fn init(umamusume: *const Il2CppImage) {
     get_class_or_return!(umamusume, Gallop, StoryTimelineBlockData);
 
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe {
         TEXTTRACK_FIELD = get_field_from_name(StoryTimelineBlockData, c"TextTrack");
         BLOCKLENGTH_FIELD = get_field_from_name(StoryTimelineBlockData, c"BlockLength");

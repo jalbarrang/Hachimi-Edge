@@ -1,0 +1,70 @@
+# =============================================================================
+# typos Configuration — Hachimi Edge
+# Catches typos in code, comments, strings, and identifiers.
+#
+# Run: typos
+# Docs: https://github.com/crate-ci/typos
+# =============================================================================
+
+[default]
+# Check identifiers (variable names, function names, etc.)
+check-filename = true
+check-file = true
+
+[default.extend-words]
+# Project-specific words that are NOT typos.
+# Game/domain terms
+umamusume = "umamusume"
+musume = "musume"
+hachimi = "hachimi"
+
+# IL2CPP / Unity terms
+il2cpp = "il2cpp"
+il2 = "il2"
+cpp = "cpp"
+vtable = "vtable"
+hwnd = "hwnd"
+wnd = "wnd"
+himc = "himc"
+
+# Crate names
+fnv = "fnv"
+gdi = "gdi"
+dxgi = "dxgi"
+hlsl = "hlsl"
+
+# Abbreviations used in codebase
+tl = "tl"
+impl = "impl"
+compat = "compat"
+
+[default.extend-identifiers]
+# Specific identifiers that look like typos but aren't
+HCBTHOOK = "HCBTHOOK"
+
+[files]
+# Don't check generated files, build artifacts, or binary content.
+extend-exclude = [
+    "target/",
+    "*.dll",
+    "*.so",
+    "*.exe",
+    "*.bin",
+    "*.png",
+    "*.jpg",
+    "Cargo.lock",
+    "assets/locales/",
+    "docs/reverse-engineering/",
+]
+
+[type.toml]
+# TOML files — only check values, not keys (dependency names look like typos)
+check-file = false
+
+[type.json]
+# JSON — skip (config files, translation files)
+check-file = false
+
+[type.md]
+# Markdown — check for typos in documentation
+check-file = true

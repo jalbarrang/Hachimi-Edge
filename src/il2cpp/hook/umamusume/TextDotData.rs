@@ -5,22 +5,25 @@ use crate::{
     il2cpp::{
         api::il2cpp_array_new,
         symbols::{get_field_from_name, set_field_object_value},
-        types::*
-    }
+        types::*,
+    },
 };
 
 static mut CLASS: *mut Il2CppClass = 0 as _;
 pub fn class() -> *mut Il2CppClass {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe { CLASS }
 }
 
 static mut DATAARRAY_FIELD: *mut FieldInfo = 0 as _;
 fn set_DataArray(this: *mut Il2CppObject, value: *mut Il2CppArray) {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     set_field_object_value(this, unsafe { DATAARRAY_FIELD }, value);
 }
 
 static mut DOTBLOCKDATA_CLASS: *mut Il2CppClass = 0 as _;
 fn DotBlockData_class() -> *mut Il2CppClass {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe { DOTBLOCKDATA_CLASS }
 }
 
@@ -38,6 +41,7 @@ pub fn init(umamusume: *const Il2CppImage) {
 
     get_class_or_return!(umamusume, "", TextDotData);
 
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe {
         CLASS = TextDotData;
         DATAARRAY_FIELD = get_field_from_name(TextDotData, c"DataArray");
@@ -46,6 +50,7 @@ pub fn init(umamusume: *const Il2CppImage) {
     // Putting nested class inside parent module due to lack of usage
     find_nested_class_or_return!(TextDotData, DotBlockData);
 
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe {
         DOTBLOCKDATA_CLASS = DotBlockData;
     }

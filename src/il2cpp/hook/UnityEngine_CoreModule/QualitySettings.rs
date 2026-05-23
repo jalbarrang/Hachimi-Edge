@@ -1,6 +1,9 @@
 use std::sync::atomic;
 
-use crate::{core::Hachimi, il2cpp::{api::il2cpp_resolve_icall, types::*}};
+use crate::{
+    core::Hachimi,
+    il2cpp::{api::il2cpp_resolve_icall, types::*},
+};
 
 type SetVSyncCountFn = extern "C" fn(value: i32);
 pub extern "C" fn set_vSyncCount(mut value: i32) {
@@ -12,9 +15,8 @@ pub extern "C" fn set_vSyncCount(mut value: i32) {
 }
 
 pub fn init(_UnityEngine_CoreModule: *const Il2CppImage) {
-    let set_vSyncCount_addr = il2cpp_resolve_icall(
-        c"UnityEngine.QualitySettings::set_vSyncCount(System.Int32)".as_ptr()
-    );
+    let set_vSyncCount_addr =
+        il2cpp_resolve_icall(c"UnityEngine.QualitySettings::set_vSyncCount(System.Int32)".as_ptr());
 
     new_hook!(set_vSyncCount_addr, set_vSyncCount);
 }

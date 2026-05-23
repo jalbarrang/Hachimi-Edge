@@ -18,7 +18,7 @@ pub enum Error {
     FileHashMismatch(String),
     ZipError(zip::result::ZipError),
     DiscordRpcError(String),
-    RuntimeError(String)
+    RuntimeError(String),
 }
 
 impl fmt::Display for Error {
@@ -32,10 +32,10 @@ impl fmt::Display for Error {
             }
             Error::AssemblyNotFound(name) => {
                 write!(f, "Assembly not found: {}", name)
-            },
+            }
             Error::ClassNotFound(namespace, class_name) => {
                 write!(f, "Class not found: {}::{}", namespace, class_name)
-            },
+            }
             Error::MethodNotFound(name) => {
                 write!(f, "Method not found: {}", name)
             }
@@ -62,10 +62,10 @@ impl fmt::Display for Error {
             }
             Error::ZipError(error) => {
                 write!(f, "Zip error: {}", error)
-            },
+            }
             Error::DiscordRpcError(msg) => {
                 write!(f, "Discord RPC Error: {}", msg)
-            },
+            }
             Error::RuntimeError(msg) => {
                 write!(f, "{}", msg)
             }

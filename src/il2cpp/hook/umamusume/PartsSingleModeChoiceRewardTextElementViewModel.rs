@@ -8,10 +8,10 @@ use crate::{
     },
 };
 
-type GetParameterValueTextFn =
-    extern "C" fn(this: *mut Il2CppObject, param: i32) -> *mut Il2CppString;
+type GetParameterValueTextFn = extern "C" fn(this: *mut Il2CppObject, param: i32) -> *mut Il2CppString;
 extern "C" fn GetParameterValueText(this: *mut Il2CppObject, param: i32) -> *mut Il2CppString {
     let mut text = get_orig_fn!(GetParameterValueText, GetParameterValueTextFn)(this, param);
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     let utf_str = unsafe { (*text).as_utf16str() };
     if utf_str.as_slice().contains(&36) {
         text = Hachimi::instance()
@@ -23,11 +23,7 @@ extern "C" fn GetParameterValueText(this: *mut Il2CppObject, param: i32) -> *mut
 }
 
 pub fn init(umamusume: *const Il2CppImage) {
-    get_class_or_return!(
-        umamusume,
-        Gallop,
-        PartsSingleModeChoiceRewardTextElementViewModel
-    );
+    get_class_or_return!(umamusume, Gallop, PartsSingleModeChoiceRewardTextElementViewModel);
 
     let GetParameterValueText_addr = get_method_addr(
         PartsSingleModeChoiceRewardTextElementViewModel,

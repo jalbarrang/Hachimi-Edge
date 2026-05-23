@@ -6,6 +6,7 @@ impl_addr_wrapper_fn!(GetView, GETVIEW_ADDR, *mut Il2CppObject, this: *mut Il2Cp
 pub fn init(umamusume: *const Il2CppImage) {
     get_class_or_return!(umamusume, Gallop, CharacterNoteTopViewController);
 
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe {
         GETVIEW_ADDR = get_method_addr(CharacterNoteTopViewController, c"GetView", 0);
     }

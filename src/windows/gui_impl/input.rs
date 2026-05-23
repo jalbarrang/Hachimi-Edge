@@ -6,25 +6,21 @@ use windows::Win32::{
     System::{
         DataExchange::{CloseClipboard, GetClipboardData, OpenClipboard},
         Ole::CF_TEXT,
-        SystemServices::{MK_CONTROL, MK_SHIFT}
+        SystemServices::{MK_CONTROL, MK_SHIFT},
     },
     UI::{
         Input::{
-            Ime::{
-                ImmGetCompositionStringW, ImmGetContext, ImmReleaseContext, GCS_COMPSTR, GCS_RESULTSTR
-            },
+            Ime::{ImmGetCompositionStringW, ImmGetContext, ImmReleaseContext, GCS_COMPSTR, GCS_RESULTSTR},
             KeyboardAndMouse::{
-                GetAsyncKeyState, VIRTUAL_KEY, VK_BACK, VK_CONTROL, VK_DELETE, VK_DOWN, VK_END,
-                VK_ESCAPE, VK_HOME, VK_INSERT, VK_LEFT, VK_LSHIFT, VK_NEXT, VK_PRIOR, VK_RETURN,
-                VK_RIGHT, VK_SPACE, VK_TAB, VK_UP,
-            }
+                GetAsyncKeyState, VIRTUAL_KEY, VK_BACK, VK_CONTROL, VK_DELETE, VK_DOWN, VK_END, VK_ESCAPE, VK_HOME,
+                VK_INSERT, VK_LEFT, VK_LSHIFT, VK_NEXT, VK_PRIOR, VK_RETURN, VK_RIGHT, VK_SPACE, VK_TAB, VK_UP,
+            },
         },
         WindowsAndMessaging::{
-            WHEEL_DELTA, WM_CHAR, WM_KEYDOWN, WM_KEYUP,
-            WM_LBUTTONDBLCLK, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDBLCLK, WM_MBUTTONDOWN,
-            WM_MBUTTONUP, WM_MOUSEHWHEEL, WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_RBUTTONDBLCLK,
-            WM_RBUTTONDOWN, WM_RBUTTONUP, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_INPUT,
-            WM_IME_COMPOSITION, WM_IME_ENDCOMPOSITION, WM_IME_STARTCOMPOSITION
+            WHEEL_DELTA, WM_CHAR, WM_IME_COMPOSITION, WM_IME_ENDCOMPOSITION, WM_IME_STARTCOMPOSITION, WM_INPUT,
+            WM_KEYDOWN, WM_KEYUP, WM_LBUTTONDBLCLK, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDBLCLK, WM_MBUTTONDOWN,
+            WM_MBUTTONUP, WM_MOUSEHWHEEL, WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_RBUTTONDBLCLK, WM_RBUTTONDOWN, WM_RBUTTONUP,
+            WM_SYSKEYDOWN, WM_SYSKEYUP,
         },
     },
 };
@@ -121,7 +117,7 @@ pub fn process(input: &mut RawInput, zoom_factor: f32, umsg: u32, wparam: usize,
                 input.events.push(Event::MouseWheel {
                     unit: MouseWheelUnit::Line,
                     delta: Vec2::new(0., delta),
-                    modifiers: Modifiers::default()
+                    modifiers: Modifiers::default(),
                 });
                 InputResult::Scroll
             }
@@ -136,7 +132,7 @@ pub fn process(input: &mut RawInput, zoom_factor: f32, umsg: u32, wparam: usize,
                 input.events.push(Event::MouseWheel {
                     unit: MouseWheelUnit::Line,
                     delta: Vec2::new(delta, 0.),
-                    modifiers: Modifiers::default()
+                    modifiers: Modifiers::default(),
                 });
                 InputResult::Scroll
             }
@@ -199,9 +195,10 @@ pub fn process_ime_sync(hwnd: HWND, umsg: u32, lparam: isize) -> (bool, Option<S
         }
         WM_IME_COMPOSITION => {
             is_ime = true;
+            // SAFETY: FFI / raw pointer operation required by IL2CPP interop
             unsafe {
                 let himc = ImmGetContext(hwnd);
-                if himc.0 != std::ptr::null_mut() {
+                if !himc.0.is_null() {
                     if (lparam as u32 & GCS_RESULTSTR.0) != 0 {
                         let size = ImmGetCompositionStringW(himc, GCS_RESULTSTR, None, 0);
                         if size > 0 {
@@ -238,17 +235,28 @@ pub fn process_ime_sync(hwnd: HWND, umsg: u32, lparam: isize) -> (bool, Option<S
     (is_ime, commit, preedit)
 }
 
-
-
 pub fn is_handled_msg(umsg: u32) -> bool {
-    match umsg {
-        WM_CHAR | WM_KEYDOWN | WM_KEYUP |
-        WM_LBUTTONDBLCLK | WM_LBUTTONDOWN | WM_LBUTTONUP | WM_MBUTTONDBLCLK | WM_MBUTTONDOWN |
-        WM_MBUTTONUP | WM_MOUSEHWHEEL | WM_MOUSEMOVE | WM_MOUSEWHEEL | WM_RBUTTONDBLCLK |
-        WM_RBUTTONDOWN | WM_RBUTTONUP | WM_SYSKEYDOWN | WM_SYSKEYUP => true,
-        WM_INPUT => true,
-        _ => false
-    }
+    matches!(
+        umsg,
+        WM_CHAR
+            | WM_KEYDOWN
+            | WM_KEYUP
+            | WM_LBUTTONDBLCLK
+            | WM_LBUTTONDOWN
+            | WM_LBUTTONUP
+            | WM_MBUTTONDBLCLK
+            | WM_MBUTTONDOWN
+            | WM_MBUTTONUP
+            | WM_MOUSEHWHEEL
+            | WM_MOUSEMOVE
+            | WM_MOUSEWHEEL
+            | WM_RBUTTONDBLCLK
+            | WM_RBUTTONDOWN
+            | WM_RBUTTONUP
+            | WM_SYSKEYDOWN
+            | WM_SYSKEYUP
+            | WM_INPUT
+    )
 }
 
 fn get_pos(lparam: isize) -> Pos2 {
@@ -269,7 +277,9 @@ fn get_modifiers(wparam: usize) -> Modifiers {
 }
 
 fn get_key_modifiers(msg: u32) -> Modifiers {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     let ctrl = unsafe { GetAsyncKeyState(VK_CONTROL.0 as _) != 0 };
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     let shift = unsafe { GetAsyncKeyState(VK_LSHIFT.0 as _) != 0 };
 
     Modifiers {
@@ -342,11 +352,12 @@ fn get_key(wparam: usize) -> Option<Key> {
         VIRTUAL_KEY(0x59) => Some(Key::Y),
         VIRTUAL_KEY(0x5A) => Some(Key::Z),
 
-        _ => None
+        _ => None,
     }
 }
 
 fn get_clipboard_text() -> Option<String> {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe {
         if OpenClipboard(Some(HWND::default())).is_ok() {
             if let Ok(handle) = GetClipboardData(CF_TEXT.0 as u32) {

@@ -1,9 +1,17 @@
+use super::{
+    DialogCommon::{Data, FormType},
+    TextId,
+};
+use crate::il2cpp::{
+    ext::StringExt,
+    symbols::{get_method_addr, SingletonLike},
+    types::*,
+};
 use std::ptr::null_mut;
-use crate::{il2cpp::{ext::StringExt, symbols::{get_method_addr, SingletonLike}, types::*}};
-use super::{DialogCommon::{Data, FormType}, TextId};
 
 static mut CLASS: *mut Il2CppClass = null_mut();
 pub fn class() -> *mut Il2CppClass {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe { CLASS }
 }
 
@@ -29,7 +37,7 @@ pub fn single_button_message(title: &str, message: &str, typ: FormType) {
         message.to_il2cpp_string(),
         null_mut(),
         TextId::from_name("Common0007"),
-        typ
+        typ,
     );
     PushDialog(dialog_data);
     // PushSystemDialog(dialog_data, true);
@@ -38,9 +46,10 @@ pub fn single_button_message(title: &str, message: &str, typ: FormType) {
 pub fn init(umamusume: *const Il2CppImage) {
     get_class_or_return!(umamusume, Gallop, DialogManager);
 
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe {
         CLASS = DialogManager;
         PUSHDIALOG_ADDR = get_method_addr(DialogManager, c"PushDialog", 1);
-        PUSHSYSTEMDIALOG_ADDR =get_method_addr(DialogManager, c"PushSystemDialog", 2);
+        PUSHSYSTEMDIALOG_ADDR = get_method_addr(DialogManager, c"PushSystemDialog", 2);
     }
 }

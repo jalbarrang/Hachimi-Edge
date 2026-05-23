@@ -1,7 +1,7 @@
 use crate::core::{game::Region, Hachimi};
 
-mod SafetyNet;
 mod Device;
+mod SafetyNet;
 
 pub fn init() {
     get_assembly_image_or_return!(image, "Cute.Core.Assembly.dll");

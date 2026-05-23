@@ -1,13 +1,24 @@
 use rust_i18n::t;
-use windows::Win32::{Foundation::{WPARAM, LPARAM}, UI::WindowsAndMessaging::{PostMessageW, WM_CLOSE}};
+use windows::Win32::{
+    Foundation::{LPARAM, WPARAM},
+    UI::WindowsAndMessaging::{PostMessageW, WM_CLOSE},
+};
 
-use crate::{core::{gui::SimpleYesNoDialog, Gui, Hachimi}, il2cpp::{symbols::get_method_addr, types::*}, windows::steamworks};
+use crate::{
+    core::{gui::SimpleYesNoDialog, Gui, Hachimi},
+    il2cpp::{symbols::get_method_addr, types::*},
+    windows::steamworks,
+};
 
-type StartPurchaseFn = extern "C" fn(this: *mut Il2CppObject, store_product_id: *mut Il2CppString, is_alert_agree: bool);
+type StartPurchaseFn =
+    extern "C" fn(this: *mut Il2CppObject, store_product_id: *mut Il2CppString, is_alert_agree: bool);
 extern "C" fn StartPurchase(this: *mut Il2CppObject, store_product_id: *mut Il2CppString, is_alert_agree: bool) {
     // check it again cuz it might change later
     if steamworks::is_overlay_conflicting(&Hachimi::instance()) {
-        let mut gui = Gui::instance().unwrap().lock().unwrap();
+        let mut gui = Gui::instance()
+            .expect("unexpected failure")
+            .lock()
+            .expect("lock poisoned");
         gui.show_window(Box::new(SimpleYesNoDialog::new(
             &t!("steam_overlay_conflict_dialog.title"),
             &t!("steam_overlay_conflict_dialog.content"),
@@ -17,11 +28,12 @@ extern "C" fn StartPurchase(this: *mut Il2CppObject, store_product_id: *mut Il2C
                     let mut config = hachimi.config.load().as_ref().clone();
                     config.disable_gui_once = true;
                     _ = hachimi.save_and_reload_config(config);
+                    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
                     unsafe {
                         _ = PostMessageW(None, WM_CLOSE, WPARAM(0), LPARAM(0));
                     }
                 }
-            }
+            },
         )));
     }
     get_orig_fn!(StartPurchase, StartPurchaseFn)(this, store_product_id, is_alert_agree);

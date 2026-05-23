@@ -6,13 +6,17 @@ use windows::{
     Win32::{
         Foundation::{CloseHandle, HMODULE, HWND, MAX_PATH},
         System::{
-            Diagnostics::ToolHelp::{CreateToolhelp32Snapshot, Process32First, Process32Next, PROCESSENTRY32, TH32CS_SNAPALL},
+            Diagnostics::ToolHelp::{
+                CreateToolhelp32Snapshot, Process32First, Process32Next, PROCESSENTRY32, TH32CS_SNAPALL,
+            },
             LibraryLoader::{GetModuleFileNameW, GetProcAddress},
             SystemInformation::GetSystemDirectoryW,
-            Threading::{OpenProcess, TerminateProcess, PROCESS_TERMINATE}
+            Threading::{OpenProcess, TerminateProcess, PROCESS_TERMINATE},
         },
-        UI::WindowsAndMessaging::{MessageBoxW, SetWindowPos, HWND_NOTOPMOST, HWND_TOPMOST, MB_ICONERROR, MB_OK, SWP_NOMOVE, SWP_NOSIZE}
-    }
+        UI::WindowsAndMessaging::{
+            MessageBoxW, SetWindowPos, HWND_NOTOPMOST, HWND_TOPMOST, MB_ICONERROR, MB_OK, SWP_NOMOVE, SWP_NOSIZE,
+        },
+    },
 };
 
 use crate::core::{utils::scale_to_aspect_ratio, Hachimi};
@@ -23,23 +27,27 @@ use super::hachimi_impl::ResolutionScaling;
 
 pub fn _get_system_directory() -> Utf16String {
     let mut buffer = [0u16; MAX_PATH as usize];
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     let length = unsafe { GetSystemDirectoryW(Some(&mut buffer)) };
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe { Utf16String::from_vec_unchecked(buffer[..length as usize].to_vec()) }
 }
 
 pub fn get_proc_address(hmodule: HMODULE, name: &CStr) -> usize {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     let res = unsafe { GetProcAddress(hmodule, PCSTR(name.as_ptr() as *const u8)) };
     if let Some(proc) = res {
         proc as usize
-    }
-    else {
+    } else {
         0
     }
 }
 
 pub fn get_exec_path() -> PathBuf {
     let mut slice = [0u16; MAX_PATH as usize];
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     let length = unsafe { GetModuleFileNameW(None, &mut slice) } as usize;
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     let exec_path_str = unsafe { Utf16Str::from_slice_unchecked(&slice[..length]) }.to_string();
 
     PathBuf::from(exec_path_str)
@@ -47,14 +55,16 @@ pub fn get_exec_path() -> PathBuf {
 
 pub fn get_game_dir() -> PathBuf {
     let exec_path = get_exec_path();
-    let parent = exec_path.parent().unwrap();
+    let parent = exec_path.parent().expect("unexpected failure");
     parent.to_owned()
 }
 
 /*
 pub fn get_game_dir_str() -> Option<String> {
     let mut slice = [0u16; MAX_PATH as usize];
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     let length = unsafe { GetModuleFileNameW(HMODULE::default(), &mut slice) } as usize;
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     let exec_path_str = unsafe { Utf16Str::from_slice_unchecked(&slice[..length]) }.to_string();
     let exec_path = Path::new(&exec_path_str);
     let parent = exec_path.parent()?;
@@ -64,24 +74,29 @@ pub fn get_game_dir_str() -> Option<String> {
 */
 
 pub unsafe fn kill_process_by_name(target_name: &CStr) -> Result<(), windows::core::Error> {
-    let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPALL, 0)?;
-    let mut entry = PROCESSENTRY32::default();
-    entry.dwSize = std::mem::size_of::<PROCESSENTRY32>() as u32;
-    let mut res = Process32First(snapshot, &mut entry);
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
+    unsafe {
+        let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPALL, 0)?;
+        let mut entry = PROCESSENTRY32 {
+            dwSize: std::mem::size_of::<PROCESSENTRY32>() as u32,
+            ..Default::default()
+        };
+        let mut res = Process32First(snapshot, &mut entry);
 
-    while res.is_ok() {
-        let process_name = CStr::from_ptr(entry.szExeFile.as_ptr());
-        if process_name == target_name {
-            if let Ok(process) = OpenProcess(PROCESS_TERMINATE, false, entry.th32ProcessID) {
-                TerminateProcess(process, 0)?;
-                CloseHandle(process)?;
+        while res.is_ok() {
+            let process_name = CStr::from_ptr(entry.szExeFile.as_ptr());
+            if process_name == target_name {
+                if let Ok(process) = OpenProcess(PROCESS_TERMINATE, false, entry.th32ProcessID) {
+                    TerminateProcess(process, 0)?;
+                    CloseHandle(process)?;
+                }
             }
+
+            res = Process32Next(snapshot, &mut entry);
         }
 
-        res = Process32Next(snapshot, &mut entry);
+        Ok(())
     }
-
-    Ok(())
 }
 
 pub fn get_tmp_installer_path() -> PathBuf {
@@ -91,8 +106,8 @@ pub fn get_tmp_installer_path() -> PathBuf {
 }
 
 pub fn get_scaling_res() -> Option<(i32, i32)> {
-    use crate::il2cpp::hook::UnityEngine_CoreModule::Screen as UnityScreen;
     use crate::il2cpp::hook::umamusume::Screen as GallopScreen;
+    use crate::il2cpp::hook::UnityEngine_CoreModule::Screen as UnityScreen;
 
     match Hachimi::instance().config.load().windows.resolution_scaling {
         ResolutionScaling::Default => None,
@@ -100,7 +115,7 @@ pub fn get_scaling_res() -> Option<(i32, i32)> {
             let res = UnityScreen::get_currentResolution(); // screen res, not game window res
             let aspect_ratio = GallopScreen::get_Width_orig() as f32 / GallopScreen::get_Height_orig() as f32;
             Some(scale_to_aspect_ratio((res.width, res.height), aspect_ratio, true))
-        },
+        }
         ResolutionScaling::ScaleToWindowSize => {
             let mut width = UnityScreen::get_width();
             let mut height = UnityScreen::get_height();
@@ -108,35 +123,43 @@ pub fn get_scaling_res() -> Option<(i32, i32)> {
                 std::mem::swap(&mut width, &mut height);
             }
             Some((width, height))
-        },
+        }
     }
 }
 
 pub unsafe fn set_window_topmost(hwnd: HWND, topmost: bool) -> Result<(), windows::core::Error> {
-    let insert_after = if topmost { HWND_TOPMOST } else { HWND_NOTOPMOST };
-    SetWindowPos(hwnd, Some(insert_after), 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE)
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
+    unsafe {
+        let insert_after = if topmost { HWND_TOPMOST } else { HWND_NOTOPMOST };
+        SetWindowPos(hwnd, Some(insert_after), 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE)
+    }
 }
 
 pub fn show_error(e: impl AsRef<str>) {
     let s = e.as_ref();
     error!("{}", s);
 
-    let cstr = U16CString::from_str(s).unwrap();
-    unsafe { MessageBoxW(None, PCWSTR(cstr.as_ptr()), w!("Hachimi Error"), MB_ICONERROR | MB_OK); }
+    let cstr = U16CString::from_str(s).expect("valid string");
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
+    unsafe {
+        MessageBoxW(None, PCWSTR(cstr.as_ptr()), w!("Hachimi Error"), MB_ICONERROR | MB_OK);
+    }
 }
 
 pub fn vk_to_display_label(vk: u16) -> String {
-    if (0x41..=0x5A).contains(&vk) { // A-Z
+    if (0x41..=0x5A).contains(&vk) {
+        // A-Z
         return (vk as u8 as char).to_string();
     }
-    if (0x30..=0x39).contains(&vk) { // 0-9
+    if (0x30..=0x39).contains(&vk) {
+        // 0-9
         return (vk as u8 as char).to_string();
     }
 
     let code = VIRTUAL_KEY(vk).0;
 
     // Function keys as a range
-    if code >= km::VK_F1.0 && code <= km::VK_F24.0 {
+    if (km::VK_F1.0..=km::VK_F24.0).contains(&code) {
         let n = (code - km::VK_F1.0) + 1;
         return format!("F{}", n);
     }

@@ -5,7 +5,8 @@ impl_addr_wrapper_fn!(GetSkillName, GETSKILLNAME_ADDR, *mut Il2CppString, skillI
 
 pub fn init(umamusume: *const Il2CppImage) {
     get_class_or_return!(umamusume, Gallop, MasterDataUtil);
-    
+
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe {
         GETSKILLNAME_ADDR = get_method_addr(MasterDataUtil, c"GetSkillName", 1);
     }

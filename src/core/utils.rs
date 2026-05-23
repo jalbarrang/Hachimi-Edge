@@ -1,12 +1,20 @@
-use std::{borrow::Cow, fs::File, io::Write, sync::Mutex, path::Path, time::SystemTime};
+use std::{borrow::Cow, fs::File, io::Write, path::Path, sync::Mutex, time::SystemTime};
 
+use fnv::FnvHashMap;
+use once_cell::sync::Lazy;
 use serde::Serialize;
 use textwrap::{core::Word, wrap_algorithms, WordSeparator::UnicodeBreakProperties};
 use unicode_width::UnicodeWidthChar;
-use fnv::FnvHashMap;
-use once_cell::sync::Lazy;
 
-use crate::{core::Gui, il2cpp::{ext::{Il2CppStringExt, StringExt}, hook::umamusume::{Localize, TextId}, types::{Il2CppObject, Il2CppString}, symbols::Thread}};
+use crate::{
+    core::Gui,
+    il2cpp::{
+        ext::{Il2CppStringExt, StringExt},
+        hook::umamusume::{Localize, TextId},
+        symbols::Thread,
+        types::{Il2CppObject, Il2CppString},
+    },
+};
 
 use super::{Error, Hachimi};
 
@@ -14,18 +22,20 @@ use super::{Error, Hachimi};
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct SendPtr(pub *mut Il2CppObject);
 
+// SAFETY: IL2CPP object pointers are safe to send across threads as the runtime manages their lifecycle
 unsafe impl Send for SendPtr {}
+// SAFETY: IL2CPP object pointers are safe to share across threads as the runtime manages their lifecycle
 unsafe impl Sync for SendPtr {}
 
-static LOCALIZE_ID_CACHE: Lazy<Mutex<FnvHashMap<String, i32>>> =
-    Lazy::new(|| Mutex::new(FnvHashMap::default()));
+static LOCALIZE_ID_CACHE: Lazy<Mutex<FnvHashMap<String, i32>>> = Lazy::new(|| Mutex::new(FnvHashMap::default()));
 
 pub fn get_localized_string(id_name: &str) -> String {
     let check_cache = |name: &str| -> Option<String> {
-        let cache = LOCALIZE_ID_CACHE.lock().unwrap();
+        let cache = LOCALIZE_ID_CACHE.lock().expect("lock poisoned");
         if let Some(&id) = cache.get(name) {
             let ptr = Localize::Get(id);
             if !ptr.is_null() {
+                // SAFETY: FFI / raw pointer operation required by IL2CPP interop
                 return Some(unsafe { (*ptr).as_utf16str() }.to_string());
             }
             return Some(name.to_owned());
@@ -39,12 +49,12 @@ pub fn get_localized_string(id_name: &str) -> String {
 
     let id_name_owned = id_name.to_owned();
     static PENDING_NAME: Mutex<Option<String>> = Mutex::new(None);
-    *PENDING_NAME.lock().unwrap() = Some(id_name_owned.clone());
+    *PENDING_NAME.lock().expect("lock poisoned") = Some(id_name_owned);
 
     Thread::main_thread().schedule(|| {
-        if let Some(name) = PENDING_NAME.lock().unwrap().take() {
+        if let Some(name) = PENDING_NAME.lock().expect("lock poisoned").take() {
             let val = TextId::from_name(&name);
-            LOCALIZE_ID_CACHE.lock().unwrap().insert(name, val);
+            LOCALIZE_ID_CACHE.lock().expect("lock poisoned").insert(name, val);
         }
     });
 
@@ -52,10 +62,7 @@ pub fn get_localized_string(id_name: &str) -> String {
 }
 
 pub fn char_to_utf16_index(text: &str, char_idx: usize) -> i32 {
-    text.chars()
-        .take(char_idx)
-        .map(|c| c.len_utf16())
-        .sum::<usize>() as i32
+    text.chars().take(char_idx).map(char::len_utf16).sum::<usize>() as i32
 }
 
 pub fn utf16_to_char_index(text: &str, utf16_idx: usize) -> usize {
@@ -101,20 +108,24 @@ pub fn str_visual_len(text: &str) -> usize {
 pub fn concat_unix_path(left: &str, right: &str) -> String {
     let mut str = String::with_capacity(left.len() + 1 + right.len());
     str.push_str(left);
-    str.push_str("/");
+    str.push('/');
     str.push_str(right);
     str
 }
 
 pub fn print_json_entry(key: &str, value: &str) {
-    info!("{}: {},", serde_json::to_string(key).unwrap(), serde_json::to_string(value).unwrap());
+    info!(
+        "{}: {},",
+        serde_json::to_string(key).expect("valid UTF-8"),
+        serde_json::to_string(value).expect("valid UTF-8")
+    );
 }
 
 pub struct IsolateTags<'a> {
     s: &'a str,
     bytes: std::str::Bytes<'a>,
     i: usize,
-    current_byte: Option<u8>
+    current_byte: Option<u8>,
 }
 
 impl<'a> IsolateTags<'a> {
@@ -124,7 +135,7 @@ impl<'a> IsolateTags<'a> {
             current_byte: bytes.next(),
             s,
             bytes,
-            i: 0
+            i: 0,
         }
     }
 }
@@ -133,9 +144,7 @@ impl<'a> Iterator for IsolateTags<'a> {
     type Item = (&'a str, bool);
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.current_byte.is_none() {
-            return None;
-        }
+        self.current_byte?;
 
         let start = self.i;
         // Unity tags
@@ -154,7 +163,7 @@ impl<'a> Iterator for IsolateTags<'a> {
                         if expecting_tag_name {
                             if !in_closing_tag {
                                 // Check for a matching closing tag after
-                                let tag_name = &self.s[tag_start+1..self.i];
+                                let tag_name = &self.s[tag_start + 1..self.i];
                                 let mut closing_tag = String::with_capacity(3 + tag_name.len());
                                 closing_tag += "</";
                                 closing_tag += tag_name;
@@ -181,8 +190,7 @@ impl<'a> Iterator for IsolateTags<'a> {
                                 break;
                             }
                             return Some((&self.s[start..self.i], false));
-                        }
-                        else if in_closing_tag {
+                        } else if in_closing_tag {
                             // Invalid character
                             in_tag = false;
                         }
@@ -190,8 +198,7 @@ impl<'a> Iterator for IsolateTags<'a> {
                     b'/' => {
                         if self.i == tag_start + 1 {
                             in_closing_tag = true;
-                        }
-                        else if expecting_tag_name {
+                        } else if expecting_tag_name {
                             in_tag = false;
                         }
                     }
@@ -201,13 +208,11 @@ impl<'a> Iterator for IsolateTags<'a> {
                         }
                     }
                 }
-            }
-            else if in_expression {
-                if c == b')'  {
+            } else if in_expression {
+                if c == b')' {
                     if !self.s[self.i..].contains(")") {
                         in_expression = false;
-                    }
-                    else {
+                    } else {
                         loop {
                             self.i += 1;
                             self.current_byte = self.bytes.next();
@@ -221,21 +226,17 @@ impl<'a> Iterator for IsolateTags<'a> {
                         return Some((&self.s[start..self.i], false));
                     }
                 }
-            }
-            else if c == b'<' {
+            } else if c == b'<' {
                 if start == self.i {
                     in_tag = true;
                     expecting_tag_name = true;
                     tag_start = self.i;
-                }
-                else {
+                } else {
                     break;
                 }
-            }
-            else if c == b'$' {
+            } else if c == b'$' {
                 expecting_expr_open = true;
-            }
-            else if c == b'(' {
+            } else if c == b'(' {
                 if expecting_expr_open {
                     if self.i != start + 1 {
                         self.i -= 1;
@@ -246,8 +247,7 @@ impl<'a> Iterator for IsolateTags<'a> {
                     in_expression = true;
                     expecting_expr_open = false;
                 }
-            }
-            else if expecting_expr_open {
+            } else if expecting_expr_open {
                 expecting_expr_open = false;
             }
 
@@ -284,13 +284,11 @@ fn custom_word_separator(line: &str) -> Box<dyn Iterator<Item = Word<'_>> + '_> 
                         unicode_break_iter = iter;
                         return break_res;
                     }
-                }
-                else {
+                } else {
                     unicode_break_iter = Box::new(std::iter::empty());
                     return Some(Word::from(next_section));
                 }
-            }
-            else {
+            } else {
                 return None;
             }
         }
@@ -318,11 +316,12 @@ fn custom_wrap_algorithm<'a, 'b>(words: &'b [Word<'a>], line_widths: &'b [usize]
     // quick escape!!!11
     let f64_line_widths = line_widths.iter().map(|w| *w as f64).collect::<Vec<_>>();
     if remove_offset == 0 {
-        return wrap_algorithms::wrap_optimal_fit(words, &f64_line_widths, penalties).unwrap();
+        return wrap_algorithms::wrap_optimal_fit(words, &f64_line_widths, penalties).expect("unexpected failure");
     }
 
     // Wrap without formatting tags
-    let wrapped = wrap_algorithms::wrap_optimal_fit(&clean_fragments, &f64_line_widths, penalties).unwrap();
+    let wrapped =
+        wrap_algorithms::wrap_optimal_fit(&clean_fragments, &f64_line_widths, penalties).expect("unexpected failure");
 
     // Create results with formatting tags added back
     // Note: The break word option doesn't really affect the extra long lines since
@@ -335,20 +334,15 @@ fn custom_wrap_algorithm<'a, 'b>(words: &'b [Word<'a>], line_widths: &'b [usize]
         let mut end: usize;
         if i == wrapped.len() - 1 {
             end = words.len();
-        }
-        else {
+        } else {
             let clean_end = clean_start + line.len();
             end = start + line.len();
-            loop {
-                let Some(index) = removed_indices.get(removed_indices_i) else {
-                    break;
-                };
+            while let Some(index) = removed_indices.get(removed_indices_i) {
                 if *index >= clean_start {
                     if *index < clean_end {
                         end += 1;
                         removed_indices_i += 1;
-                    }
-                    else {
+                    } else {
                         break;
                     }
                 }
@@ -364,8 +358,14 @@ fn custom_wrap_algorithm<'a, 'b>(words: &'b [Word<'a>], line_widths: &'b [usize]
 
 pub fn wrap_text(string: &str, base_line_width: i32) -> Option<Vec<Cow<'_, str>>> {
     let config = &Hachimi::instance().localized_data.load().config;
-    if !config.use_text_wrapper { return None; }
-    Some(wrap_text_internal(string, base_line_width, config.line_width_multiplier?))
+    if !config.use_text_wrapper {
+        return None;
+    }
+    Some(wrap_text_internal(
+        string,
+        base_line_width,
+        config.line_width_multiplier?,
+    ))
 }
 
 fn wrap_text_internal(string: &str, base_line_width: i32, line_width_multiplier: f32) -> Vec<Cow<'_, str>> {
@@ -373,17 +373,24 @@ fn wrap_text_internal(string: &str, base_line_width: i32, line_width_multiplier:
     let options = textwrap::Options::new(line_width)
         .word_separator(textwrap::WordSeparator::Custom(custom_word_separator))
         .wrap_algorithm(textwrap::WrapAlgorithm::Custom(custom_wrap_algorithm));
-    return textwrap::wrap(string, &options);
+    textwrap::wrap(string, &options)
 }
 
 pub fn wrap_text_il2cpp(string: *mut Il2CppString, base_line_width: i32) -> Option<*mut Il2CppString> {
     let config = &Hachimi::instance().localized_data.load().config;
-    if !config.use_text_wrapper { return None; }
+    if !config.use_text_wrapper {
+        return None;
+    }
 
     Some(
-        wrap_text_internal(unsafe { &(*string).as_utf16str().to_string() }, base_line_width, config.line_width_multiplier?)
-            .join("\n")
-            .to_il2cpp_string()
+        wrap_text_internal(
+            // SAFETY: FFI / raw pointer operation required by IL2CPP interop
+            unsafe { &(*string).as_utf16str().to_string() },
+            base_line_width,
+            config.line_width_multiplier?,
+        )
+        .join("\n")
+        .to_il2cpp_string(),
     )
 }
 
@@ -392,7 +399,7 @@ pub fn add_size_tag(string: &str, size: i32) -> String {
     let mut new_str = String::with_capacity(9 + string.len() + 7);
     new_str.push_str("<size=");
     new_str.push_str(&size.to_string());
-    new_str.push_str(">");
+    new_str.push('>');
     new_str.push_str(string);
     new_str.push_str("</size>");
     new_str
@@ -404,23 +411,36 @@ pub fn fit_text(string: &str, base_line_width: i32, base_font_size: i32) -> Opti
 }
 
 fn fit_text_internal(
-    string: &str, base_line_width: i32, base_font_size: i32, line_width_multiplier: f32
+    string: &str,
+    base_line_width: i32,
+    base_font_size: i32,
+    line_width_multiplier: f32,
 ) -> Option<String> {
     let line_width = base_line_width as f32 * line_width_multiplier;
 
     let count = string.chars().count() as f32;
     if line_width < count {
-        Some(add_size_tag(string, (base_font_size as f32 * (line_width / count)) as i32))
-    }
-    else {
+        Some(add_size_tag(
+            string,
+            (base_font_size as f32 * (line_width / count)) as i32,
+        ))
+    } else {
         None
     }
 }
 
-pub fn fit_text_il2cpp(string: *mut Il2CppString, base_line_width: i32, base_font_size: i32) -> Option<*mut Il2CppString> {
+pub fn fit_text_il2cpp(
+    string: *mut Il2CppString,
+    base_line_width: i32,
+    base_font_size: i32,
+) -> Option<*mut Il2CppString> {
     let mult = Hachimi::instance().localized_data.load().config.line_width_multiplier?;
-    if let Some(result) = fit_text_internal(unsafe { &(*string).as_utf16str().to_string() },
-        base_line_width, base_font_size, mult
+    if let Some(result) = fit_text_internal(
+        // SAFETY: FFI / raw pointer operation required by IL2CPP interop
+        unsafe { &(*string).as_utf16str().to_string() },
+        base_line_width,
+        base_font_size,
+        mult,
     ) {
         return Some(result.to_il2cpp_string());
     }
@@ -429,7 +449,12 @@ pub fn fit_text_il2cpp(string: *mut Il2CppString, base_line_width: i32, base_fon
 }
 
 // WRAP IT TILL IT FITS GRAHHH BRUTE FORCE GRAHHH
-pub fn wrap_fit_text(string: &str, base_line_width: i32, mut max_line_count: i32, base_font_size: i32) -> Option<String> {
+pub fn wrap_fit_text(
+    string: &str,
+    base_line_width: i32,
+    mut max_line_count: i32,
+    base_font_size: i32,
+) -> Option<String> {
     let config = &Hachimi::instance().localized_data.load().config;
     if !config.use_text_wrapper {
         return None;
@@ -443,7 +468,6 @@ pub fn wrap_fit_text(string: &str, base_line_width: i32, mut max_line_count: i32
 
     let mut line_width = base_line_width as f32;
     let mut font_size = base_font_size as f32;
-
 
     loop {
         let wrapped = wrap_text_internal(string, line_width.round() as i32, line_width_multiplier);
@@ -461,15 +485,24 @@ pub fn wrap_fit_text(string: &str, base_line_width: i32, mut max_line_count: i32
         max_line_count += 1;
 
         let scale = prev_max_line_count as f32 / max_line_count as f32;
-        font_size = font_size as f32 * scale;
-        line_width = line_width as f32 / scale;
+        font_size *= scale;
+        line_width /= scale;
     }
 }
 
-pub fn wrap_fit_text_il2cpp(string: *mut Il2CppString, base_line_width: i32, max_line_count: i32, base_font_size: i32) -> Option<*mut Il2CppString> {
+pub fn wrap_fit_text_il2cpp(
+    string: *mut Il2CppString,
+    base_line_width: i32,
+    max_line_count: i32,
+    base_font_size: i32,
+) -> Option<*mut Il2CppString> {
     if Hachimi::instance().localized_data.load().config.use_text_wrapper {
-        if let Some(result) = wrap_fit_text(unsafe { &(*string).as_utf16str().to_string() },
-            base_line_width, max_line_count, base_font_size
+        if let Some(result) = wrap_fit_text(
+            // SAFETY: FFI / raw pointer operation required by IL2CPP interop
+            unsafe { &(*string).as_utf16str().to_string() },
+            base_line_width,
+            max_line_count,
+            base_font_size,
         ) {
             return Some(result.to_il2cpp_string());
         }
@@ -479,7 +512,10 @@ pub fn wrap_fit_text_il2cpp(string: *mut Il2CppString, base_line_width: i32, max
 }
 
 fn truncate_chars_internal(
-    mut chars: impl Iterator<Item = char>, mut width: usize, ellipsis: bool, line_width_multiplier: f32
+    mut chars: impl Iterator<Item = char>,
+    mut width: usize,
+    ellipsis: bool,
+    line_width_multiplier: f32,
 ) -> Option<Vec<char>> {
     width = (width as f32 * line_width_multiplier).round() as usize;
 
@@ -487,7 +523,7 @@ fn truncate_chars_internal(
     let mut v = Vec::with_capacity(width); // it's not the actual max size but it's a good starting point
     let mut total_width = 0;
     let mut dropped_char = None;
-    while let Some(c) = chars.next() {
+    for c in chars.by_ref() {
         let char_width = c.width().unwrap_or(0);
         if char_width == 0 {
             v.push(c);
@@ -522,8 +558,7 @@ fn truncate_chars_internal(
                 return None;
             }
             true
-        }
-        else {
+        } else {
             false
         };
 
@@ -531,16 +566,14 @@ fn truncate_chars_internal(
         return if has_next_char {
             v.push('…');
             Some(v)
-        }
-        else {
+        } else {
             None
-        }
+        };
     }
 
     if dropped_char.is_some() || chars.next().is_some() {
         Some(v)
-    }
-    else {
+    } else {
         None
     }
 }
@@ -552,11 +585,14 @@ pub fn truncate_chars(chars: impl Iterator<Item = char>, width: usize, ellipsis:
 
 pub fn truncate_text_il2cpp(string: *mut Il2CppString, width: usize, ellipsis: bool) -> Option<*mut Il2CppString> {
     let line_width_multiplier = Hachimi::instance().localized_data.load().config.line_width_multiplier?;
-    truncate_chars_internal(unsafe { (*string).as_utf16str().chars() }, width, ellipsis, line_width_multiplier).map(|chars|
-        chars.iter()
-            .collect::<String>()
-            .to_il2cpp_string()
+    truncate_chars_internal(
+        // SAFETY: FFI / raw pointer operation required by IL2CPP interop
+        unsafe { (*string).as_utf16str().chars() },
+        width,
+        ellipsis,
+        line_width_multiplier,
     )
+    .map(|chars| chars.iter().collect::<String>().to_il2cpp_string())
 }
 
 pub fn write_json_file<T: Serialize, P: AsRef<Path>>(data: &T, path: P) -> Result<(), Error> {
@@ -570,18 +606,21 @@ pub fn write_json_file<T: Serialize, P: AsRef<Path>>(data: &T, path: P) -> Resul
 // Checks for both \n and \\n
 pub fn game_str_has_newline(string: *mut Il2CppString) -> bool {
     let mut got_backslash = false;
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     for c in unsafe { (*string).as_utf16str().as_slice().iter() } {
         if got_backslash {
-            if *c == 0x6E { // n
+            if *c == 0x6E {
+                // n
                 return true;
             }
             got_backslash = false;
         }
 
-        if *c == 0x0A { // newline
+        if *c == 0x0A {
+            // newline
             return true;
-        }
-        else if *c == 0x5C { // backslash
+        } else if *c == 0x5C {
+            // backslash
             got_backslash = true; //
         }
     }
@@ -595,8 +634,7 @@ pub fn scale_to_aspect_ratio(sizes: (i32, i32), aspect_ratio: f32, prefer_larger
     // Use original values if possible
     if (aspect_ratio - orig_aspect_ratio).abs() <= 0.001 {
         return sizes;
-    }
-    else if (aspect_ratio - 1.0/orig_aspect_ratio).abs() <= 0.001 {
+    } else if (aspect_ratio - 1.0 / orig_aspect_ratio).abs() <= 0.001 {
         return (height, width);
     }
 
@@ -604,8 +642,7 @@ pub fn scale_to_aspect_ratio(sizes: (i32, i32), aspect_ratio: f32, prefer_larger
     if scale_by_height {
         width = (height as f32 * aspect_ratio).round() as i32;
         // height = height;
-    }
-    else {
+    } else {
         // width = width;
         height = (width as f32 / aspect_ratio).round() as i32;
     }
@@ -615,7 +652,9 @@ pub fn scale_to_aspect_ratio(sizes: (i32, i32), aspect_ratio: f32, prefer_larger
 
 pub fn get_file_modified_time<P: AsRef<Path>>(path: P) -> Option<SystemTime> {
     let metadata = std::fs::metadata(path).ok()?;
-    if !metadata.is_file() { return None; }
+    if !metadata.is_file() {
+        return None;
+    }
     metadata.modified().ok()
 }
 
@@ -628,24 +667,16 @@ pub fn get_data_path() -> String {
     #[cfg(target_os = "windows")]
     {
         use crate::{
-            core::game::Region,
-            il2cpp::hook::UnityEngine_CoreModule::Application,
-            windows::utils::get_game_dir
+            core::game::Region, il2cpp::hook::UnityEngine_CoreModule::Application, windows::utils::get_game_dir,
         };
 
         let game = &Hachimi::instance().game;
-        let jp_steam_data_path = get_game_dir()
-            .join("UmamusumePrettyDerby_Jpn_Data")
-            .join("Persistent");
-        let new_jp_dmm_data_path = get_game_dir()
-            .join("umamusume_Data")
-            .join("Persistent");
+        let jp_steam_data_path = get_game_dir().join("UmamusumePrettyDerby_Jpn_Data").join("Persistent");
+        let new_jp_dmm_data_path = get_game_dir().join("umamusume_Data").join("Persistent");
 
         let dir_ok = |path: &std::path::Path| {
             path.exists()
-                && std::fs::read_dir(path)
-                    .map(|mut d| d.next().is_some())
-                    .unwrap_or(false)
+                && std::fs::read_dir(path).is_ok_and(|mut d| d.next().is_some())
                 && path.join("master").join("master.mdb").exists()
         };
 
@@ -654,6 +685,7 @@ pub fn get_data_path() -> String {
         } else if game.region == Region::Japan && !game.is_steam_release && dir_ok(&new_jp_dmm_data_path) {
             new_jp_dmm_data_path.to_string_lossy().to_string()
         } else {
+            // SAFETY: FFI / raw pointer operation required by IL2CPP interop
             unsafe { (*Application::get_persistentDataPath()).as_utf16str() }.to_string()
         }
     }
@@ -683,10 +715,10 @@ pub fn notify_error(message: impl AsRef<str>) {
     let s = message.as_ref();
     error!("{}", s);
     if let Some(mutex) = Gui::instance() {
-        mutex.lock().unwrap().show_notification(s);
+        mutex.lock().expect("lock poisoned").show_notification(s);
     }
 }
 
-pub fn mul_int (base:i32, mult: f32) -> i32 {
+pub fn mul_int(base: i32, mult: f32) -> i32 {
     (base as f32 * mult).round() as i32
 }

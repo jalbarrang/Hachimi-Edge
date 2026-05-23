@@ -49,25 +49,26 @@ fn try_load_library(name_or_path: &str) -> Option<Plugin> {
         return None;
     };
 
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     let handle = unsafe { libc::dlopen(name_cstr.as_ptr(), libc::RTLD_NOW) };
     if handle.is_null() {
+        // SAFETY: FFI / raw pointer operation required by IL2CPP interop
         let err = unsafe { libc::dlerror() };
         if err.is_null() {
             warn!("Failed to load library: {}", name_or_path);
         } else {
+            // SAFETY: Pointer from IL2CPP runtime is valid
             let err = unsafe { std::ffi::CStr::from_ptr(err) };
-            warn!(
-                "Failed to load library: {} ({})",
-                name_or_path,
-                err.to_string_lossy()
-            );
+            warn!("Failed to load library: {} ({})", name_or_path, err.to_string_lossy());
         }
         return None;
     }
 
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     let init_addr = unsafe { libc::dlsym(handle, c"hachimi_init".as_ptr()) };
     if init_addr.is_null() {
         warn!("Library loaded but missing hachimi_init: {}", name_or_path);
+        // SAFETY: FFI / raw pointer operation required by IL2CPP interop
         unsafe {
             libc::dlclose(handle);
         }
@@ -77,6 +78,7 @@ fn try_load_library(name_or_path: &str) -> Option<Plugin> {
     info!("Loaded library: {}", name_or_path);
     Some(Plugin {
         name: name_or_path.to_string(),
+        // SAFETY: Transmute required for IL2CPP type conversion
         init_fn: unsafe { std::mem::transmute(init_addr) },
     })
 }

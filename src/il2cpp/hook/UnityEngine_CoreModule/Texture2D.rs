@@ -2,22 +2,26 @@ use std::{path::Path, ptr::null_mut};
 
 use widestring::Utf16Str;
 
-use crate::{core::{ext::Utf16StringExt, Hachimi}, il2cpp::{
-    api::{il2cpp_object_new, il2cpp_resolve_icall},
-    hook::{
-        mscorlib,
-        UnityEngine_AssetBundleModule::AssetBundle::ASSET_PATH_PREFIX,
-        UnityEngine_ImageConversionModule::ImageConversion
+use crate::{
+    core::{ext::Utf16StringExt, Hachimi},
+    il2cpp::{
+        api::{il2cpp_object_new, il2cpp_resolve_icall},
+        ext::StringExt,
+        hook::{
+            mscorlib, UnityEngine_AssetBundleModule::AssetBundle::ASSET_PATH_PREFIX,
+            UnityEngine_ImageConversionModule::ImageConversion,
+        },
+        symbols::{get_method_addr, Array},
+        types::*,
+        utils,
     },
-    symbols::{get_method_addr, Array},
-    ext::StringExt,
-    types::*, utils
-}};
+};
 
 use super::{Graphics, RenderTexture, Texture, TextureFormat_RGBA32};
 
 static mut CLASS: *mut Il2CppClass = null_mut();
 pub fn class() -> *mut Il2CppClass {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe { CLASS }
 }
 
@@ -47,8 +51,7 @@ pub fn from_image_file<P: AsRef<Path>>(path: P, mip_chain: bool, mark_non_readab
     let texture = new(2, 2, TextureFormat_RGBA32, mip_chain, false);
     if ImageConversion::LoadImage(texture, bytes, mark_non_readable) {
         Some(texture)
-    }
-    else {
+    } else {
         warn!("Failed to load texture: {}", path_str);
         None
     }
@@ -66,16 +69,20 @@ pub fn load_image_file<P: AsRef<Path>>(this: *mut Il2CppObject, path: P, mark_no
     }
 
     // we've done everything we can, can't catch C# exceptions, yolo :)
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe { load_image_file_unsafe(this, path, mark_non_readable) }
 }
 
-pub unsafe fn load_image_file_unsafe<P: AsRef<Path>>(this: *mut Il2CppObject, path: P, mark_non_readable: bool) -> bool {
+pub unsafe fn load_image_file_unsafe<P: AsRef<Path>>(
+    this: *mut Il2CppObject,
+    path: P,
+    mark_non_readable: bool,
+) -> bool {
     if let Some(path_str) = path.as_ref().to_str() {
         let bytes = mscorlib::File::ReadAllBytes(path_str.to_il2cpp_string());
         if ImageConversion::LoadImage(this, bytes, mark_non_readable) {
             return true;
-        }
-        else {
+        } else {
             warn!("Failed to load texture: {}", path_str);
         }
     }
@@ -100,8 +107,14 @@ pub fn render_to_texture(this: *mut Il2CppObject) -> *mut Il2CppObject {
     let output_texture = new(width, height, TextureFormat_RGBA32, false, false);
     ReadPixels(
         output_texture,
-        Rect_t { x: 0.0, y: 0.0, width: width as f32, height: height as f32 },
-        0, 0
+        Rect_t {
+            x: 0.0,
+            y: 0.0,
+            width: width as f32,
+            height: height as f32,
+        },
+        0,
+        0,
     );
 
     // Revert active texture, release temp render texture
@@ -134,14 +147,18 @@ pub fn on_LoadAsset(_bundle: *mut Il2CppObject, this: *mut Il2CppObject, name: &
             // Don't allow direct loading fallback here, otherwise the common diff would be skipped
             // after the initial patch (when the texture has already been created)
             if utils::replace_texture_with_diff_ex(
-                this, &replace_path, utils::get_texture_diff_path(&replace_path), true, false
+                this,
+                &replace_path,
+                utils::get_texture_diff_path(&replace_path),
+                true,
+                false,
             ) {
                 return;
             }
 
             // Try to load common diff for "Train" buttons
-            let rel_common_diff_path = Path::new("textures")
-                .join(format!("chara/_chr/petit/petit_chr_{}.diff.png", petit_type));
+            let rel_common_diff_path =
+                Path::new("textures").join(format!("chara/_chr/petit/petit_chr_{}.diff.png", petit_type));
 
             let Some(common_diff_path) = localized_data.get_assets_path(&rel_common_diff_path) else {
                 return;
@@ -165,6 +182,7 @@ impl_addr_wrapper_fn!(ReadPixels, READPIXELS_ADDR, (), this: *mut Il2CppObject, 
 pub fn init(UnityEngine_CoreModule: *const Il2CppImage) {
     get_class_or_return!(UnityEngine_CoreModule, UnityEngine, Texture2D);
 
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe {
         CLASS = Texture2D;
         CTOR_ADDR = get_method_addr(Texture2D, c".ctor", 5);

@@ -1,0 +1,225 @@
+# =============================================================================
+# CI Pipeline — Hachimi Edge
+#
+# Design: fail fast, fail loud. Every check that passes green means the code
+# actually meets the bar. No silent warnings, no cosmetic passes.
+#
+# Pipeline order (fastest/cheapest first):
+#   1. Formatting (rustfmt)           — seconds, no deps
+#   2. Typos (typos-cli)              — seconds, no deps
+#   3. Supply chain (cargo-deny)      — seconds, no build
+#   4. Unused deps (cargo-machete)    — seconds, heuristic
+#   5. Lint (clippy, zero-warn)       — minutes, needs compile
+#   6. Type check (cargo check)       — minutes, cross-platform
+# =============================================================================
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  HACHIMI_IGNORE_DIRTY: "true"
+  # Pin toolchain for reproducible CI
+  RUST_VERSION: stable
+
+# Cancel in-flight CI for the same PR/branch when new commits are pushed.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ──────────────────────────────────────────────────────────────
+  # Stage 1: Fast checks (no compilation, no deps)
+  # ──────────────────────────────────────────────────────────────
+
+  fmt:
+    name: "1 · Rustfmt"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --check
+      - name: Check plugin formatting
+        working-directory: plugins/training-tracker
+        run: cargo fmt --check
+
+  typos:
+    name: "1 · Typos"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: crate-ci/typos@master
+
+  # ──────────────────────────────────────────────────────────────
+  # Stage 2: Supply chain & dependency checks (no compilation)
+  # ──────────────────────────────────────────────────────────────
+
+  deny:
+    name: "2 · cargo-deny"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check
+          arguments: --all-features
+
+  machete:
+    name: "2 · Unused deps"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+      - name: Install cargo-machete
+        run: cargo install cargo-machete
+      - name: Check for unused dependencies (core)
+        run: cargo machete
+      - name: Check for unused dependencies (plugin)
+        working-directory: plugins/training-tracker
+        run: cargo machete
+
+  # ──────────────────────────────────────────────────────────────
+  # Stage 3: Clippy lint — ZERO WARNINGS policy
+  # `-D warnings` promotes every warning to a hard error.
+  # If clippy passes, the code meets the quality bar. Period.
+  # ──────────────────────────────────────────────────────────────
+
+  clippy-windows:
+    name: "3 · Clippy (Windows)"
+    needs: [fmt, typos]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: swatinem/rust-cache@v2
+
+      - name: Patch dependencies
+        shell: powershell
+        run: |
+          pushd ..
+
+          git clone --revision 44cdd653e2317d300fb8a6c9c36b03f23991e803 https://github.com/emilk/egui.git
+          cd egui
+          $File = "crates/egui/src/containers/combo_box.rs"
+          (Get-Content $File) -replace 'ui.set_min_width\(ui.available_width\(\)\);', '// ui.set_min_width(ui.available_width());' | Set-Content $File
+          cd ..
+
+          git clone --revision 903043939a076dc81e122a1c8451755bfb3979c8 https://github.com/Nekomaru-PKU/egui-directx11.git
+          cd egui-directx11
+          $fxc = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits" -Recurse -Filter "fxc.exe" | Where-Object { $_.FullName -like "*x64*" } | Select-Object -First 1
+          if (-not $fxc) { Write-Error "fxc.exe not found"; exit 1 }
+          & $fxc.FullName /nologo /O3 /T vs_4_0 /E vs_egui /Fo shaders/vs_egui.bin shaders/egui.hlsl
+          & $fxc.FullName /nologo /O3 /T ps_4_0 /E ps_egui /Fo shaders/ps_egui.bin shaders/egui.hlsl
+          popd
+
+          Add-Content -Path "Cargo.toml" -Value "`n"
+          $patches = @(
+            "egui-directx11 = { path = '../egui-directx11' }",
+            "egui = { path = '../egui/crates/egui' }",
+            "egui_extras = { path = '../egui/crates/egui_extras' }"
+          )
+          Add-Content -Path "Cargo.toml" -Value $patches
+
+      # Zero-warning policy: -D warnings makes ANY clippy warning a CI failure.
+      - name: Clippy (core — zero warnings)
+        run: >
+          cargo clippy
+          --target x86_64-pc-windows-msvc
+          --all-targets
+          -- -D warnings
+
+      - name: Clippy (plugin — zero warnings)
+        working-directory: plugins/training-tracker
+        run: >
+          cargo clippy
+          --all-targets
+          -- -D warnings
+
+  clippy-android:
+    name: "3 · Clippy (Android)"
+    needs: [fmt, typos]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+          targets: aarch64-linux-android
+      - uses: swatinem/rust-cache@v2
+
+      - name: Patch dependencies
+        run: |
+          pushd ..
+          git clone --revision 44cdd653e2317d300fb8a6c9c36b03f23991e803 https://github.com/emilk/egui.git
+          cd egui
+          sed -i 's/ui.set_min_width(ui.available_width());/\/\/ ui.set_min_width(ui.available_width());/' crates/egui/src/containers/combo_box.rs
+          popd
+
+          echo -e "\negui = { path = '../egui/crates/egui' }" >> Cargo.toml
+          echo "egui_extras = { path = '../egui/crates/egui_extras' }" >> Cargo.toml
+
+      - name: Clippy (Android — zero warnings)
+        run: >
+          cargo clippy
+          --target aarch64-linux-android
+          -- -D warnings
+
+  # ──────────────────────────────────────────────────────────────
+  # Stage 4: Type check — cross-platform compilation verification
+  # ──────────────────────────────────────────────────────────────
+
+  check-windows:
+    name: "4 · Check (Windows)"
+    needs: [clippy-windows]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+
+      - name: Patch dependencies
+        shell: powershell
+        run: |
+          pushd ..
+
+          git clone --revision 44cdd653e2317d300fb8a6c9c36b03f23991e803 https://github.com/emilk/egui.git
+          cd egui
+          $File = "crates/egui/src/containers/combo_box.rs"
+          (Get-Content $File) -replace 'ui.set_min_width\(ui.available_width\(\)\);', '// ui.set_min_width(ui.available_width());' | Set-Content $File
+          cd ..
+
+          git clone --revision 903043939a076dc81e122a1c8451755bfb3979c8 https://github.com/Nekomaru-PKU/egui-directx11.git
+          cd egui-directx11
+          $fxc = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits" -Recurse -Filter "fxc.exe" | Where-Object { $_.FullName -like "*x64*" } | Select-Object -First 1
+          if (-not $fxc) { Write-Error "fxc.exe not found"; exit 1 }
+          & $fxc.FullName /nologo /O3 /T vs_4_0 /E vs_egui /Fo shaders/vs_egui.bin shaders/egui.hlsl
+          & $fxc.FullName /nologo /O3 /T ps_4_0 /E ps_egui /Fo shaders/ps_egui.bin shaders/egui.hlsl
+          popd
+
+          Add-Content -Path "Cargo.toml" -Value "`n"
+          $patches = @(
+            "egui-directx11 = { path = '../egui-directx11' }",
+            "egui = { path = '../egui/crates/egui' }",
+            "egui_extras = { path = '../egui/crates/egui_extras' }"
+          )
+          Add-Content -Path "Cargo.toml" -Value $patches
+
+      - name: Cargo check (core)
+        run: cargo check --target x86_64-pc-windows-msvc
+
+      - name: Cargo check (plugin)
+        working-directory: plugins/training-tracker
+        run: cargo check

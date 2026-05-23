@@ -6,10 +6,11 @@ use crate::{
     core::Hachimi,
     il2cpp::{
         hook::UnityEngine_CoreModule::{
-            FullScreenMode_ExclusiveFullScreen, FullScreenMode_FullScreenWindow,
-            QualitySettings, Screen
-        }, symbols::Thread, types::Resolution
-    }
+            FullScreenMode_ExclusiveFullScreen, FullScreenMode_FullScreenWindow, QualitySettings, Screen,
+        },
+        symbols::Thread,
+        types::Resolution,
+    },
 };
 
 use super::{utils, wnd_hook};
@@ -26,9 +27,10 @@ pub fn on_hooking_finished(hachimi: &Hachimi) {
     wnd_hook::init();
 
     // Kill unity crash handler (just to be safe)
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe {
         if let Err(e) = utils::kill_process_by_name(c"UnityCrashHandler64.exe") {
-            warn!("Error occured while trying to kill crash handler: {}", e);
+            warn!("Error occurred while trying to kill crash handler: {}", e);
         }
     };
 
@@ -76,31 +78,45 @@ pub struct Config {
     #[serde(default = "Config::default_true")]
     pub discord_rpc: bool,
     #[serde(default = "Config::default_gui_landscape_ratio")]
-    pub gui_landscape_ratio: f32
+    pub gui_landscape_ratio: f32,
 }
 
 impl Config {
-    fn default_vsync_count() -> i32 { -1 }
-    fn default_menu_open_key() -> u16 { windows::Win32::UI::Input::KeyboardAndMouse::VK_RIGHT.0 }
-    fn default_hide_ingame_ui_hotkey_bind() -> u16 { windows::Win32::UI::Input::KeyboardAndMouse::VK_INSERT.0 }
-    fn default_true() -> bool { true }
-    fn default_gui_landscape_ratio() -> f32 { 1.0 }
+    fn default_vsync_count() -> i32 {
+        -1
+    }
+    fn default_menu_open_key() -> u16 {
+        windows::Win32::UI::Input::KeyboardAndMouse::VK_RIGHT.0
+    }
+    fn default_hide_ingame_ui_hotkey_bind() -> u16 {
+        windows::Win32::UI::Input::KeyboardAndMouse::VK_INSERT.0
+    }
+    fn default_true() -> bool {
+        true
+    }
+    fn default_gui_landscape_ratio() -> f32 {
+        1.0
+    }
 }
 
 #[derive(Deserialize, Serialize, Copy, Clone, Default, Eq, PartialEq)]
 #[repr(i32)]
 pub enum FullScreenMode {
-    #[default] ExclusiveFullScreen = FullScreenMode_ExclusiveFullScreen,
-    FullScreenWindow = FullScreenMode_FullScreenWindow
+    #[default]
+    ExclusiveFullScreen = FullScreenMode_ExclusiveFullScreen,
+    FullScreenWindow = FullScreenMode_FullScreenWindow,
 }
 
 #[derive(Deserialize, Serialize, Copy, Clone, Default, Eq, PartialEq)]
 pub enum ResolutionScaling {
-    #[default] Default,
+    #[default]
+    Default,
     ScaleToScreenSize,
-    ScaleToWindowSize
+    ScaleToWindowSize,
 }
 
 impl ResolutionScaling {
-    pub fn is_not_default(&self) -> bool { *self != Self::Default }
+    pub fn is_not_default(&self) -> bool {
+        *self != Self::Default
+    }
 }

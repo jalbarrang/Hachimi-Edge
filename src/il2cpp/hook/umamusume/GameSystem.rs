@@ -1,10 +1,17 @@
-use crate::{core::{Hachimi, game::Region}, il2cpp::{symbols::{IEnumerator, MoveNextFn, SingletonLike, get_method_addr}, types::*}};
+use crate::{
+    core::{game::Region, Hachimi},
+    il2cpp::{
+        symbols::{get_method_addr, IEnumerator, MoveNextFn, SingletonLike},
+        types::*,
+    },
+};
 // use std::sync::atomic::{AtomicBool, Ordering};
 
 // pub static GAME_INITIALIZED: AtomicBool = AtomicBool::new(false);
 
 static mut CLASS: *mut Il2CppClass = 0 as _;
 pub fn class() -> *mut Il2CppClass {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe { CLASS }
 }
 
@@ -39,7 +46,9 @@ extern "C" fn InitializeGame_MoveNext(enumerator: *mut Il2CppObject) -> bool {
 }
 
 fn InitializeGameCommon(enumerator: IEnumerator) -> IEnumerator {
-    if Hachimi::instance().config.load().ui_scale == 1.0 { return enumerator; }
+    if Hachimi::instance().config.load().ui_scale == 1.0 {
+        return enumerator;
+    }
 
     if let Err(e) = enumerator.hook_move_next(InitializeGame_MoveNext) {
         error!("Failed to hook InitializeGame enumerator: {}", e);
@@ -48,7 +57,8 @@ fn InitializeGameCommon(enumerator: IEnumerator) -> IEnumerator {
     enumerator
 }
 
-type InitializeGameJpFn = extern "C" fn(this: *mut Il2CppObject, on_complete_initialize_ui: *mut Il2CppObject) -> IEnumerator;
+type InitializeGameJpFn =
+    extern "C" fn(this: *mut Il2CppObject, on_complete_initialize_ui: *mut Il2CppObject) -> IEnumerator;
 extern "C" fn InitializeGameJp(this: *mut Il2CppObject, on_complete_initialize_ui: *mut Il2CppObject) -> IEnumerator {
     let enumerator = get_orig_fn!(InitializeGameJp, InitializeGameJpFn)(this, on_complete_initialize_ui);
     InitializeGameCommon(enumerator)
@@ -66,12 +76,12 @@ pub fn init(umamusume: *const Il2CppImage) {
     if Hachimi::instance().game.region == Region::Japan {
         let InitializeGame_addr = get_method_addr(GameSystem, c"InitializeGame", 1);
         new_hook!(InitializeGame_addr, InitializeGameJp);
-    }
-    else {
+    } else {
         let InitializeGame_addr = get_method_addr(GameSystem, c"InitializeGame", 0);
         new_hook!(InitializeGame_addr, InitializeGameOther);
     }
 
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe {
         CLASS = GameSystem;
         SOFTWARERESET_ADDR = get_method_addr(GameSystem, c"SoftwareReset", 0);

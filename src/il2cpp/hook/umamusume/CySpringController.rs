@@ -1,6 +1,12 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{core::Hachimi, il2cpp::{symbols::{get_field_from_name, get_method_addr, set_field_value}, types::*}};
+use crate::{
+    core::Hachimi,
+    il2cpp::{
+        symbols::{get_field_from_name, get_method_addr, set_field_value},
+        types::*,
+    },
+};
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
 #[repr(i32)]
@@ -8,11 +14,12 @@ pub enum SpringUpdateMode {
     ModeNormal,
     Mode60FPS,
     SkipFrame,
-    SkipFramePostAlways
+    SkipFramePostAlways,
 }
 
 static mut UPDATEMODE_FIELD: *mut FieldInfo = 0 as _;
 fn set_UpdateMode(this: *mut Il2CppObject, value: &SpringUpdateMode) {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     set_field_value(this, unsafe { UPDATEMODE_FIELD }, value);
 }
 
@@ -32,6 +39,7 @@ pub fn init(umamusume: *const Il2CppImage) {
 
     new_hook!(Init_addr, Init);
 
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe {
         UPDATEMODE_FIELD = get_field_from_name(CySpringController, c"<UpdateMode>k__BackingField");
     }

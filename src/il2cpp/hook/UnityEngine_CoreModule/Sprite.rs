@@ -6,6 +6,7 @@ impl_addr_wrapper_fn!(get_texture, GET_TEXTURE_ADDR, *mut Il2CppObject, this: *m
 pub fn init(UnityEngine_CoreModule: *const Il2CppImage) {
     get_class_or_return!(UnityEngine_CoreModule, UnityEngine, Sprite);
 
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe {
         GET_TEXTURE_ADDR = get_method_addr(Sprite, c"get_texture", 0);
     }

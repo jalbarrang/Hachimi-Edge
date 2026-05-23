@@ -20,8 +20,7 @@ pub fn apply_auto_full_screen(mut width: i32, mut height: i32) -> bool {
     let preferred_res = &windows_config.full_screen_res;
     let (preferred_width, preferred_height) = if preferred_res.width > 0 && preferred_res.height > 0 {
         (preferred_res.width, preferred_res.height)
-    }
-    else {
+    } else {
         let res = get_currentResolution();
         (res.width, res.height)
     };
@@ -29,31 +28,44 @@ pub fn apply_auto_full_screen(mut width: i32, mut height: i32) -> bool {
     if width > 0 && height > 0 && (width > height) == (preferred_width > preferred_height) {
         let aspect_ratio = width as f32 / height as f32;
         (width, height) = scale_to_aspect_ratio((preferred_width, preferred_height), aspect_ratio, false)
-    }
-    else {
+    } else {
         return false;
     }
 
     let full_screen_mode = windows_config.full_screen_mode as i32;
     let preferred_refresh_rate = RefreshRate {
         numerator: preferred_res.refresh_rate as u32,
-        denominator: 1
+        denominator: 1,
     };
-    get_orig_fn!(SetResolution_Injected, SetResolutionInjectedFn)(width, height, full_screen_mode, &preferred_refresh_rate);
+    get_orig_fn!(SetResolution_Injected, SetResolutionInjectedFn)(
+        width,
+        height,
+        full_screen_mode,
+        &preferred_refresh_rate,
+    );
 
     true
 }
 
-type SetResolutionInjectedFn = extern "C" fn(width: i32, height: i32, fullscreen_mode: i32, preferred_refresh_rate: *const RefreshRate);
-extern "C" fn SetResolution_Injected(width: i32, height: i32, full_screen_mode: i32, preferred_refresh_rate: *const RefreshRate) {
+type SetResolutionInjectedFn =
+    extern "C" fn(width: i32, height: i32, fullscreen_mode: i32, preferred_refresh_rate: *const RefreshRate);
+extern "C" fn SetResolution_Injected(
+    width: i32,
+    height: i32,
+    full_screen_mode: i32,
+    preferred_refresh_rate: *const RefreshRate,
+) {
     let windows_config = &Hachimi::instance().config.load().windows;
-    if windows_config.auto_full_screen {
-        if apply_auto_full_screen(width, height) {
-            return;
-        }
+    if windows_config.auto_full_screen && apply_auto_full_screen(width, height) {
+        return;
     }
 
-    get_orig_fn!(SetResolution_Injected, SetResolutionInjectedFn)(width, height, full_screen_mode, preferred_refresh_rate);
+    get_orig_fn!(SetResolution_Injected, SetResolutionInjectedFn)(
+        width,
+        height,
+        full_screen_mode,
+        preferred_refresh_rate,
+    );
 }
 
 pub fn init(UnityEngine_CoreModule: *const Il2CppImage) {
@@ -61,15 +73,17 @@ pub fn init(UnityEngine_CoreModule: *const Il2CppImage) {
 
     let SetResolution_Injected_addr = il2cpp_resolve_icall(
         c"UnityEngine.Screen::SetResolution_Injected(System.Int32,System.Int32,\
-        UnityEngine.FullScreenMode,UnityEngine.RefreshRate)".as_ptr()
+        UnityEngine.FullScreenMode,UnityEngine.RefreshRate)"
+            .as_ptr(),
     );
 
     new_hook!(SetResolution_Injected_addr, SetResolution_Injected);
 
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe {
         GET_CURRENTRESOLUTION_ADDR = get_method_addr(Screen, c"get_currentResolution", 0);
         GET_WIDTH_ADDR = il2cpp_resolve_icall(c"UnityEngine.Screen::get_width()".as_ptr());
         GET_HEIGHT_ADDR = il2cpp_resolve_icall(c"UnityEngine.Screen::get_height()".as_ptr());
-        GET_FULLSCREEN_ADDR =il2cpp_resolve_icall(c"UnityEngine.Screen::get_fullScreen()".as_ptr());
+        GET_FULLSCREEN_ADDR = il2cpp_resolve_icall(c"UnityEngine.Screen::get_fullScreen()".as_ptr());
     }
 }

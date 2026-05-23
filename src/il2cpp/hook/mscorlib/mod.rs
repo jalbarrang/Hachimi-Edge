@@ -1,6 +1,6 @@
+pub mod Byte;
 pub mod Enum;
 pub mod File;
-pub mod Byte;
 
 pub fn init() {
     get_assembly_image_or_return!(image, "mscorlib.dll");

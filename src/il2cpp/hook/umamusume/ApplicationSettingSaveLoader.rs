@@ -1,6 +1,6 @@
 use crate::{
     core::{game::Region, Hachimi},
-    il2cpp::{symbols::get_method_addr, types::*}
+    il2cpp::{symbols::get_method_addr, types::*},
 };
 
 static mut GET_ISTRYRACEDYNAMICCAMERA_ADDR: usize = 0;
@@ -13,7 +13,9 @@ pub fn init(umamusume: *const Il2CppImage) {
 
     get_class_or_return!(umamusume, Gallop, ApplicationSettingSaveLoader);
 
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe {
-        GET_ISTRYRACEDYNAMICCAMERA_ADDR = get_method_addr(ApplicationSettingSaveLoader, c"get_IsTryRaceDynamicCamera", 0);
+        GET_ISTRYRACEDYNAMICCAMERA_ADDR =
+            get_method_addr(ApplicationSettingSaveLoader, c"get_IsTryRaceDynamicCamera", 0);
     }
 }

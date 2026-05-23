@@ -4,32 +4,45 @@ use std::{
     ops::RangeInclusive,
     os::raw::c_void,
     panic::{self, AssertUnwindSafe},
-    sync::{atomic::{self, AtomicBool}, Arc, Mutex},
+    sync::{
+        atomic::{self, AtomicBool},
+        Arc, Mutex,
+    },
     thread,
-    time::Instant
+    time::Instant,
 };
 
+use chrono::{Datelike, Utc};
 use egui_scale::EguiScale;
 use fnv::FnvHashSet;
 use once_cell::sync::{Lazy, OnceCell};
 use rust_i18n::t;
-use chrono::{Utc, Datelike};
 
 use crate::il2cpp::{
     ext::StringExt,
     hook::{
-        umamusume::{CameraData::ShadowResolution, CySpringController::SpringUpdateMode, GameSystem, GraphicSettings::{GraphicsQuality, MsaaQuality}, Localize, TimeUtil::BgSeason},
-        UnityEngine_CoreModule::{Application, Texture::AnisoLevel}
+        umamusume::{
+            CameraData::ShadowResolution,
+            CySpringController::SpringUpdateMode,
+            GameSystem,
+            GraphicSettings::{GraphicsQuality, MsaaQuality},
+            Localize,
+            TimeUtil::BgSeason,
+        },
+        UnityEngine_CoreModule::{Application, Texture::AnisoLevel},
     },
-    symbols::Thread
+    symbols::Thread,
 };
 
 #[cfg(target_os = "android")]
 use crate::il2cpp::{
     ext::Il2CppStringExt,
-    hook::{umamusume::WebViewManager, UnityEngine_CoreModule::{TouchScreenKeyboard, TouchScreenKeyboardType}},
+    hook::{
+        umamusume::WebViewManager,
+        UnityEngine_CoreModule::{TouchScreenKeyboard, TouchScreenKeyboardType},
+    },
     symbols::GCHandle,
-    types::{Il2CppObject, Il2CppString, RangeInt}
+    types::{Il2CppObject, Il2CppString, RangeInt},
 };
 
 #[cfg(target_os = "windows")]
@@ -40,14 +53,14 @@ use super::{
     http::AsyncRequest,
     tl_repo::{self, RepoInfo},
     utils::{self, get_localized_string, SendPtr},
-    Hachimi
+    Hachimi,
 };
 
 macro_rules! add_font {
     ($fonts:expr, $family_fonts:expr, $filename:literal) => {
         $fonts.font_data.insert(
             $filename.to_owned(),
-            egui::FontData::from_static(include_bytes!(concat!("../../assets/fonts/", $filename))).into()
+            egui::FontData::from_static(include_bytes!(concat!("../../assets/fonts/", $filename))).into(),
         );
         $family_fonts.push($filename.to_owned());
     };
@@ -96,19 +109,19 @@ pub struct Gui {
 
     notifications: Vec<Notification>,
     next_notification_id: u32,
-    windows: Vec<BoxedWindow>
+    windows: Vec<BoxedWindow>,
 }
 
-const PIXELS_PER_POINT_RATIO: f32 = 3.0/1080.0;
+const PIXELS_PER_POINT_RATIO: f32 = 3.0 / 1080.0;
 
 static INSTANCE: OnceCell<Mutex<Gui>> = OnceCell::new();
 static IS_CONSUMING_INPUT: AtomicBool = AtomicBool::new(false);
-static DISABLED_GAME_UIS: Lazy<Mutex<FnvHashSet<SendPtr>>> =
-    Lazy::new(|| Mutex::new(FnvHashSet::default()));
+static DISABLED_GAME_UIS: Lazy<Mutex<FnvHashSet<SendPtr>>> = Lazy::new(|| Mutex::new(FnvHashSet::default()));
 static PLUGIN_MENU_ITEMS: Lazy<Mutex<Vec<PluginMenuItem>>> = Lazy::new(|| Mutex::new(Vec::new()));
 static PLUGIN_MENU_SECTIONS: Lazy<Mutex<Vec<PluginMenuSection>>> = Lazy::new(|| Mutex::new(Vec::new()));
 static PLUGIN_MENU_ICONS: Lazy<Mutex<HashMap<String, PluginMenuIcon>>> = Lazy::new(|| Mutex::new(HashMap::new()));
 static PLUGIN_NOTIFICATIONS: Lazy<Mutex<Vec<String>>> = Lazy::new(|| Mutex::new(Vec::new()));
+static PLUGIN_OVERLAYS: Lazy<Mutex<Vec<PluginOverlay>>> = Lazy::new(|| Mutex::new(Vec::new()));
 
 pub type PluginMenuCallback = extern "C" fn(userdata: *mut c_void);
 pub type PluginMenuSectionCallback = extern "C" fn(ui: *mut c_void, userdata: *mut c_void);
@@ -117,7 +130,7 @@ pub type PluginMenuSectionCallback = extern "C" fn(ui: *mut c_void, userdata: *m
 struct PluginMenuItem {
     label: String,
     callback: Option<PluginMenuCallback>,
-    userdata: usize
+    userdata: usize,
 }
 
 #[derive(Clone)]
@@ -131,24 +144,34 @@ struct PluginMenuSection {
     title: Option<String>,
     icon: Option<PluginMenuIcon>,
     callback: PluginMenuSectionCallback,
-    userdata: usize
+    userdata: usize,
+}
+
+#[derive(Clone)]
+struct PluginOverlay {
+    id: String,
+    callback: PluginMenuSectionCallback,
+    userdata: usize,
 }
 
 pub fn register_plugin_menu_item(label: String, callback: Option<PluginMenuCallback>, userdata: *mut c_void) {
-    PLUGIN_MENU_ITEMS.lock().unwrap().push(PluginMenuItem {
+    PLUGIN_MENU_ITEMS.lock().expect("lock poisoned").push(PluginMenuItem {
         label,
         callback,
-        userdata: userdata as usize
+        userdata: userdata as usize,
     });
 }
 
 pub fn register_plugin_menu_section(callback: PluginMenuSectionCallback, userdata: *mut c_void) {
-    PLUGIN_MENU_SECTIONS.lock().unwrap().push(PluginMenuSection {
-        title: None,
-        icon: None,
-        callback,
-        userdata: userdata as usize
-    });
+    PLUGIN_MENU_SECTIONS
+        .lock()
+        .expect("lock poisoned")
+        .push(PluginMenuSection {
+            title: None,
+            icon: None,
+            callback,
+            userdata: userdata as usize,
+        });
 }
 
 pub fn register_plugin_menu_section_with_icon(
@@ -156,17 +179,23 @@ pub fn register_plugin_menu_section_with_icon(
     uri: String,
     bytes: Vec<u8>,
     callback: PluginMenuSectionCallback,
-    userdata: *mut c_void
+    userdata: *mut c_void,
 ) -> bool {
     if title.is_empty() || uri.is_empty() || bytes.is_empty() {
         return false;
     }
-    PLUGIN_MENU_SECTIONS.lock().unwrap().push(PluginMenuSection {
-        title: Some(title),
-        icon: Some(PluginMenuIcon { uri, bytes: bytes.into() }),
-        callback,
-        userdata: userdata as usize
-    });
+    PLUGIN_MENU_SECTIONS
+        .lock()
+        .expect("lock poisoned")
+        .push(PluginMenuSection {
+            title: Some(title),
+            icon: Some(PluginMenuIcon {
+                uri,
+                bytes: bytes.into(),
+            }),
+            callback,
+            userdata: userdata as usize,
+        });
     true
 }
 
@@ -174,31 +203,46 @@ pub fn register_plugin_menu_icon(label: String, uri: String, bytes: Vec<u8>) -> 
     if label.is_empty() || uri.is_empty() || bytes.is_empty() {
         return false;
     }
-    PLUGIN_MENU_ICONS.lock().unwrap().insert(label, PluginMenuIcon {
-        uri,
-        bytes: bytes.into(),
-    });
+    PLUGIN_MENU_ICONS.lock().expect("lock poisoned").insert(
+        label,
+        PluginMenuIcon {
+            uri,
+            bytes: bytes.into(),
+        },
+    );
     true
 }
 
 pub fn enqueue_plugin_notification(message: String) {
-    PLUGIN_NOTIFICATIONS.lock().unwrap().push(message);
+    PLUGIN_NOTIFICATIONS.lock().expect("lock poisoned").push(message);
+}
+
+pub fn register_plugin_overlay(id: String, callback: PluginMenuSectionCallback, userdata: *mut c_void) {
+    PLUGIN_OVERLAYS.lock().expect("lock poisoned").push(PluginOverlay {
+        id,
+        callback,
+        userdata: userdata as usize,
+    });
+}
+
+fn get_plugin_overlays() -> Vec<PluginOverlay> {
+    PLUGIN_OVERLAYS.lock().expect("lock poisoned").clone()
 }
 
 fn get_plugin_menu_items() -> Vec<PluginMenuItem> {
-    PLUGIN_MENU_ITEMS.lock().unwrap().clone()
+    PLUGIN_MENU_ITEMS.lock().expect("lock poisoned").clone()
 }
 
 fn get_plugin_menu_sections() -> Vec<PluginMenuSection> {
-    PLUGIN_MENU_SECTIONS.lock().unwrap().clone()
+    PLUGIN_MENU_SECTIONS.lock().expect("lock poisoned").clone()
 }
 
 fn get_plugin_menu_icon(label: &str) -> Option<PluginMenuIcon> {
-    PLUGIN_MENU_ICONS.lock().unwrap().get(label).cloned()
+    PLUGIN_MENU_ICONS.lock().expect("lock poisoned").get(label).cloned()
 }
 
 fn drain_plugin_notifications() -> Vec<String> {
-    let mut notifications = PLUGIN_NOTIFICATIONS.lock().unwrap();
+    let mut notifications = PLUGIN_NOTIFICATIONS.lock().expect("lock poisoned");
     std::mem::take(&mut *notifications)
 }
 
@@ -215,25 +259,24 @@ static ACTIVE_KEYBOARD: AtomicPtr<Il2CppObject> = AtomicPtr::new(std::ptr::null_
 #[cfg(target_os = "android")]
 pub static KEYBOARD_GC_HANDLE: Lazy<Mutex<Option<GCHandle>>> = Lazy::new(|| Mutex::default());
 #[cfg(target_os = "android")]
-static KEYBOARD_SELECTION: Lazy<Mutex<RangeInt>> = Lazy::new(|| {
-    Mutex::new(RangeInt::new(0, 1))
-});
+static KEYBOARD_SELECTION: Lazy<Mutex<RangeInt>> = Lazy::new(|| Mutex::new(RangeInt::new(0, 1)));
 #[cfg(target_os = "android")]
-pub static KEYBOARD_OWNER: Lazy<Mutex<Option<KeyboardOwner>>> = 
-    Lazy::new(|| Mutex::new(None));
+pub static KEYBOARD_OWNER: Lazy<Mutex<Option<KeyboardOwner>>> = Lazy::new(|| Mutex::new(None));
 #[cfg(target_os = "android")]
 #[derive(PartialEq)]
 pub enum KeyboardOwner {
     JNI(egui::Id),
-    Unity(egui::Id)
+    Unity(egui::Id),
 }
 
 fn get_scale_salt(ctx: &egui::Context) -> f32 {
-    ctx.data(|d| d.get_temp::<f32>(egui::Id::new("gui_scale_salt"))).unwrap_or(1.0)
+    ctx.data(|d| d.get_temp::<f32>(egui::Id::new("gui_scale_salt")))
+        .unwrap_or(1.0)
 }
 
 fn get_scale(ctx: &egui::Context) -> f32 {
-    ctx.data(|d| d.get_temp::<f32>(egui::Id::new("gui_scale"))).unwrap_or(1.0)
+    ctx.data(|d| d.get_temp::<f32>(egui::Id::new("gui_scale")))
+        .unwrap_or(1.0)
 }
 
 #[cfg(target_os = "android")]
@@ -260,7 +303,9 @@ fn ime_scroll_padding(ctx: &egui::Context) -> f32 {
 #[cfg(target_os = "android")]
 pub fn handle_android_keyboard<T: 'static>(res: &egui::Response, val: &mut T) {
     {
-        let Ok(mut owner_lock) = KEYBOARD_OWNER.try_lock() else { return; };
+        let Ok(mut owner_lock) = KEYBOARD_OWNER.try_lock() else {
+            return;
+        };
         if let Some(KeyboardOwner::JNI(_)) = *owner_lock {
             return;
         }
@@ -285,8 +330,11 @@ pub fn handle_android_keyboard<T: 'static>(res: &egui::Response, val: &mut T) {
         return;
     }
 
+    use egui::{
+        text::{CCursor, CCursorRange},
+        widgets::text_edit::TextEditState,
+    };
     use utils::{char_to_utf16_index, utf16_to_char_index};
-    use egui::{text::{CCursor, CCursorRange}, widgets::text_edit::TextEditState};
 
     let val_any = val as &dyn std::any::Any;
     PENDING_KB_TYPE.store(TouchScreenKeyboardType::KeyboardType::Default as i32, Ordering::Release);
@@ -294,15 +342,25 @@ pub fn handle_android_keyboard<T: 'static>(res: &egui::Response, val: &mut T) {
     let text = if let Some(s) = val_any.downcast_ref::<String>() {
         s.clone()
     } else if let Some(f) = val_any.downcast_ref::<f32>() {
-        PENDING_KB_TYPE.store(TouchScreenKeyboardType::KeyboardType::DecimalPad as i32, Ordering::Release);
-        if f.fract() == 0.0 { format!("{:.1}", f) } else { f.to_string() }
+        PENDING_KB_TYPE.store(
+            TouchScreenKeyboardType::KeyboardType::DecimalPad as i32,
+            Ordering::Release,
+        );
+        if f.fract() == 0.0 {
+            format!("{:.1}", f)
+        } else {
+            f.to_string()
+        }
     } else if let Some(i) = val_any.downcast_ref::<i32>() {
-        PENDING_KB_TYPE.store(TouchScreenKeyboardType::KeyboardType::NumberPad as i32, Ordering::Release);
+        PENDING_KB_TYPE.store(
+            TouchScreenKeyboardType::KeyboardType::NumberPad as i32,
+            Ordering::Release,
+        );
         i.to_string()
     } else {
-        String::new() 
+        String::new()
     };
-    
+
     if res.gained_focus() {
         {
             let mut owner_lock = KEYBOARD_OWNER.lock().unwrap();
@@ -316,23 +374,27 @@ pub fn handle_android_keyboard<T: 'static>(res: &egui::Response, val: &mut T) {
 
         let initial_selection = res.ctx.data(|data| {
             data.get_temp::<TextEditState>(res.id)
-            .and_then(|state| state.cursor.char_range())
-            .map(|range| {
-                let start_char = range.primary.index.min(range.secondary.index);
-                let end_char = range.primary.index.max(range.secondary.index);
+                .and_then(|state| state.cursor.char_range())
+                .map(|range| {
+                    let start_char = range.primary.index.min(range.secondary.index);
+                    let end_char = range.primary.index.max(range.secondary.index);
 
-                let start_u16 = char_to_utf16_index(&text, start_char);
-                let end_u16 = char_to_utf16_index(&text, end_char);
+                    let start_u16 = char_to_utf16_index(&text, start_char);
+                    let end_u16 = char_to_utf16_index(&text, end_char);
 
-                RangeInt::new(start_u16, end_u16 - start_u16)
-            })
-            .unwrap_or(RangeInt::new(char_to_utf16_index(&text, text.chars().count()), 0))
+                    RangeInt::new(start_u16, end_u16 - start_u16)
+                })
+                .unwrap_or(RangeInt::new(char_to_utf16_index(&text, text.chars().count()), 0))
         });
         *KEYBOARD_SELECTION.lock().unwrap() = initial_selection;
 
         Thread::main_thread().schedule(|| {
             let ptr = PENDING_KEYBOARD_TEXT.swap(std::ptr::null_mut(), Ordering::AcqRel);
-            let typ: TouchScreenKeyboardType::KeyboardType = unsafe { *(&PENDING_KB_TYPE.load(Ordering::Acquire) as *const i32 as *const TouchScreenKeyboardType::KeyboardType) };
+            // SAFETY: FFI / raw pointer operation required by IL2CPP interop
+            let typ: TouchScreenKeyboardType::KeyboardType = unsafe {
+                *(&PENDING_KB_TYPE.load(Ordering::Acquire) as *const i32
+                    as *const TouchScreenKeyboardType::KeyboardType)
+            };
 
             if !ptr.is_null() {
                 let keyboard = TouchScreenKeyboard::Open(ptr, typ, false, false, false);
@@ -352,33 +414,40 @@ pub fn handle_android_keyboard<T: 'static>(res: &egui::Response, val: &mut T) {
             let unity_range = TouchScreenKeyboard::get_selection(kb_ptr);
 
             let kb_txt_ptr = TouchScreenKeyboard::get_text(kb_ptr);
+            // SAFETY: FFI / raw pointer operation required by IL2CPP interop
             if let Some(kb_ref) = unsafe { kb_txt_ptr.as_ref() } {
                 let kb_txt_str = kb_ref.as_utf16str().to_string();
 
                 let val_any_mut = val as &mut dyn std::any::Any;
 
                 if let Some(s) = val_any_mut.downcast_mut::<String>() {
-                    if *s != kb_txt_str { *s = kb_txt_str.clone(); }
+                    if *s != kb_txt_str {
+                        *s = kb_txt_str.clone();
+                    }
                 } else if let Some(f) = val_any_mut.downcast_mut::<f32>() {
                     if let Ok(parsed) = kb_txt_str.parse::<f32>() {
                         let changed = !egui::emath::almost_equal(*f, parsed, 1e-6);
-                        let drafting = kb_txt_str.ends_with('.') || (kb_txt_str.contains('.') && kb_txt_str.ends_with('0'));
+                        let drafting =
+                            kb_txt_str.ends_with('.') || (kb_txt_str.contains('.') && kb_txt_str.ends_with('0'));
 
                         if changed && !drafting {
                             *f = parsed;
                         }
                     }
                 } else if let Some(i) = val_any_mut.downcast_mut::<i32>() {
-                    if let Ok(parsed) = kb_txt_str.parse::<i32>() { 
-                        if *i != parsed { *i = parsed; }
+                    if let Ok(parsed) = kb_txt_str.parse::<i32>() {
+                        if *i != parsed {
+                            *i = parsed;
+                        }
                     }
                 }
 
-                let kb_txt_clone = kb_txt_str.clone(); 
+                let kb_txt_clone = kb_txt_str.clone();
                 res.ctx.data_mut(|data| {
                     if let Some(mut state) = data.get_temp::<TextEditState>(res.id) {
                         let start_char = utf16_to_char_index(&kb_txt_clone, unity_range.start as usize);
-                        let end_char = utf16_to_char_index(&kb_txt_clone, (unity_range.start + unity_range.length) as usize);
+                        let end_char =
+                            utf16_to_char_index(&kb_txt_clone, (unity_range.start + unity_range.length) as usize);
 
                         let new_range = CCursorRange::two(CCursor::new(start_char), CCursor::new(end_char));
 
@@ -428,9 +497,7 @@ impl Gui {
     }
 
     // Call this from the render thread!
-    pub fn instance_or_init(
-        #[cfg_attr(target_os = "windows", allow(unused))] open_key_id: &str
-    ) -> &Mutex<Gui> {
+    pub fn instance_or_init(#[cfg_attr(target_os = "windows", allow(unused))] open_key_id: &str) -> &Mutex<Gui> {
         if let Some(instance) = INSTANCE.get() {
             return instance;
         }
@@ -487,7 +554,8 @@ impl Gui {
             splash_sub_str: {
                 #[cfg(target_os = "windows")]
                 {
-                    let key_label = crate::windows::utils::vk_to_display_label(hachimi.config.load().windows.menu_open_key);
+                    let key_label =
+                        crate::windows::utils::vk_to_display_label(hachimi.config.load().windows.menu_open_key);
                     t!("splash_sub", open_key_str = key_label).into_owned()
                 }
                 #[cfg(not(target_os = "windows"))]
@@ -507,9 +575,10 @@ impl Gui {
 
             notifications: Vec::new(),
             next_notification_id: 0,
-            windows
+            windows,
         };
 
+        // SAFETY: FFI / raw pointer operation required by IL2CPP interop
         unsafe {
             INSTANCE.set(Mutex::new(instance)).unwrap_unchecked();
 
@@ -526,7 +595,10 @@ impl Gui {
 
     fn get_font_definitions() -> egui::FontDefinitions {
         let mut fonts = egui::FontDefinitions::default();
-        let proportional_fonts = fonts.families.get_mut(&egui::FontFamily::Proportional).unwrap();
+        let proportional_fonts = fonts
+            .families
+            .get_mut(&egui::FontFamily::Proportional)
+            .expect("unexpected failure");
 
         add_font!(fonts, proportional_fonts, "Inter_24pt-Regular.ttf");
         add_font!(fonts, proportional_fonts, "AlibabaPuHuiTi-3-45-Light.otf");
@@ -542,12 +614,22 @@ impl Gui {
         let orientation_scale = {
             #[cfg(target_os = "windows")]
             {
-                let orientation_ratio = if is_landscape { height as f32 / width as f32 } else { 1.0 };
-                if is_landscape { orientation_ratio * Hachimi::instance().config.load().windows.gui_landscape_ratio } else { 1.0 }
+                let orientation_ratio = if is_landscape {
+                    height as f32 / width as f32
+                } else {
+                    1.0
+                };
+                if is_landscape {
+                    orientation_ratio * Hachimi::instance().config.load().windows.gui_landscape_ratio
+                } else {
+                    1.0
+                }
             }
 
             #[cfg(target_os = "android")]
-            { 1.0 }
+            {
+                1.0
+            }
         };
 
         let pixels_per_point = main_axis_size as f32 * PIXELS_PER_POINT_RATIO * orientation_scale;
@@ -557,8 +639,8 @@ impl Gui {
             min: egui::Pos2::default(),
             max: egui::Pos2::new(
                 width as f32 / self.context.pixels_per_point(),
-                height as f32 / self.context.pixels_per_point()
-            )
+                height as f32 / self.context.pixels_per_point(),
+            ),
         });
 
         self.prev_main_axis_size = main_axis_size;
@@ -576,8 +658,7 @@ impl Gui {
             self.fps_text = t!("menu.fps_text", fps = fps).into_owned();
             self.tmp_frame_count = 1;
             self.last_fps_update = Instant::now();
-        }
-        else {
+        } else {
             self.tmp_frame_count += 1;
         }
     }
@@ -623,14 +704,21 @@ impl Gui {
         self.context.set_style(style);
 
         self.context.begin_pass(input);
-        
-        if self.menu_visible { self.run_menu(); }
-        if self.update_progress_visible { self.run_update_progress(); }
+
+        if self.menu_visible {
+            self.run_menu();
+        }
+        if self.update_progress_visible {
+            self.run_update_progress();
+        }
 
         self.run_windows();
         self.run_notifications();
+        self.run_overlays();
 
-        if self.splash_visible { self.run_splash(); }
+        if self.splash_visible {
+            self.run_splash();
+        }
         if hachimi::CONFIG_LOAD_ERROR.swap(false, Ordering::AcqRel) {
             self.show_notification(&t!("notification.config_error"));
         }
@@ -639,7 +727,7 @@ impl Gui {
         {
             use crate::il2cpp::hook::UnityEngine_InputLegacyModule::Input::set_imeCompositionMode;
 
-            let focused = self.context.memory(|m| m.focused());
+            let focused = self.context.memory(egui::Memory::focused);
             let wants_kb = self.context.wants_keyboard_input();
 
             if focused != self.last_focused {
@@ -657,7 +745,9 @@ impl Gui {
         }
         #[cfg(target_os = "android")]
         {
-            use crate::android::utils::{set_keyboard_visible, check_keyboard_status, BACK_BUTTON_PRESSED, IS_IME_VISIBLE};
+            use crate::android::utils::{
+                check_keyboard_status, set_keyboard_visible, BACK_BUTTON_PRESSED, IS_IME_VISIBLE,
+            };
 
             let focused = self.context.memory(|m| m.focused());
             let wants_kb = self.context.wants_keyboard_input();
@@ -728,14 +818,12 @@ impl Gui {
     const ICON_IMAGE: egui::ImageSource<'static> = egui::include_image!("../../assets/icon.png");
     fn icon<'a>(ctx: &egui::Context) -> egui::Image<'a> {
         let scale = get_scale(ctx);
-        egui::Image::new(Self::ICON_IMAGE)
-            .fit_to_exact_size(egui::Vec2::new(24.0 * scale, 24.0 * scale))
+        egui::Image::new(Self::ICON_IMAGE).fit_to_exact_size(egui::Vec2::new(24.0 * scale, 24.0 * scale))
     }
 
     fn icon_2x<'a>(ctx: &egui::Context) -> egui::Image<'a> {
         let scale = get_scale(ctx);
-        egui::Image::new(Self::ICON_IMAGE)
-            .fit_to_exact_size(egui::Vec2::new(48.0 * scale, 48.0 * scale))
+        egui::Image::new(Self::ICON_IMAGE).fit_to_exact_size(egui::Vec2::new(48.0 * scale, 48.0 * scale))
     }
 
     fn run_splash(&mut self) {
@@ -749,23 +837,23 @@ impl Gui {
         };
 
         egui::Area::new(id)
-        .fixed_pos(egui::Pos2 {
-            x: (-250.0 * scale) * (1.0 - tween_val),
-            y: 16.0 * scale
-        })
-        .show(ctx, |ui| {
-            egui::Frame::NONE
-            .fill(self.config.ui_panel_fill)
-            .inner_margin(egui::Margin::same((10.0 * scale) as i8))
-            .show(ui, |ui| {
-                ui.horizontal(|ui| {
-                    ui.add(Self::icon(ctx));
-                    ui.heading("Hachimi");
-                    ui.label(env!("HACHIMI_DISPLAY_VERSION"));
-                });
-                ui.label(&self.splash_sub_str);
+            .fixed_pos(egui::Pos2 {
+                x: (-250.0 * scale) * (1.0 - tween_val),
+                y: 16.0 * scale,
+            })
+            .show(ctx, |ui| {
+                egui::Frame::NONE
+                    .fill(self.config.ui_panel_fill)
+                    .inner_margin(egui::Margin::same((10.0 * scale) as i8))
+                    .show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.add(Self::icon(ctx));
+                            ui.heading("Hachimi");
+                            ui.label(env!("HACHIMI_DISPLAY_VERSION"));
+                        });
+                        ui.label(&self.splash_sub_str);
+                    });
             });
-        });
     }
 
     fn run_menu(&mut self) {
@@ -784,241 +872,271 @@ impl Gui {
                 .min_width(96.0 * scale)
                 .default_width(200.0 * scale)
                 .show_animated(ctx, self.show_menu, |ui| {
-                ui.with_layout(egui::Layout::top_down_justified(egui::Align::TOP), |ui| {
-                    #[cfg(target_os = "windows")]
-                    {
-                        ui.horizontal(|ui| {
-                            ui.add(Self::icon(ctx));
-                            ui.heading(t!("hachimi"));
-                            if ui.button(" \u{f29c} ").clicked() {
-                                show_window = Some(Box::new(AboutWindow::new()));
-                            }
-                        });
-                        ui.label(env!("HACHIMI_DISPLAY_VERSION"));
-                        if ui.button(t!("menu.close_menu")).clicked() {
-                            self.show_menu = false;
-                            self.menu_anim_time = None;
-                        }
-                    }
-                    // did this because android phones have a notch
-                    #[cfg(target_os = "android")]
-                    {
-                        ui.horizontal(|ui| {
-                            ui.add(Self::icon(ctx));
-                            ui.heading(t!("hachimi"));
-                        });
-                        ui.label(env!("HACHIMI_DISPLAY_VERSION"));
-                        ui.horizontal(|ui| {
+                    ui.with_layout(egui::Layout::top_down_justified(egui::Align::TOP), |ui| {
+                        #[cfg(target_os = "windows")]
+                        {
+                            ui.horizontal(|ui| {
+                                ui.add(Self::icon(ctx));
+                                ui.heading(t!("hachimi"));
+                                if ui.button(" \u{f29c} ").clicked() {
+                                    show_window = Some(Box::new(AboutWindow::new()));
+                                }
+                            });
+                            ui.label(env!("HACHIMI_DISPLAY_VERSION"));
                             if ui.button(t!("menu.close_menu")).clicked() {
                                 self.show_menu = false;
                                 self.menu_anim_time = None;
                             }
-                            if ui.button(" \u{f29c} ").clicked() {
-                                show_window = Some(Box::new(AboutWindow::new()));
+                        }
+                        // did this because android phones have a notch
+                        #[cfg(target_os = "android")]
+                        {
+                            ui.horizontal(|ui| {
+                                ui.add(Self::icon(ctx));
+                                ui.heading(t!("hachimi"));
+                            });
+                            ui.label(env!("HACHIMI_DISPLAY_VERSION"));
+                            ui.horizontal(|ui| {
+                                if ui.button(t!("menu.close_menu")).clicked() {
+                                    self.show_menu = false;
+                                    self.menu_anim_time = None;
+                                }
+                                if ui.button(" \u{f29c} ").clicked() {
+                                    show_window = Some(Box::new(AboutWindow::new()));
+                                }
+                            });
+                        }
+                        if ui.button(t!("menu.check_for_updates")).clicked() {
+                            Hachimi::instance().updater.clone().check_for_updates(|_| {});
+                        }
+                        ui.separator();
+
+                        egui::ScrollArea::vertical().show(ui, |ui| {
+                            ui.heading(t!("menu.stats_heading"));
+                            ui.label(&self.fps_text);
+                            ui.label(t!("menu.localize_dict_entries", count = localize_dict_count));
+                            ui.label(t!("menu.hashed_dict_entries", count = hashed_dict_count));
+                            ui.separator();
+
+                            ui.heading(t!("menu.config_heading"));
+                            if ui.button(t!("menu.open_config_editor")).clicked() {
+                                show_window = Some(Box::new(ConfigEditor::new()));
                             }
-                        });
-                    }
-                    if ui.button(t!("menu.check_for_updates")).clicked() {
-                        Hachimi::instance().updater.clone().check_for_updates(|_| {});
-                    }
-                    ui.separator();
+                            if ui.button(t!("menu.reload_config")).clicked() {
+                                hachimi.reload_config();
+                                show_notification = Some(t!("notification.config_reloaded"));
+                            }
+                            if ui.button(t!("menu.open_first_time_setup")).clicked() {
+                                show_window = Some(Box::new(FirstTimeSetupWindow::new()));
+                            }
+                            ui.separator();
 
-                    egui::ScrollArea::vertical().show(ui, |ui| {
-                        ui.heading(t!("menu.stats_heading"));
-                        ui.label(&self.fps_text);
-                        ui.label(t!("menu.localize_dict_entries", count = localize_dict_count));
-                        ui.label(t!("menu.hashed_dict_entries", count = hashed_dict_count));
-                        ui.separator();
+                            ui.heading(t!("menu.graphics_heading"));
+                            ui.horizontal(|ui| {
+                                ui.label(t!("menu.fps_label"));
+                                let res = ui.add(egui::Slider::new(&mut self.menu_fps_value, 30..=1000));
+                                if res.lost_focus() || res.drag_stopped() {
+                                    hachimi.target_fps.store(self.menu_fps_value, atomic::Ordering::Relaxed);
+                                    Thread::main_thread().schedule(|| {
+                                        Application::set_targetFrameRate(30);
+                                    });
+                                }
+                            });
+                            #[cfg(target_os = "windows")]
+                            {
+                                use crate::windows::{discord, utils::set_window_topmost, wnd_hook};
 
-                        ui.heading(t!("menu.config_heading"));
-                        if ui.button(t!("menu.open_config_editor")).clicked() {
-                            show_window = Some(Box::new(ConfigEditor::new()));
-                        }
-                        if ui.button(t!("menu.reload_config")).clicked() {
-                            hachimi.reload_config();
-                            show_notification = Some(t!("notification.config_reloaded"));
-                        }
-                        if ui.button(t!("menu.open_first_time_setup")).clicked() {
-                            show_window = Some(Box::new(FirstTimeSetupWindow::new()));
-                        }
-                        ui.separator();
+                                ui.horizontal(|ui| {
+                                    let prev_value = self.menu_vsync_value;
 
-                        ui.heading(t!("menu.graphics_heading"));
-                        ui.horizontal(|ui| {
-                            ui.label(t!("menu.fps_label"));
-                            let res = ui.add(egui::Slider::new(&mut self.menu_fps_value, 30..=1000));
-                            if res.lost_focus() || res.drag_stopped() {
-                                hachimi.target_fps.store(self.menu_fps_value, atomic::Ordering::Relaxed);
-                                Thread::main_thread().schedule(|| {
-                                    Application::set_targetFrameRate(30);
+                                    ui.label(t!("menu.vsync_label"));
+                                    Self::run_vsync_combo(ui, &mut self.menu_vsync_value);
+
+                                    if prev_value != self.menu_vsync_value {
+                                        hachimi
+                                            .vsync_count
+                                            .store(self.menu_vsync_value, atomic::Ordering::Relaxed);
+                                        Thread::main_thread().schedule(|| {
+                                            QualitySettings::set_vSyncCount(1);
+                                        });
+                                    }
+                                });
+                                ui.horizontal(|ui| {
+                                    let mut value = hachimi.window_always_on_top.load(atomic::Ordering::Relaxed);
+
+                                    ui.label(t!("menu.stay_on_top"));
+                                    if ui.checkbox(&mut value, "").changed() {
+                                        hachimi.window_always_on_top.store(value, atomic::Ordering::Relaxed);
+                                        Thread::main_thread().schedule(|| {
+                                            let topmost = Hachimi::instance()
+                                                .window_always_on_top
+                                                .load(atomic::Ordering::Relaxed);
+                                            // SAFETY: FFI / raw pointer operation required by IL2CPP interop
+                                            unsafe {
+                                                _ = set_window_topmost(wnd_hook::get_target_hwnd(), topmost);
+                                            }
+                                        });
+                                    }
+                                });
+                                ui.horizontal(|ui| {
+                                    let mut value = hachimi.discord_rpc.load(atomic::Ordering::Relaxed);
+
+                                    ui.label(t!("menu.discord_rpc"));
+                                    if ui.checkbox(&mut value, "").changed() {
+                                        hachimi.discord_rpc.store(value, atomic::Ordering::Relaxed);
+                                        if let Err(e) = if value {
+                                            discord::start_rpc()
+                                        } else {
+                                            discord::stop_rpc()
+                                        } {
+                                            error!("{}", e);
+                                        }
+                                    }
                                 });
                             }
-                        });
-                        #[cfg(target_os = "windows")]
-                        {
-                            use crate::windows::{discord, utils::set_window_topmost, wnd_hook};
+                            ui.separator();
 
-                            ui.horizontal(|ui| {
-                                let prev_value = self.menu_vsync_value;
-
-                                ui.label(t!("menu.vsync_label"));
-                                Self::run_vsync_combo(ui, &mut self.menu_vsync_value);
-
-                                if prev_value != self.menu_vsync_value {
-                                    hachimi.vsync_count.store(self.menu_vsync_value, atomic::Ordering::Relaxed);
-                                    Thread::main_thread().schedule(|| {
-                                        QualitySettings::set_vSyncCount(1);
-                                    });
-                                }
-                            });
-                            ui.horizontal(|ui| {
-                                let mut value = hachimi.window_always_on_top.load(atomic::Ordering::Relaxed);
-
-                                ui.label(t!("menu.stay_on_top"));
-                                if ui.checkbox(&mut value, "").changed() {
-                                    hachimi.window_always_on_top.store(value, atomic::Ordering::Relaxed);
-                                    Thread::main_thread().schedule(|| {
-                                        let topmost = Hachimi::instance().window_always_on_top.load(atomic::Ordering::Relaxed);
-                                        unsafe { _ = set_window_topmost(wnd_hook::get_target_hwnd(), topmost); }
-                                    });
-                                }
-                            });
-                            ui.horizontal(|ui| {
-                                let mut value = hachimi.discord_rpc.load(atomic::Ordering::Relaxed);
-                                
-                                ui.label(t!("menu.discord_rpc"));
-                                if ui.checkbox(&mut value, "").changed() {
-                                    hachimi.discord_rpc.store(value, atomic::Ordering::Relaxed);
-                                    if let Err(e) = if value { discord::start_rpc() } else { discord::stop_rpc() } {
-                                        error!("{}", e);
-                                    }
-                                }
-                            });
-                        }
-                        ui.separator();
-
-                        ui.heading(t!("menu.translation_heading"));
-                        if ui.button(t!("menu.reload_localized_data")).clicked() {
-                            hachimi.load_localized_data();
-                            show_notification = Some(t!("notification.localized_data_reloaded"));
-                        }
-                        if ui.button(t!("menu.tl_check_for_updates")).clicked() {
-                            hachimi.tl_updater.clone().check_for_updates(false);
-                        }
-                        if ui.button(t!("menu.tl_check_for_updates_pedantic")).clicked() {
-                            hachimi.tl_updater.clone().check_for_updates(true);
-                        }
-                        if hachimi.config.load().translator_mode {
-                            if ui.button(t!("menu.dump_localize_dict")).clicked() {
+                            ui.heading(t!("menu.translation_heading"));
+                            if ui.button(t!("menu.reload_localized_data")).clicked() {
+                                hachimi.load_localized_data();
+                                show_notification = Some(t!("notification.localized_data_reloaded"));
+                            }
+                            if ui.button(t!("menu.tl_check_for_updates")).clicked() {
+                                hachimi.tl_updater.clone().check_for_updates(false);
+                            }
+                            if ui.button(t!("menu.tl_check_for_updates_pedantic")).clicked() {
+                                hachimi.tl_updater.clone().check_for_updates(true);
+                            }
+                            if hachimi.config.load().translator_mode
+                                && ui.button(t!("menu.dump_localize_dict")).clicked()
+                            {
                                 Thread::main_thread().schedule(|| {
                                     let data = Localize::dump_strings();
                                     let dict_path = Hachimi::instance().get_data_path("localize_dump.json");
-                                    let mut gui = Gui::instance().unwrap().lock().unwrap();
+                                    let mut gui = Gui::instance()
+                                        .expect("unexpected failure")
+                                        .lock()
+                                        .expect("lock poisoned");
                                     if let Err(e) = utils::write_json_file(&data, dict_path) {
                                         gui.show_notification(&e.to_string())
-                                    }
-                                    else {
+                                    } else {
                                         gui.show_notification(&t!("notification.saved_localize_dump"))
                                     }
                                 })
                             }
-                        }
-                        ui.separator();
-
-                        let plugin_items = get_plugin_menu_items();
-                        if !plugin_items.is_empty() {
-                            ui.heading("Plugins");
-                            for item in plugin_items {
-                                let icon = get_plugin_menu_icon(&item.label);
-                                let clicked = if let Some(icon) = icon {
-                                    let size = 18.0 * scale;
-                                    ui.horizontal(|ui| {
-                                        ui.add(
-                                            egui::Image::new((icon.uri, icon.bytes))
-                                                .fit_to_exact_size(egui::Vec2::splat(size))
-                                        );
-                                        ui.button(&item.label).clicked()
-                                    })
-                                    .inner
-                                }
-                                else {
-                                    ui.button(&item.label).clicked()
-                                };
-                                if clicked {
-                                    if let Some(callback) = item.callback {
-                                        let _ = panic::catch_unwind(AssertUnwindSafe(|| {
-                                            callback(item.userdata as *mut c_void);
-                                        }))
-                                        .inspect_err(|_| {
-                                            error!("plugin menu item callback panicked: {}", item.label);
-                                        });
-                                    }
-                                }
-                            }
                             ui.separator();
-                        }
 
-                        let plugin_sections = get_plugin_menu_sections();
-                        if !plugin_sections.is_empty() {
-                            for section in plugin_sections {
-                                if let Some(title) = section.title.clone() {
-                                    let icon = section.icon.clone();
-                                    let size = 18.0 * scale;
-                                    ui.horizontal(|ui| {
-                                        if let Some(icon) = icon {
+                            let plugin_items = get_plugin_menu_items();
+                            if !plugin_items.is_empty() {
+                                ui.heading("Plugins");
+                                for item in plugin_items {
+                                    let icon = get_plugin_menu_icon(&item.label);
+                                    let clicked = if let Some(icon) = icon {
+                                        let size = 18.0 * scale;
+                                        ui.horizontal(|ui| {
                                             ui.add(
                                                 egui::Image::new((icon.uri, icon.bytes))
-                                                    .fit_to_exact_size(egui::Vec2::splat(size))
+                                                    .fit_to_exact_size(egui::Vec2::splat(size)),
                                             );
+                                            ui.button(&item.label).clicked()
+                                        })
+                                        .inner
+                                    } else {
+                                        ui.button(&item.label).clicked()
+                                    };
+                                    if clicked {
+                                        if let Some(callback) = item.callback {
+                                            let _ = panic::catch_unwind(AssertUnwindSafe(|| {
+                                                callback(item.userdata as *mut c_void);
+                                            }))
+                                            .inspect_err(|_| {
+                                                error!("plugin menu item callback panicked: {}", item.label);
+                                            });
                                         }
-                                        ui.heading(title);
+                                    }
+                                }
+                                ui.separator();
+                            }
+
+                            let plugin_sections = get_plugin_menu_sections();
+                            if !plugin_sections.is_empty() {
+                                for section in plugin_sections {
+                                    if let Some(title) = section.title.clone() {
+                                        let icon = section.icon.clone();
+                                        let size = 18.0 * scale;
+                                        ui.horizontal(|ui| {
+                                            if let Some(icon) = icon {
+                                                ui.add(
+                                                    egui::Image::new((icon.uri, icon.bytes))
+                                                        .fit_to_exact_size(egui::Vec2::splat(size)),
+                                                );
+                                            }
+                                            ui.heading(title);
+                                        });
+                                    }
+                                    let _ = panic::catch_unwind(AssertUnwindSafe(|| {
+                                        (section.callback)(
+                                            ui as *mut _ as *mut c_void,
+                                            section.userdata as *mut c_void,
+                                        );
+                                    }))
+                                    .inspect_err(|_| {
+                                        error!("plugin menu section callback panicked");
                                     });
                                 }
-                                let _ = panic::catch_unwind(AssertUnwindSafe(|| {
-                                    (section.callback)(ui as *mut _ as *mut c_void, section.userdata as *mut c_void);
-                                }))
-                                .inspect_err(|_| {
-                                    error!("plugin menu section callback panicked");
-                                });
+                                ui.separator();
                             }
-                            ui.separator();
-                        }
 
-                        ui.heading(t!("menu.danger_zone_heading"));
-                        ui.vertical(|ui| {
-                            ui.label(t!("menu.danger_zone_warning"));
+                            ui.heading(t!("menu.danger_zone_heading"));
+                            ui.vertical(|ui| {
+                                ui.label(t!("menu.danger_zone_warning"));
+                            });
+                            if ui.button(t!("menu.soft_restart")).clicked() {
+                                show_window = Some(Box::new(SimpleYesNoDialog::new(
+                                    &t!("confirm_dialog_title"),
+                                    &t!("soft_restart_confirm_content"),
+                                    |ok| {
+                                        if !ok {
+                                            return;
+                                        }
+                                        Thread::main_thread().schedule(|| {
+                                            GameSystem::SoftwareReset(GameSystem::instance());
+                                        });
+                                    },
+                                )));
+                            }
+                            #[cfg(not(target_os = "windows"))]
+                            if ui.button(t!("menu.open_in_game_browser")).clicked() {
+                                show_window = Some(Box::new(SimpleYesNoDialog::new(
+                                    &t!("confirm_dialog_title"),
+                                    &t!("in_game_browser_confirm_content"),
+                                    |ok| {
+                                        if !ok {
+                                            return;
+                                        }
+                                        Thread::main_thread().schedule(|| {
+                                            WebViewManager::quick_open(
+                                                &t!("browser_dialog_title"),
+                                                &Hachimi::instance().config.load().open_browser_url,
+                                            );
+                                        });
+                                    },
+                                )));
+                            }
+                            if ui.button(t!("menu.toggle_game_ui")).clicked() {
+                                Thread::main_thread().schedule(Self::toggle_game_ui);
+                            }
+
+                            #[cfg(target_os = "android")]
+                            {
+                                let padding = ime_scroll_padding(ui.ctx());
+                                if padding > 0.0 {
+                                    ui.add_space(padding);
+                                }
+                            }
                         });
-                        if ui.button(t!("menu.soft_restart")).clicked() {
-                            show_window = Some(Box::new(SimpleYesNoDialog::new(&t!("confirm_dialog_title"), &t!("soft_restart_confirm_content"), |ok| {
-                                if !ok { return; }
-                                Thread::main_thread().schedule(|| {
-                                    GameSystem::SoftwareReset(GameSystem::instance());
-                                });
-                            })));
-                        }
-                        #[cfg(not(target_os = "windows"))]
-                        if ui.button(t!("menu.open_in_game_browser")).clicked() {
-                            show_window = Some(Box::new(SimpleYesNoDialog::new(&t!("confirm_dialog_title"), &t!("in_game_browser_confirm_content"), |ok| {
-                                if !ok { return; }
-                                Thread::main_thread().schedule(|| {
-                                    WebViewManager::quick_open(&t!("browser_dialog_title"), &Hachimi::instance().config.load().open_browser_url);
-                                });
-                            })));
-                        }
-                        if ui.button(t!("menu.toggle_game_ui")).clicked() {
-                            Thread::main_thread().schedule(Self::toggle_game_ui);
-                        }
-
-                        #[cfg(target_os = "android")]
-                        {
-                            let padding = ime_scroll_padding(ui.ctx());
-                            if padding > 0.0 {
-                                ui.add_space(padding);
-                            }
-                        }
                     });
                 });
-            });
         }
 
         for message in drain_plugin_notifications() {
@@ -1030,8 +1148,7 @@ impl Gui {
                 if time.elapsed().as_secs_f32() >= self.context.style().animation_time {
                     self.menu_visible = false;
                 }
-            }
-            else {
+            } else {
                 self.menu_anim_time = Some(Instant::now());
             }
         }
@@ -1047,17 +1164,19 @@ impl Gui {
 
     pub fn toggle_game_ui() {
         use crate::il2cpp::hook::{
-            UnityEngine_CoreModule::{Object, Behaviour, GameObject},
+            Plugins::AnimateToUnity::AnRoot,
+            UnityEngine_CoreModule::{Behaviour, GameObject, Object},
             UnityEngine_UIModule::Canvas,
-            Plugins::AnimateToUnity::AnRoot
         };
 
         let canvas_array = Object::FindObjectsOfType(Canvas::type_object(), true);
         let an_root_array = Object::FindObjectsOfType(AnRoot::type_object(), true);
+        // SAFETY: FFI / raw pointer operation required by IL2CPP interop
         let canvas_iter = unsafe { canvas_array.as_slice().iter() };
+        // SAFETY: FFI / raw pointer operation required by IL2CPP interop
         let an_root_iter = unsafe { an_root_array.as_slice().iter() };
 
-        let mut disabled_uis = DISABLED_GAME_UIS.lock().unwrap();
+        let mut disabled_uis = DISABLED_GAME_UIS.lock().expect("lock poisoned");
 
         if disabled_uis.is_empty() {
             for canvas in canvas_iter {
@@ -1073,8 +1192,7 @@ impl Gui {
                     disabled_uis.insert(SendPtr(top_object));
                 }
             }
-        }
-        else {
+        } else {
             for canvas in canvas_iter {
                 if disabled_uis.contains(&SendPtr(*canvas)) {
                     Behaviour::set_enabled(*canvas, true);
@@ -1092,21 +1210,26 @@ impl Gui {
 
     #[cfg(target_os = "windows")]
     fn run_vsync_combo(ui: &mut egui::Ui, value: &mut i32) {
-        Self::run_combo(ui, "vsync_combo", value, &[
-            (-1, &t!("default")),
-            (0, &t!("off")),
-            (1, &t!("on")),
-            (2, "1/2"),
-            (3, "1/3"),
-            (4, "1/4")
-        ]);
+        Self::run_combo(
+            ui,
+            "vsync_combo",
+            value,
+            &[
+                (-1, &t!("default")),
+                (0, &t!("off")),
+                (1, &t!("on")),
+                (2, "1/2"),
+                (3, "1/3"),
+                (4, "1/4"),
+            ],
+        );
     }
 
     fn run_combo<T: PartialEq + Copy>(
         ui: &mut egui::Ui,
         id_child: impl std::hash::Hash,
         value: &mut T,
-        choices: &[(T, &str)]
+        choices: &[(T, &str)],
     ) -> bool {
         let mut selected = "Unknown";
         for choice in choices.iter() {
@@ -1117,13 +1240,13 @@ impl Gui {
 
         let mut changed = false;
         egui::ComboBox::new(ui.id().with(id_child), "")
-        .wrap_mode(egui::TextWrapMode::Wrap)
-        .selected_text(selected)
-        .show_ui(ui, |ui| {
-            for choice in choices.iter() {
-                changed |= ui.selectable_value(value, choice.0, choice.1).changed();
-            }
-        });
+            .wrap_mode(egui::TextWrapMode::Wrap)
+            .selected_text(selected)
+            .show_ui(ui, |ui| {
+                for choice in choices.iter() {
+                    changed |= ui.selectable_value(value, choice.0, choice.1).changed();
+                }
+            });
 
         changed
     }
@@ -1144,10 +1267,7 @@ impl Gui {
         let button_id = ui.make_persistent_id(id_salt);
         let popup_id = button_id.with("popup");
 
-        let selected_text = choices.iter()
-            .find(|(v, _)| v == value)
-            .map(|(_, s)| *s)
-            .unwrap_or("Unknown");
+        let selected_text = choices.iter().find(|(v, _)| v == value).map_or("Unknown", |(_, s)| *s);
 
         let (rect, _) = ui.allocate_exact_size(egui::vec2(fixed_width, row_height), egui::Sense::hover());
         let button_res = ui.interact(rect, button_id, egui::Sense::click());
@@ -1165,94 +1285,86 @@ impl Gui {
                 visuals.corner_radius,
                 visuals.weak_bg_fill,
                 visuals.bg_stroke,
-                egui::epaint::StrokeKind::Inside
+                egui::epaint::StrokeKind::Inside,
             );
 
-            let icon_size = 12.0 * scale; 
+            let icon_size = 12.0 * scale;
             let icon_rect = egui::Rect::from_center_size(
                 egui::pos2(rect.right() - padding.x - icon_size / 2.0, rect.center().y),
-                egui::vec2(icon_size, icon_size)
+                egui::vec2(icon_size, icon_size),
             );
             Self::down_triangle_icon(ui.painter(), icon_rect, visuals);
 
             let galley = ui.painter().layout_no_wrap(
                 selected_text.to_owned(),
                 egui::TextStyle::Button.resolve(ui.style()),
-                visuals.text_color()
+                visuals.text_color(),
             );
 
-            let text_pos = egui::pos2(
-                rect.left() + padding.x,
-                rect.center().y - galley.size().y / 2.0
-            );
+            let text_pos = egui::pos2(rect.left() + padding.x, rect.center().y - galley.size().y / 2.0);
             ui.painter().galley(text_pos, galley, visuals.text_color());
         }
 
         egui::Popup::menu(&button_res)
-        .id(popup_id)
-        .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
-        .show(|ui| {
-            ui.set_width(fixed_width);
-            ui.set_max_width(fixed_width);
+            .id(popup_id)
+            .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+            .show(|ui| {
+                ui.set_width(fixed_width);
+                ui.set_max_width(fixed_width);
 
-            ui.horizontal(|ui| {
-                let _res = ui.add_sized(
-                    [ui.available_width() - 30.0 * scale, row_height],
-                    egui::TextEdit::singleline(search_term).hint_text(t!("search_filter"))
-                );
-                #[cfg(target_os = "android")]
-                handle_android_keyboard(&_res, search_term);
+                ui.horizontal(|ui| {
+                    let _res = ui.add_sized(
+                        [ui.available_width() - 30.0 * scale, row_height],
+                        egui::TextEdit::singleline(search_term).hint_text(t!("search_filter")),
+                    );
+                    #[cfg(target_os = "android")]
+                    handle_android_keyboard(&_res, search_term);
 
-                if ui.button("X").clicked() {
-                    search_term.clear();
-                }
-            });
-
-            ui.separator();
-
-            egui::ScrollArea::vertical()
-            .max_height(250.0 * scale)
-            .hscroll(false)
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
-                ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
-
-                ui.with_layout(egui::Layout::top_down_justified(egui::Align::Min), |ui| {
-                    for (choice_val, label) in choices {
-                        if !search_term.is_empty() && !label.to_lowercase().contains(&search_term.to_lowercase()) {
-                            continue;
-                        }
-    
-                        let is_selected = value == choice_val;
-                        if ui.add(egui::Button::selectable(is_selected, *label)).clicked() {
-                            *value = *choice_val;
-                            changed = true;
-                            egui::Popup::close_id(ui.ctx(), popup_id);
-                            search_term.clear();
-                        }
+                    if ui.button("X").clicked() {
+                        search_term.clear();
                     }
                 });
+
+                ui.separator();
+
+                egui::ScrollArea::vertical()
+                    .max_height(250.0 * scale)
+                    .hscroll(false)
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
+
+                        ui.with_layout(egui::Layout::top_down_justified(egui::Align::Min), |ui| {
+                            for (choice_val, label) in choices {
+                                if !search_term.is_empty()
+                                    && !label.to_lowercase().contains(&search_term.to_lowercase())
+                                {
+                                    continue;
+                                }
+
+                                let is_selected = value == choice_val;
+                                if ui.add(egui::Button::selectable(is_selected, *label)).clicked() {
+                                    *value = *choice_val;
+                                    changed = true;
+                                    egui::Popup::close_id(ui.ctx(), popup_id);
+                                    search_term.clear();
+                                }
+                            }
+                        });
+                    });
             });
-        });
 
         changed
     }
 
     // egui's code originally (https://github.com/emilk/egui/blob/main/crates/egui/src/containers/combo_box.rs)
     fn down_triangle_icon(painter: &egui::Painter, rect: egui::Rect, visuals: &egui::style::WidgetVisuals) {
-        let rect = egui::Rect::from_center_size(
-            rect.center(),
-            egui::vec2(rect.width() * 0.7, rect.height() * 0.45)
-        );
+        let rect = egui::Rect::from_center_size(rect.center(), egui::vec2(rect.width() * 0.7, rect.height() * 0.45));
 
         painter.add(egui::Shape::convex_polygon(
-            vec![
-                rect.left_top(),
-                rect.right_top(),
-                rect.center_bottom()
-            ],
+            vec![rect.left_top(), rect.right_top(), rect.center_bottom()],
             visuals.fg_stroke.color,
-            visuals.fg_stroke
+            visuals.fg_stroke,
         ));
     }
 
@@ -1268,32 +1380,32 @@ impl Gui {
         let ratio = progress.current as f32 / progress.total as f32;
 
         egui::Area::new("update_progress".into())
-        .fixed_pos(egui::Pos2 {
-            x: 4.0 * scale,
-            y: 4.0 * scale
-        })
-        .show(ctx, |ui| {
-            egui::Frame::NONE
-            .fill(self.config.ui_panel_fill)
-            .inner_margin(egui::Margin::same((4.0 * scale) as i8))
-            .corner_radius(4.0 * scale)
-            .show(ui, |ui| {
-                ui.horizontal(|ui| {
-                    ui.label(t!("tl_updater.title"));
-                    ui.add_space(26.0 * scale);
-                    ui.label(format!("{:.2}%", ratio * 100.0));
-                });
-                ui.add(
-                    egui::ProgressBar::new(ratio)
-                    .desired_height(4.0 * scale)
-                    .desired_width(140.0 * scale)
-                );
-                ui.label(
-                    egui::RichText::new(t!("tl_updater.warning"))
-                    .font(egui::FontId::proportional(10.0 * scale))
-                );
+            .fixed_pos(egui::Pos2 {
+                x: 4.0 * scale,
+                y: 4.0 * scale,
+            })
+            .show(ctx, |ui| {
+                egui::Frame::NONE
+                    .fill(self.config.ui_panel_fill)
+                    .inner_margin(egui::Margin::same((4.0 * scale) as i8))
+                    .corner_radius(4.0 * scale)
+                    .show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.label(t!("tl_updater.title"));
+                            ui.add_space(26.0 * scale);
+                            ui.label(format!("{:.2}%", ratio * 100.0));
+                        });
+                        ui.add(
+                            egui::ProgressBar::new(ratio)
+                                .desired_height(4.0 * scale)
+                                .desired_width(140.0 * scale),
+                        );
+                        ui.label(
+                            egui::RichText::new(t!("tl_updater.warning"))
+                                .font(egui::FontId::proportional(10.0 * scale)),
+                        );
+                    });
             });
-        });
     }
 
     fn run_notifications(&mut self) {
@@ -1301,13 +1413,43 @@ impl Gui {
         self.notifications.retain_mut(|n| n.run(&self.context, &mut offset));
     }
 
+    fn run_overlays(&mut self) {
+        let overlays = get_plugin_overlays();
+        if overlays.is_empty() {
+            return;
+        }
+
+        let ctx = &self.context;
+        let scale = get_scale(ctx);
+
+        for overlay in overlays.iter() {
+            let id = egui::Id::new("plugin_overlay").with(&overlay.id);
+            egui::Area::new(id)
+                .anchor(egui::Align2::RIGHT_TOP, egui::vec2(-8.0 * scale, 8.0 * scale))
+                .interactable(false)
+                .show(ctx, |ui| {
+                    egui::Frame::NONE
+                        .fill(self.config.ui_panel_fill)
+                        .corner_radius(egui::CornerRadius::same((6.0 * scale) as u8))
+                        .inner_margin(egui::Margin::same((8.0 * scale) as i8))
+                        .show(ui, |ui| {
+                            (overlay.callback)(ui as *mut egui::Ui as *mut c_void, overlay.userdata as *mut c_void);
+                        });
+                });
+        }
+    }
+
     fn run_windows(&mut self) {
         self.windows.retain_mut(|w| w.run(&self.context));
     }
 
     pub fn is_empty(&self) -> bool {
-        !self.splash_visible && !self.menu_visible && !self.update_progress_visible &&
-        self.notifications.is_empty() && self.windows.is_empty()
+        !self.splash_visible
+            && !self.menu_visible
+            && !self.update_progress_visible
+            && self.notifications.is_empty()
+            && self.windows.is_empty()
+            && PLUGIN_OVERLAYS.lock().map_or(true, |o| o.is_empty())
     }
 
     pub fn is_consuming_input(&self) -> bool {
@@ -1332,8 +1474,7 @@ impl Gui {
         // Menu is always visible on show, but not immediately invisible on hide
         if self.show_menu {
             self.menu_visible = true;
-        }
-        else {
+        } else {
             self.menu_anim_time = None;
         }
     }
@@ -1348,7 +1489,8 @@ impl Gui {
 
     fn add_notification(&mut self, content: &str, persistent: bool) -> u32 {
         let id = self.next_notification_id;
-        self.notifications.push(Notification::new(id, content.to_owned(), persistent));        
+        self.notifications
+            .push(Notification::new(id, content.to_owned(), persistent));
         self.next_notification_id = self.next_notification_id.wrapping_add(1);
         id
     }
@@ -1368,13 +1510,13 @@ struct TweenInOutWithDelay {
     easing: Easing,
 
     started: bool,
-    delay_start: Option<Instant>
+    delay_start: Option<Instant>,
 }
 
 enum Easing {
     //Linear,
     //InQuad,
-    OutQuad
+    OutQuad,
 }
 
 impl TweenInOutWithDelay {
@@ -1385,7 +1527,7 @@ impl TweenInOutWithDelay {
             easing,
 
             started: false,
-            delay_start: None
+            delay_start: None,
         }
     }
 
@@ -1393,8 +1535,7 @@ impl TweenInOutWithDelay {
         let anim_dir = if let Some(start) = self.delay_start {
             // Hold animation at peak position until duration passes
             start.elapsed().as_secs_f32() < self.delay_duration
-        }
-        else {
+        } else {
             // On animation start, initialize to 0.0. Next calls will start tweening to 1.0
             let v = self.started;
             self.started = true;
@@ -1411,13 +1552,11 @@ impl TweenInOutWithDelay {
             return None;
         }
 
-        Some(
-            match self.easing {
-                //Easing::Linear => tween_val,
-                //Easing::InQuad => tween_val * tween_val,
-                Easing::OutQuad => 1.0 - (1.0 - tween_val) * (1.0 - tween_val)
-            }
-        )
+        Some(match self.easing {
+            //Easing::Linear => tween_val,
+            //Easing::InQuad => tween_val * tween_val,
+            Easing::OutQuad => 1.0 - (1.0 - tween_val) * (1.0 - tween_val),
+        })
     }
 }
 
@@ -1426,7 +1565,7 @@ fn random_id() -> egui::Id {
     egui::Id::new(egui::epaint::ahash::RandomState::new().hash_one(0))
 }
 
-pub struct NotificationGuard(pub u32); 
+pub struct NotificationGuard(pub u32);
 
 impl Drop for NotificationGuard {
     fn drop(&mut self) {
@@ -1443,7 +1582,7 @@ struct Notification {
     content: String,
     config: hachimi::Config,
     tween: TweenInOutWithDelay,
-    egui_id: egui::Id
+    egui_id: egui::Id,
 }
 
 impl Notification {
@@ -1452,12 +1591,8 @@ impl Notification {
             id,
             content,
             config: (**Hachimi::instance().config.load()).clone(),
-            tween: TweenInOutWithDelay::new(
-                0.2, 
-                if persistent { f32::MAX } else { 3.0 }, 
-                Easing::OutQuad
-            ),
-            egui_id: random_id()
+            tween: TweenInOutWithDelay::new(0.2, if persistent { f32::MAX } else { 3.0 }, Easing::OutQuad),
+            egui_id: random_id(),
         }
     }
 
@@ -1471,22 +1606,22 @@ impl Notification {
         };
 
         let frame_rect = egui::Area::new(self.egui_id)
-        .anchor(
-            egui::Align2::RIGHT_BOTTOM,
-            egui::Vec2::new(
-                (Self::WIDTH * scale) * (1.0 - tween_val),
-                *offset
+            .anchor(
+                egui::Align2::RIGHT_BOTTOM,
+                egui::Vec2::new((Self::WIDTH * scale) * (1.0 - tween_val), *offset),
             )
-        )
-        .show(ctx, |ui| {
-            egui::Frame::NONE
-            .fill(self.config.ui_panel_fill)
-            .inner_margin(egui::Margin::symmetric(10, 8))
-            .show(ui, |ui| {
-                ui.set_width(Self::WIDTH * scale);
-                ui.label(&self.content);
-            }).response.rect
-        }).inner;
+            .show(ctx, |ui| {
+                egui::Frame::NONE
+                    .fill(self.config.ui_panel_fill)
+                    .inner_margin(egui::Margin::symmetric(10, 8))
+                    .show(ui, |ui| {
+                        ui.set_width(Self::WIDTH * scale);
+                        ui.label(&self.content);
+                    })
+                    .response
+                    .rect
+            })
+            .inner;
 
         *offset -= (2.0 * scale) + frame_rect.height() * tween_val;
         true
@@ -1503,17 +1638,22 @@ fn new_window<'a>(ctx: &egui::Context, id: egui::Id, title: impl Into<egui::Widg
     let salt = get_scale_salt(ctx);
 
     egui::Window::new(title)
-    .id(id.with(salt.to_bits()))
-    .pivot(egui::Align2::CENTER_CENTER)
-    .fixed_pos(ctx.viewport_rect().max / 2.0)
-    .min_width(96.0 * scale)
-    .max_width(320.0 * scale)
-    .max_height(250.0 * scale)
-    .collapsible(false)
-    .resizable(false)
+        .id(id.with(salt.to_bits()))
+        .pivot(egui::Align2::CENTER_CENTER)
+        .fixed_pos(ctx.viewport_rect().max / 2.0)
+        .min_width(96.0 * scale)
+        .max_width(320.0 * scale)
+        .max_height(250.0 * scale)
+        .collapsible(false)
+        .resizable(false)
 }
 
-fn simple_window_layout(ui: &mut egui::Ui, id: egui::Id, add_contents: impl FnOnce(&mut egui::Ui), add_buttons: impl FnOnce(&mut egui::Ui)) {
+fn simple_window_layout(
+    ui: &mut egui::Ui,
+    id: egui::Id,
+    add_contents: impl FnOnce(&mut egui::Ui),
+    add_buttons: impl FnOnce(&mut egui::Ui),
+) {
     let builder = egui::UiBuilder::new()
         .id(id)
         .layout(egui::Layout::top_down(egui::Align::Center).with_cross_justify(true));
@@ -1521,7 +1661,7 @@ fn simple_window_layout(ui: &mut egui::Ui, id: egui::Id, add_contents: impl FnOn
     ui.scope_builder(builder, |ui| {
         ui.with_layout(egui::Layout::top_down(egui::Align::Min), add_contents);
 
-        ui.separator(); 
+        ui.separator();
 
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), add_buttons);
     });
@@ -1534,12 +1674,7 @@ fn centered_and_wrapped_text(ui: &mut egui::Ui, text: &str) {
     let text_font = ui.style().text_styles.get(&text_style).cloned().unwrap_or_default();
     let text_color = ui.style().visuals.text_color();
 
-    let mut job = egui::text::LayoutJob::simple(
-        text.to_owned(),
-        text_font,
-        text_color,
-        rect.width()
-    );
+    let mut job = egui::text::LayoutJob::simple(text.to_owned(), text_font, text_color, rect.width());
     job.halign = egui::Align::Center;
 
     let galley = ui.painter().layout_job(job);
@@ -1559,7 +1694,7 @@ fn paginated_window_layout(
     i: &mut usize,
     page_count: usize,
     allow_next: bool,
-    add_page_content: impl FnOnce(&mut egui::Ui, usize)
+    add_page_content: impl FnOnce(&mut egui::Ui, usize),
 ) -> bool {
     let mut open = true;
 
@@ -1593,7 +1728,11 @@ fn paginated_window_layout(
     open
 }
 
-fn async_request_ui_content<T: Send + Sync + 'static>(ui: &mut egui::Ui, request: Arc<AsyncRequest<T>>, add_contents: impl FnOnce(&mut egui::Ui, &T)) {
+fn async_request_ui_content<T: Send + Sync + 'static>(
+    ui: &mut egui::Ui,
+    request: Arc<AsyncRequest<T>>,
+    add_contents: impl FnOnce(&mut egui::Ui, &T),
+) {
     let Some(result) = &**request.result.load() else {
         if !request.running() {
             request.call();
@@ -1632,10 +1771,8 @@ fn async_request_ui_content<T: Send + Sync + 'static>(ui: &mut egui::Ui, request
             let center_y = rect.center().y;
             let top_y = (center_y - total_height / 2.0).max(rect.top());
 
-            let content_rect = egui::Rect::from_min_size(
-                egui::pos2(rect.left(), top_y),
-                egui::vec2(rect.width(), total_height)
-            );
+            let content_rect =
+                egui::Rect::from_min_size(egui::pos2(rect.left(), top_y), egui::vec2(rect.width(), total_height));
 
             let builder = egui::UiBuilder::new().max_rect(content_rect);
             ui.scope_builder(builder, |ui| {
@@ -1654,7 +1791,7 @@ pub struct SimpleYesNoDialog {
     title: String,
     content: String,
     callback: fn(bool),
-    id: egui::Id
+    id: egui::Id,
 }
 
 impl SimpleYesNoDialog {
@@ -1663,7 +1800,7 @@ impl SimpleYesNoDialog {
             title: title.to_owned(),
             content: content.to_owned(),
             callback,
-            id: random_id()
+            id: random_id(),
         }
     }
 }
@@ -1674,11 +1811,8 @@ impl Window for SimpleYesNoDialog {
         let mut open2 = true;
         let mut result = false;
 
-        new_window(ctx, self.id, &self.title)
-        .open(&mut open)
-        .show(ctx, |ui| {
-            egui::TopBottomPanel::bottom(self.id.with("bottom_panel"))
-            .show_inside(ui, |ui| {
+        new_window(ctx, self.id, &self.title).open(&mut open).show(ctx, |ui| {
+            egui::TopBottomPanel::bottom(self.id.with("bottom_panel")).show_inside(ui, |ui| {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
                     if ui.button(t!("no")).clicked() {
                         open2 = false;
@@ -1693,14 +1827,13 @@ impl Window for SimpleYesNoDialog {
             egui::CentralPanel::default()
                 .frame(egui::Frame::NONE)
                 .show_inside(ui, |ui| {
-                centered_and_wrapped_text(ui, &self.content);
-            });
+                    centered_and_wrapped_text(ui, &self.content);
+                });
         });
 
         if open && open2 {
             true
-        }
-        else {
+        } else {
             (self.callback)(result);
             false
         }
@@ -1711,7 +1844,7 @@ pub struct SimpleOkDialog {
     title: String,
     content: String,
     callback: fn(),
-    id: egui::Id
+    id: egui::Id,
 }
 
 impl SimpleOkDialog {
@@ -1720,7 +1853,7 @@ impl SimpleOkDialog {
             title: title.to_owned(),
             content: content.to_owned(),
             callback,
-            id: random_id()
+            id: random_id(),
         }
     }
 }
@@ -1730,11 +1863,8 @@ impl Window for SimpleOkDialog {
         let mut open = true;
         let mut open2 = true;
 
-        new_window(ctx, self.id, &self.title)
-        .open(&mut open)
-        .show(ctx, |ui| {
-            egui::TopBottomPanel::bottom(self.id.with("bottom_panel"))
-            .show_inside(ui, |ui| {
+        new_window(ctx, self.id, &self.title).open(&mut open).show(ctx, |ui| {
+            egui::TopBottomPanel::bottom(self.id.with("bottom_panel")).show_inside(ui, |ui| {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
                     if ui.button(t!("ok")).clicked() {
                         open2 = false;
@@ -1745,14 +1875,13 @@ impl Window for SimpleOkDialog {
             egui::CentralPanel::default()
                 .frame(egui::Frame::NONE)
                 .show_inside(ui, |ui| {
-                centered_and_wrapped_text(ui, &self.content);
-            });
+                    centered_and_wrapped_text(ui, &self.content);
+                });
         });
 
         if open && open2 {
             true
-        }
-        else {
+        } else {
             (self.callback)();
             false
         }
@@ -1763,14 +1892,14 @@ struct ConfigEditor {
     last_ptr_config: usize,
     config: hachimi::Config,
     id: egui::Id,
-    current_tab: ConfigEditorTab
+    current_tab: ConfigEditorTab,
 }
 
 #[derive(Eq, PartialEq, Clone, Copy)]
 enum ConfigEditorTab {
     General,
     Graphics,
-    Gameplay
+    Gameplay,
 }
 
 impl ConfigEditorTab {
@@ -1778,7 +1907,7 @@ impl ConfigEditorTab {
         [
             (ConfigEditorTab::General, t!("config_editor.general_tab")),
             (ConfigEditorTab::Graphics, t!("config_editor.graphics_tab")),
-            (ConfigEditorTab::Gameplay, t!("config_editor.gameplay_tab"))
+            (ConfigEditorTab::Gameplay, t!("config_editor.gameplay_tab")),
         ]
     }
 }
@@ -1790,7 +1919,7 @@ impl ConfigEditor {
             last_ptr_config: Arc::as_ptr(&handle) as usize,
             config: (**Hachimi::instance().config.load()).clone(),
             id: random_id(),
-            current_tab: ConfigEditorTab::General
+            current_tab: ConfigEditorTab::General,
         }
     }
 
@@ -1800,7 +1929,12 @@ impl ConfigEditor {
         self.config.language = current_language;
     }
 
-    fn option_slider<Num: egui::emath::Numeric>(ui: &mut egui::Ui, label: &str, value: &mut Option<Num>, range: RangeInclusive<Num>) {
+    fn option_slider<Num: egui::emath::Numeric>(
+        ui: &mut egui::Ui,
+        label: &str,
+        value: &mut Option<Num>,
+        range: RangeInclusive<Num>,
+    ) {
         let mut checked = value.is_some();
         ui.label(label);
         ui.checkbox(&mut checked, t!("enable"));
@@ -1808,8 +1942,7 @@ impl ConfigEditor {
 
         if checked && value.is_none() {
             *value = Some(*range.start())
-        }
-        else if !checked && value.is_some() {
+        } else if !checked && value.is_some() {
             *value = None;
         }
 
@@ -1834,18 +1967,18 @@ impl ConfigEditor {
                 ui.end_row();
 
                 ui.label(t!("config_editor.disable_overlay"));
-                if ui.checkbox(&mut config.disable_gui, "").clicked() {
-                    if config.disable_gui {
-                        thread::spawn(|| {
-                            Gui::instance().unwrap()
-                            .lock().unwrap()
+                if ui.checkbox(&mut config.disable_gui, "").clicked() && config.disable_gui {
+                    thread::spawn(|| {
+                        Gui::instance()
+                            .expect("unexpected failure")
+                            .lock()
+                            .expect("unexpected failure")
                             .show_window(Box::new(SimpleOkDialog::new(
                                 &t!("warning"),
                                 &t!("config_editor.disable_overlay_warning"),
-                                || {}
+                                || {},
                             )));
-                        });
-                    }
+                    });
                 }
                 ui.end_row();
 
@@ -1859,27 +1992,32 @@ impl ConfigEditor {
                 handle_android_keyboard(&res, &mut config.meta_index_url);
                 #[cfg(target_os = "windows")]
                 if res.has_focus() {
-                    ui.memory_mut(|mem| mem.set_focus_lock_filter(
-                        res.id,
-                        egui::EventFilter {
-                            tab: true,
-                            horizontal_arrows: true,
-                            vertical_arrows: true,
-                            escape: true,
-                            ..Default::default()
-                        }
-                    ));
+                    ui.memory_mut(|mem| {
+                        mem.set_focus_lock_filter(
+                            res.id,
+                            egui::EventFilter {
+                                tab: true,
+                                horizontal_arrows: true,
+                                vertical_arrows: true,
+                                escape: true,
+                            },
+                        )
+                    });
                 }
                 ui.end_row();
 
                 ui.label(t!("config_editor.gui_scale"));
                 ui.add(egui::Slider::new(&mut config.gui_scale, 0.25..=2.0).step_by(0.05));
                 ui.end_row();
-                
+
                 #[cfg(target_os = "windows")]
                 {
                     ui.label(t!("config_editor.gui_landscape_ratio"));
-                    ui.add(egui::Slider::new(&mut config.windows.gui_landscape_ratio, 0.25..=1.0).step_by(0.05).fixed_decimals(2));
+                    ui.add(
+                        egui::Slider::new(&mut config.windows.gui_landscape_ratio, 0.25..=1.0)
+                            .step_by(0.05)
+                            .fixed_decimals(2),
+                    );
                     ui.end_row();
                 }
 
@@ -1887,9 +2025,11 @@ impl ConfigEditor {
                 ui.horizontal(|ui| {
                     if ui.button(t!("open")).clicked() {
                         thread::spawn(|| {
-                            Gui::instance().unwrap()
-                            .lock().unwrap()
-                            .show_window(Box::new(ThemeEditorWindow::new()));
+                            Gui::instance()
+                                .expect("unexpected failure")
+                                .lock()
+                                .expect("unexpected failure")
+                                .show_window(Box::new(ThemeEditorWindow::new()));
                         });
                     }
                 });
@@ -1907,9 +2047,11 @@ impl ConfigEditor {
                         if ui.button(t!("config_editor.menu_open_key_set")).clicked() {
                             crate::windows::wnd_hook::start_menu_key_capture();
                             thread::spawn(|| {
-                                Gui::instance().unwrap()
-                                .lock().unwrap()
-                                .show_notification(&t!("notification.press_to_set_menu_key"));
+                                Gui::instance()
+                                    .expect("unexpected failure")
+                                    .lock()
+                                    .expect("unexpected failure")
+                                    .show_notification(&t!("notification.press_to_set_menu_key"));
                             });
                         }
                     });
@@ -1957,37 +2099,37 @@ impl ConfigEditor {
                 ui.end_row();
 
                 ui.label(t!("config_editor.auto_translate_stories"));
-                if ui.checkbox(&mut config.auto_translate_stories, "").clicked() {
-                    if config.auto_translate_stories {
-                        thread::spawn(|| {
-                            Gui::instance().unwrap()
-                            .lock().unwrap()
+                if ui.checkbox(&mut config.auto_translate_stories, "").clicked() && config.auto_translate_stories {
+                    thread::spawn(|| {
+                        Gui::instance()
+                            .expect("unexpected failure")
+                            .lock()
+                            .expect("unexpected failure")
                             .show_window(Box::new(SimpleOkDialog::new(
                                 &t!("warning"),
                                 &t!("config_editor.auto_tl_warning"),
-                                || {}
+                                || {},
                             )));
-                        });
-                    }
+                    });
                 }
                 ui.end_row();
 
                 ui.label(t!("config_editor.auto_translate_ui"));
-                if ui.checkbox(&mut config.auto_translate_localize, "").clicked() {
-                    if config.auto_translate_localize {
-                        thread::spawn(|| {
-                            Gui::instance().unwrap()
-                            .lock().unwrap()
+                if ui.checkbox(&mut config.auto_translate_localize, "").clicked() && config.auto_translate_localize {
+                    thread::spawn(|| {
+                        Gui::instance()
+                            .expect("unexpected failure")
+                            .lock()
+                            .expect("unexpected failure")
                             .show_window(Box::new(SimpleOkDialog::new(
                                 &t!("warning"),
                                 &t!("config_editor.auto_tl_warning"),
-                                || {}
+                                || {},
                             )));
-                        });
-                    }
+                    });
                 }
                 ui.end_row();
-            },
+            }
 
             ConfigEditorTab::Graphics => {
                 Self::option_slider(ui, &t!("config_editor.target_fps"), &mut config.target_fps, 30..=1000);
@@ -2009,44 +2151,64 @@ impl ConfigEditor {
                 ui.end_row();
 
                 ui.label(t!("config_editor.msaa"));
-                Gui::run_combo(ui, "msaa", &mut config.msaa, &[
-                    (MsaaQuality:: Disabled, &t!("default")),
-                    (MsaaQuality::_2x, "2x"),
-                    (MsaaQuality::_4x, "4x"),
-                    (MsaaQuality::_8x, "8x")
-                ]);
+                Gui::run_combo(
+                    ui,
+                    "msaa",
+                    &mut config.msaa,
+                    &[
+                        (MsaaQuality::Disabled, &t!("default")),
+                        (MsaaQuality::_2x, "2x"),
+                        (MsaaQuality::_4x, "4x"),
+                        (MsaaQuality::_8x, "8x"),
+                    ],
+                );
                 ui.end_row();
 
                 ui.label(t!("config_editor.aniso_level"));
-                Gui::run_combo(ui, "aniso_level", &mut config.aniso_level, &[
-                    (AnisoLevel::Default, &t!("default")),
-                    (AnisoLevel::_2x, "2x"),
-                    (AnisoLevel::_4x, "4x"),
-                    (AnisoLevel::_8x, "8x"),
-                    (AnisoLevel::_16x, "16x")
-                ]);
+                Gui::run_combo(
+                    ui,
+                    "aniso_level",
+                    &mut config.aniso_level,
+                    &[
+                        (AnisoLevel::Default, &t!("default")),
+                        (AnisoLevel::_2x, "2x"),
+                        (AnisoLevel::_4x, "4x"),
+                        (AnisoLevel::_8x, "8x"),
+                        (AnisoLevel::_16x, "16x"),
+                    ],
+                );
                 ui.end_row();
 
                 ui.label(t!("config_editor.shadow_resolution"));
-                Gui::run_combo(ui, "shadow_resolution", &mut config.shadow_resolution, &[
-                    (ShadowResolution::Default, &t!("default")),
-                    (ShadowResolution::_256, "256x"),
-                    (ShadowResolution::_512, "512x"),
-                    (ShadowResolution::_1024, "1K"),
-                    (ShadowResolution::_2048, "2K"),
-                    (ShadowResolution::_4096, "4K")
-                ]);
+                Gui::run_combo(
+                    ui,
+                    "shadow_resolution",
+                    &mut config.shadow_resolution,
+                    &[
+                        (ShadowResolution::Default, &t!("default")),
+                        (ShadowResolution::_256, "256x"),
+                        (ShadowResolution::_512, "512x"),
+                        (ShadowResolution::_1024, "1K"),
+                        (ShadowResolution::_2048, "2K"),
+                        (ShadowResolution::_4096, "4K"),
+                    ],
+                );
                 ui.end_row();
 
                 ui.label(t!("config_editor.graphics_quality"));
-                Gui::run_combo(ui, "graphics_quality", &mut config.graphics_quality, &[
-                    (GraphicsQuality::Default, &t!("default")),
-                    (GraphicsQuality::Toon1280, "Toon1280"),
-                    (GraphicsQuality::Toon1280x2, "Toon1280x2"),
-                    (GraphicsQuality::Toon1280x4, "Toon1280x4"),
-                    (GraphicsQuality::ToonFull, "ToonFull"),
-                    (GraphicsQuality::Max, "Max")
-                ]);
+                Gui::run_combo(
+                    ui,
+                    "graphics_quality",
+                    &mut config.graphics_quality,
+                    &[
+                        (GraphicsQuality::Default, &t!("default")),
+                        (GraphicsQuality::Toon1280, "Toon1280"),
+                        (GraphicsQuality::Toon1280x2, "Toon1280x2"),
+                        (GraphicsQuality::Toon1280x4, "Toon1280x4"),
+                        (GraphicsQuality::ToonFull, "ToonFull"),
+                        (GraphicsQuality::Max, "Max"),
+                    ],
+                );
                 ui.end_row();
 
                 #[cfg(target_os = "windows")]
@@ -2062,10 +2224,21 @@ impl ConfigEditor {
                     ui.end_row();
 
                     ui.label(t!("config_editor.full_screen_mode"));
-                    Gui::run_combo(ui, "full_screen_mode", &mut config.windows.full_screen_mode, &[
-                        (FullScreenMode::ExclusiveFullScreen, &t!("config_editor.full_screen_mode_exclusive")),
-                        (FullScreenMode::FullScreenWindow, &t!("config_editor.full_screen_mode_borderless"))
-                    ]);
+                    Gui::run_combo(
+                        ui,
+                        "full_screen_mode",
+                        &mut config.windows.full_screen_mode,
+                        &[
+                            (
+                                FullScreenMode::ExclusiveFullScreen,
+                                &t!("config_editor.full_screen_mode_exclusive"),
+                            ),
+                            (
+                                FullScreenMode::FullScreenWindow,
+                                &t!("config_editor.full_screen_mode_borderless"),
+                            ),
+                        ],
+                    );
                     ui.end_row();
 
                     ui.label(t!("config_editor.block_minimize_in_full_screen"));
@@ -2073,28 +2246,47 @@ impl ConfigEditor {
                     ui.end_row();
 
                     ui.label(t!("config_editor.resolution_scaling"));
-                    Gui::run_combo(ui, "resolution_scaling", &mut config.windows.resolution_scaling, &[
-                        (ResolutionScaling::Default, &t!("config_editor.resolution_scaling_default")),
-                        (ResolutionScaling::ScaleToScreenSize, &t!("config_editor.resolution_scaling_ssize")),
-                        (ResolutionScaling::ScaleToWindowSize, &t!("config_editor.resolution_scaling_wsize"))
-                    ]);
+                    Gui::run_combo(
+                        ui,
+                        "resolution_scaling",
+                        &mut config.windows.resolution_scaling,
+                        &[
+                            (
+                                ResolutionScaling::Default,
+                                &t!("config_editor.resolution_scaling_default"),
+                            ),
+                            (
+                                ResolutionScaling::ScaleToScreenSize,
+                                &t!("config_editor.resolution_scaling_ssize"),
+                            ),
+                            (
+                                ResolutionScaling::ScaleToWindowSize,
+                                &t!("config_editor.resolution_scaling_wsize"),
+                            ),
+                        ],
+                    );
                     ui.end_row();
 
                     ui.label(t!("config_editor.window_always_on_top"));
                     ui.checkbox(&mut config.windows.window_always_on_top, "");
                     ui.end_row();
                 }
-            },
+            }
 
             ConfigEditorTab::Gameplay => {
                 ui.label(t!("config_editor.physics_update_mode"));
-                Gui::run_combo(ui, "physics_update_mode", &mut config.physics_update_mode, &[
-                    (None, &t!("default")),
-                    (SpringUpdateMode::ModeNormal.into(), "ModeNormal"),
-                    (SpringUpdateMode::Mode60FPS.into(), "Mode60FPS"),
-                    (SpringUpdateMode::SkipFrame.into(), "SkipFrame"),
-                    (SpringUpdateMode::SkipFramePostAlways.into(), "SkipFramePostAlways")
-                ]);
+                Gui::run_combo(
+                    ui,
+                    "physics_update_mode",
+                    &mut config.physics_update_mode,
+                    &[
+                        (None, &t!("default")),
+                        (SpringUpdateMode::ModeNormal.into(), "ModeNormal"),
+                        (SpringUpdateMode::Mode60FPS.into(), "Mode60FPS"),
+                        (SpringUpdateMode::SkipFrame.into(), "SkipFrame"),
+                        (SpringUpdateMode::SkipFramePostAlways.into(), "SkipFramePostAlways"),
+                    ],
+                );
                 ui.end_row();
 
                 ui.label(t!("config_editor.story_choice_auto_select_delay"));
@@ -2117,9 +2309,11 @@ impl ConfigEditor {
                 ui.horizontal(|ui| {
                     if ui.button(t!("open")).clicked() {
                         thread::spawn(|| {
-                            Gui::instance().unwrap()
-                            .lock().unwrap()
-                            .show_window(Box::new(LiveVocalsSwapWindow::new()));
+                            Gui::instance()
+                                .expect("unexpected failure")
+                                .lock()
+                                .expect("unexpected failure")
+                                .show_window(Box::new(LiveVocalsSwapWindow::new()));
                         });
                     }
                 });
@@ -2130,15 +2324,20 @@ impl ConfigEditor {
                 ui.end_row();
 
                 ui.label(t!("config_editor.homescreen_bgseason"));
-                Gui::run_combo(ui, "homescreen_bgseason", &mut config.homescreen_bgseason, &[
-                    (BgSeason::None, &t!("default")),
-                    // Season text from TextId enum
-                    (BgSeason::Spring, &get_localized_string("Common0108").as_str()),
-                    (BgSeason::Summer, &get_localized_string("Common0109").as_str()),
-                    (BgSeason::Fall, &get_localized_string("Common0110").as_str()),
-                    (BgSeason::Winter, &get_localized_string("Common0111").as_str()),
-                    (BgSeason::CherryBlossom, &get_localized_string("Common0112").as_str())
-                ]);
+                Gui::run_combo(
+                    ui,
+                    "homescreen_bgseason",
+                    &mut config.homescreen_bgseason,
+                    &[
+                        (BgSeason::None, &t!("default")),
+                        // Season text from TextId enum
+                        (BgSeason::Spring, get_localized_string("Common0108").as_str()),
+                        (BgSeason::Summer, get_localized_string("Common0109").as_str()),
+                        (BgSeason::Fall, get_localized_string("Common0110").as_str()),
+                        (BgSeason::Winter, get_localized_string("Common0111").as_str()),
+                        (BgSeason::CherryBlossom, get_localized_string("Common0112").as_str()),
+                    ],
+                );
                 ui.end_row();
 
                 ui.label(t!("config_editor.disable_skill_name_translation"));
@@ -2146,18 +2345,18 @@ impl ConfigEditor {
                 ui.end_row();
 
                 ui.label(t!("config_editor.hide_ingame_ui_hotkey"));
-                if ui.checkbox(&mut config.hide_ingame_ui_hotkey, "").clicked() {
-                    if config.hide_ingame_ui_hotkey {
-                        thread::spawn(|| {
-                            Gui::instance().unwrap()
-                            .lock().unwrap()
+                if ui.checkbox(&mut config.hide_ingame_ui_hotkey, "").clicked() && config.hide_ingame_ui_hotkey {
+                    thread::spawn(|| {
+                        Gui::instance()
+                            .expect("unexpected failure")
+                            .lock()
+                            .expect("unexpected failure")
                             .show_window(Box::new(SimpleOkDialog::new(
                                 &t!("info"),
                                 &t!("config_editor.hide_ingame_ui_hotkey_info"),
-                                || {}
+                                || {},
                             )));
-                        });
-                    }
+                    });
                 }
                 ui.end_row();
             }
@@ -2192,74 +2391,72 @@ impl Window for ConfigEditor {
         let mut reset_clicked = false;
 
         new_window(ctx, self.id, t!("config_editor.title"))
-        .open(&mut open)
-        .show(ctx, |ui| {
-            simple_window_layout(ui, self.id,
-                |ui| {
-                    egui::ScrollArea::horizontal()
-                    .id_salt("tabs_scroll")
-                    .show(ui, |ui| {
-                        ui.horizontal(|ui| {
-                            let style = ui.style_mut();
-                            style.spacing.button_padding = egui::vec2(8.0, 5.0);
-                            style.spacing.item_spacing = egui::Vec2::ZERO;
-                            let widgets = &mut style.visuals.widgets;
-                            widgets.inactive.corner_radius = egui::CornerRadius::ZERO;
-                            widgets.hovered.corner_radius = egui::CornerRadius::ZERO;
-                            widgets.active.corner_radius = egui::CornerRadius::ZERO;
+            .open(&mut open)
+            .show(ctx, |ui| {
+                simple_window_layout(
+                    ui,
+                    self.id,
+                    |ui| {
+                        egui::ScrollArea::horizontal().id_salt("tabs_scroll").show(ui, |ui| {
+                            ui.horizontal(|ui| {
+                                let style = ui.style_mut();
+                                style.spacing.button_padding = egui::vec2(8.0, 5.0);
+                                style.spacing.item_spacing = egui::Vec2::ZERO;
+                                let widgets = &mut style.visuals.widgets;
+                                widgets.inactive.corner_radius = egui::CornerRadius::ZERO;
+                                widgets.hovered.corner_radius = egui::CornerRadius::ZERO;
+                                widgets.active.corner_radius = egui::CornerRadius::ZERO;
 
-                            for (tab, label) in ConfigEditorTab::display_list() {
-                                if ui.selectable_label(self.current_tab == tab, label.as_ref()).clicked() {
-                                    self.current_tab = tab;
+                                for (tab, label) in ConfigEditorTab::display_list() {
+                                    if ui.selectable_label(self.current_tab == tab, label.as_ref()).clicked() {
+                                        self.current_tab = tab;
+                                    }
+                                }
+                            });
+                        });
+
+                        ui.add_space(4.0);
+
+                        egui::ScrollArea::vertical().id_salt("body_scroll").show(ui, |ui| {
+                            egui::Frame::NONE
+                                .inner_margin(egui::Margin::symmetric(8, 0))
+                                .show(ui, |ui| {
+                                    egui::Grid::new(self.id.with("options_grid"))
+                                        .striped(true)
+                                        .num_columns(2)
+                                        .spacing([40.0 * scale, 4.0 * scale])
+                                        .show(ui, |ui| {
+                                            Self::run_options_grid(&mut config, ui, self.current_tab);
+                                        });
+                                });
+                            #[cfg(target_os = "android")]
+                            {
+                                let padding = ime_scroll_padding(ui.ctx());
+                                if padding > 0.0 {
+                                    ui.add_space(padding);
                                 }
                             }
                         });
-                    });
+                    },
+                    |ui| {
+                        ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| {
+                            if ui.button(t!("config_editor.restore_defaults")).clicked() {
+                                reset_clicked = true;
+                            }
 
-                    ui.add_space(4.0);
-
-                    egui::ScrollArea::vertical()
-                    .id_salt("body_scroll")
-                    .show(ui, |ui| {
-                        egui::Frame::NONE
-                        .inner_margin(egui::Margin::symmetric(8, 0))
-                        .show(ui, |ui| {
-                            egui::Grid::new(self.id.with("options_grid"))
-                            .striped(true)
-                            .num_columns(2)
-                            .spacing([40.0 * scale, 4.0 * scale])
-                            .show(ui, |ui| {
-                                Self::run_options_grid(&mut config, ui, self.current_tab);
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
+                                if ui.button(t!("cancel")).clicked() {
+                                    open2 = false;
+                                }
+                                if ui.button(t!("save")).clicked() {
+                                    save_and_reload_config(self.config.clone());
+                                    open2 = false;
+                                }
                             });
                         });
-                        #[cfg(target_os = "android")]
-                        {
-                            let padding = ime_scroll_padding(ui.ctx());
-                            if padding > 0.0 {
-                                ui.add_space(padding);
-                            }
-                        }
-                    });
-                },
-                |ui| {
-                    ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| {
-                        if ui.button(t!("config_editor.restore_defaults")).clicked() {
-                            reset_clicked = true;
-                        }
-
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
-                            if ui.button(t!("cancel")).clicked() {
-                                open2 = false;
-                            }
-                            if ui.button(t!("save")).clicked() {
-                                save_and_reload_config(self.config.clone());
-                                open2 = false;
-                            }
-                        });
-                    });
-                }
-            );
-        });
+                    },
+                );
+            });
 
         self.config = config;
 
@@ -2282,15 +2479,17 @@ impl Window for ConfigEditor {
 fn save_and_reload_config(config: hachimi::Config) {
     let notif = match Hachimi::instance().save_and_reload_config(config) {
         Ok(_) => t!("notification.config_saved").into_owned(),
-        Err(e) => e.to_string()
+        Err(e) => e.to_string(),
     };
 
     // workaround since we can't get a mutable ref to the Gui and
     // locking the mutex on the current thread would cause a deadlock
     thread::spawn(move || {
-        Gui::instance().unwrap()
-        .lock().unwrap()
-        .show_notification(&notif);
+        Gui::instance()
+            .expect("unexpected failure")
+            .lock()
+            .expect("lock poisoned")
+            .show_notification(&notif);
     });
 }
 
@@ -2301,7 +2500,7 @@ struct FirstTimeSetupWindow {
     index_request: Arc<AsyncRequest<Vec<RepoInfo>>>,
     current_page: usize,
     current_tl_repo: Option<String>,
-    has_auto_selected: bool
+    has_auto_selected: bool,
 }
 
 impl FirstTimeSetupWindow {
@@ -2314,7 +2513,7 @@ impl FirstTimeSetupWindow {
             index_request: Arc::new(tl_repo::new_meta_index_request()),
             current_page: 0,
             current_tl_repo: None,
-            has_auto_selected: false
+            has_auto_selected: false,
         }
     }
 }
@@ -2325,142 +2524,156 @@ impl Window for FirstTimeSetupWindow {
         let mut page_open = true;
 
         new_window(ctx, self.id, t!("first_time_setup.title"))
-        .open(&mut open)
-        .show(ctx, |ui| {
-            let allow_next = match self.current_page {
-                1 => {
-                    (**self.index_request.result.load()).as_ref().map_or(false, |r| r.is_ok())
-                },
-                _ => true
-            };
+            .open(&mut open)
+            .show(ctx, |ui| {
+                let allow_next = match self.current_page {
+                    1 => (**self.index_request.result.load())
+                        .as_ref()
+                        .is_some_and(std::result::Result::is_ok),
+                    _ => true,
+                };
 
-            page_open = paginated_window_layout(ui, self.id, &mut self.current_page, 3, allow_next, |ui, i| {
-                match i {
-                    0 => {
-                        ui.heading(t!("first_time_setup.welcome_heading"));
-                        ui.separator();
-                        ui.horizontal(|ui| {
-                            ui.label(t!("config_editor.language"));
-                            let mut language = self.config.language;
-                            let lang_changed = Gui::run_combo(ui, "language", &mut language, Language::CHOICES);
-                            if lang_changed {
-                                self.config.language = language;
-                                save_and_reload_config(self.config.clone());
-                                self.current_tl_repo = None;
-                            }
-                        });
-                        ui.horizontal(|ui| {
-                            ui.label(t!("config_editor.meta_index_url"));
-                            let res = ui.add(egui::TextEdit::singleline(&mut self.meta_index_url).lock_focus(true));
-                            #[cfg(target_os = "android")]
-                            handle_android_keyboard(&res, &mut self.meta_index_url);
-                            #[cfg(target_os = "windows")]
-                            if res.has_focus() {
-                                ui.memory_mut(|mem| mem.set_focus_lock_filter(
-                                    res.id,
-                                    egui::EventFilter {
-                                        tab: true,
-                                        horizontal_arrows: true,
-                                        vertical_arrows: true,
-                                        escape: true,
-                                        ..Default::default()
-                                    }
-                                ));
-                            }
+                page_open = paginated_window_layout(ui, self.id, &mut self.current_page, 3, allow_next, |ui, i| {
+                    match i {
+                        0 => {
+                            ui.heading(t!("first_time_setup.welcome_heading"));
+                            ui.separator();
+                            ui.horizontal(|ui| {
+                                ui.label(t!("config_editor.language"));
+                                let mut language = self.config.language;
+                                let lang_changed = Gui::run_combo(ui, "language", &mut language, Language::CHOICES);
+                                if lang_changed {
+                                    self.config.language = language;
+                                    save_and_reload_config(self.config.clone());
+                                    self.current_tl_repo = None;
+                                }
+                            });
+                            ui.horizontal(|ui| {
+                                ui.label(t!("config_editor.meta_index_url"));
+                                let res = ui.add(egui::TextEdit::singleline(&mut self.meta_index_url).lock_focus(true));
+                                #[cfg(target_os = "android")]
+                                handle_android_keyboard(&res, &mut self.meta_index_url);
+                                #[cfg(target_os = "windows")]
+                                if res.has_focus() {
+                                    ui.memory_mut(|mem| {
+                                        mem.set_focus_lock_filter(
+                                            res.id,
+                                            egui::EventFilter {
+                                                tab: true,
+                                                horizontal_arrows: true,
+                                                vertical_arrows: true,
+                                                escape: true,
+                                            },
+                                        )
+                                    });
+                                }
 
-                            if res.lost_focus() {
-                                if self.meta_index_url != self.config.meta_index_url {
+                                if res.lost_focus() && self.meta_index_url != self.config.meta_index_url {
                                     self.config.meta_index_url = self.meta_index_url.clone();
                                     save_and_reload_config(self.config.clone());
                                     self.index_request = Arc::new(tl_repo::new_meta_index_request());
                                 }
-                            }
-                        });
-                        ui.separator();
-                        ui.label(t!("first_time_setup.welcome_content"));
-                    }
-                    1 => {
-                        ui.heading(t!("first_time_setup.translation_repo_heading"));
-                        ui.separator();
-                        ui.label(t!("first_time_setup.select_translation_repo"));
-                        ui.add_space(4.0);
+                            });
+                            ui.separator();
+                            ui.label(t!("first_time_setup.welcome_content"));
+                        }
+                        1 => {
+                            ui.heading(t!("first_time_setup.translation_repo_heading"));
+                            ui.separator();
+                            ui.label(t!("first_time_setup.select_translation_repo"));
+                            ui.add_space(4.0);
 
-                        async_request_ui_content(ui, self.index_request.clone(), |ui, repo_list| {
-                            let hachimi = Hachimi::instance();
-                            let current_lang_str = self.config.language.locale_str();
+                            async_request_ui_content(ui, self.index_request.clone(), |ui, repo_list| {
+                                let hachimi = Hachimi::instance();
+                                let current_lang_str = self.config.language.locale_str();
 
-                            let mut filtered_repos: Vec<_> = repo_list.iter()
-                                .filter(|repo| repo.region == hachimi.game.region)
-                                .collect();
+                                let mut filtered_repos: Vec<_> = repo_list
+                                    .iter()
+                                    .filter(|repo| repo.region == hachimi.game.region)
+                                    .collect();
 
-                            if !self.has_auto_selected && self.current_tl_repo.is_none() {
-                                if let Some(matched) = filtered_repos.iter().find(|r| r.is_recommended(current_lang_str)) {
-                                    self.current_tl_repo = Some(matched.index.clone());
-                                }
-                                self.has_auto_selected = true;
-                            }
-  
-                            filtered_repos.sort_by_key(|repo| !repo.is_recommended(current_lang_str));
-                            
-                            egui::ScrollArea::vertical().show(ui, |ui| {
-                                egui::Frame::NONE
-                                .inner_margin(egui::Margin::symmetric(8, 0))
-                                .show(ui, |ui| {
-                                    if filtered_repos.is_empty() {
-                                        ui.label(t!("first_time_setup.no_compatible_repo"));
-                                        return;
+                                if !self.has_auto_selected && self.current_tl_repo.is_none() {
+                                    if let Some(matched) =
+                                        filtered_repos.iter().find(|r| r.is_recommended(current_lang_str))
+                                    {
+                                        self.current_tl_repo = Some(matched.index.clone());
                                     }
-                                    ui.radio_value(&mut self.current_tl_repo, None, t!("first_time_setup.skip_translation"));
+                                    self.has_auto_selected = true;
+                                }
 
-                                    let mut last_section: Option<bool> = None;
+                                filtered_repos.sort_by_key(|repo| !repo.is_recommended(current_lang_str));
 
-                                    for repo in filtered_repos.iter() {
-                                        let is_matched = repo.is_recommended(current_lang_str);
-                                        let is_selected = self.current_tl_repo.as_ref() == Some(&repo.index);
-                                        
-                                        // Add separator before switching from matched to unmatched
-                                        if let Some(prev_matched) = last_section {
-                                            if prev_matched != is_matched {
-                                                ui.separator();
+                                egui::ScrollArea::vertical().show(ui, |ui| {
+                                    egui::Frame::NONE
+                                        .inner_margin(egui::Margin::symmetric(8, 0))
+                                        .show(ui, |ui| {
+                                            if filtered_repos.is_empty() {
+                                                ui.label(t!("first_time_setup.no_compatible_repo"));
+                                                return;
                                             }
+                                            ui.radio_value(
+                                                &mut self.current_tl_repo,
+                                                None,
+                                                t!("first_time_setup.skip_translation"),
+                                            );
+
+                                            let mut last_section: Option<bool> = None;
+
+                                            for repo in filtered_repos.iter() {
+                                                let is_matched = repo.is_recommended(current_lang_str);
+                                                let is_selected = self.current_tl_repo.as_ref() == Some(&repo.index);
+
+                                                // Add separator before switching from matched to unmatched
+                                                if let Some(prev_matched) = last_section {
+                                                    if prev_matched != is_matched {
+                                                        ui.separator();
+                                                    }
+                                                }
+
+                                                // Visual indicator for auto-selected matched language repo
+                                                if is_matched && is_selected {
+                                                    let repo_label = format!("★ {}", repo.name);
+                                                    ui.radio_value(
+                                                        &mut self.current_tl_repo,
+                                                        Some(repo.index.clone()),
+                                                        repo_label,
+                                                    );
+                                                    if let Some(short_desc) = &repo.short_desc {
+                                                        ui.label(egui::RichText::new(short_desc).small());
+                                                    }
+                                                } else {
+                                                    ui.radio_value(
+                                                        &mut self.current_tl_repo,
+                                                        Some(repo.index.clone()),
+                                                        &repo.name,
+                                                    );
+                                                    if let Some(short_desc) = &repo.short_desc {
+                                                        ui.label(egui::RichText::new(short_desc).small());
+                                                    }
+                                                }
+
+                                                last_section = Some(is_matched);
+                                            }
+                                        });
+                                    #[cfg(target_os = "android")]
+                                    {
+                                        let padding = ime_scroll_padding(ui.ctx());
+                                        if padding > 0.0 {
+                                            ui.add_space(padding);
                                         }
-
-                                        // Visual indicator for auto-selected matched language repo
-                                        if is_matched && is_selected {
-                                            let repo_label = format!("★ {}", repo.name);
-                                            ui.radio_value(&mut self.current_tl_repo, Some(repo.index.clone()), repo_label);
-                                            if let Some(short_desc) = &repo.short_desc {
-                                                ui.label(egui::RichText::new(short_desc).small());
-                                            }
-                                        } else {
-                                            ui.radio_value(&mut self.current_tl_repo, Some(repo.index.clone()), &repo.name);
-                                            if let Some(short_desc) = &repo.short_desc {
-                                                ui.label(egui::RichText::new(short_desc).small());
-                                            }
-                                        }
-                                        
-                                        last_section = Some(is_matched);
                                     }
                                 });
-                                #[cfg(target_os = "android")]
-                                {
-                                    let padding = ime_scroll_padding(ui.ctx());
-                                    if padding > 0.0 {
-                                        ui.add_space(padding);
-                                    }
-                                }
                             });
-                        });
+                        }
+                        2 => {
+                            ui.heading(t!("first_time_setup.complete_heading"));
+                            ui.separator();
+                            ui.label(t!("first_time_setup.complete_content"));
+                        }
+                        _ => {}
                     }
-                    2 => {
-                        ui.heading(t!("first_time_setup.complete_heading"));
-                        ui.separator();
-                        ui.label(t!("first_time_setup.complete_content"));
-                    }
-                    _ => {}
-                }
+                });
             });
-        });
 
         let open_res = open && page_open;
         if !open_res {
@@ -2485,7 +2698,7 @@ struct LiveVocalsSwapWindow {
     id: egui::Id,
     config: hachimi::Config,
     chara_choices: Vec<(i32, String)>,
-    search_term: String
+    search_term: String,
 }
 
 impl LiveVocalsSwapWindow {
@@ -2504,7 +2717,7 @@ impl LiveVocalsSwapWindow {
             id: random_id(),
             config: (**hachimi.config.load()).clone(),
             chara_choices,
-            search_term: String::new()
+            search_term: String::new(),
         }
     }
 }
@@ -2516,47 +2729,56 @@ impl Window for LiveVocalsSwapWindow {
         let mut open2 = true;
         let mut save_clicked = false;
 
-        let combo_items: Vec<(i32, &str)> = self.chara_choices
+        let combo_items: Vec<(i32, &str)> = self
+            .chara_choices
             .iter()
             .map(|&(id, ref name)| (id, name.as_str()))
             .collect();
 
         new_window(ctx, self.id, t!("config_editor.live_vocals_swap"))
-        .open(&mut open)
-        .show(ctx, |ui| {
-            simple_window_layout(ui, self.id,
-                |ui| {
-                    egui::Frame::NONE
-                    .inner_margin(egui::Margin::symmetric(8, 0))
-                    .show(ui, |ui| {
-                        egui::Grid::new(self.id.with("live_vocals_swap_grid"))
-                        .striped(true)
-                        .num_columns(2)
-                        .spacing([40.0 * scale, 4.0 * scale])
-                        .show(ui, |ui| {
-                            for i in 0..6 {
-                                ui.label(t!("config_editor.live_vocals_swap_character_n", index = i + 1));
-                                Gui::run_combo_menu(ui, egui::Id::new("vocals_swap").with(i), &mut self.config.live_vocals_swap[i], &combo_items, &mut self.search_term);
-                                ui.end_row();
-                            }
+            .open(&mut open)
+            .show(ctx, |ui| {
+                simple_window_layout(
+                    ui,
+                    self.id,
+                    |ui| {
+                        egui::Frame::NONE
+                            .inner_margin(egui::Margin::symmetric(8, 0))
+                            .show(ui, |ui| {
+                                egui::Grid::new(self.id.with("live_vocals_swap_grid"))
+                                    .striped(true)
+                                    .num_columns(2)
+                                    .spacing([40.0 * scale, 4.0 * scale])
+                                    .show(ui, |ui| {
+                                        for i in 0..6 {
+                                            ui.label(t!("config_editor.live_vocals_swap_character_n", index = i + 1));
+                                            Gui::run_combo_menu(
+                                                ui,
+                                                egui::Id::new("vocals_swap").with(i),
+                                                &mut self.config.live_vocals_swap[i],
+                                                &combo_items,
+                                                &mut self.search_term,
+                                            );
+                                            ui.end_row();
+                                        }
+                                    });
+                            });
+                    },
+                    |ui| {
+                        ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| {
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
+                                if ui.button(t!("cancel")).clicked() {
+                                    open2 = false;
+                                }
+                                if ui.button(t!("save")).clicked() {
+                                    save_clicked = true;
+                                    open2 = false;
+                                }
+                            });
                         });
-                    });
-                },
-                |ui| {
-                    ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| {
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
-                            if ui.button(t!("cancel")).clicked() {
-                                open2 = false;
-                            }
-                            if ui.button(t!("save")).clicked() {
-                                save_clicked = true;
-                                open2 = false;
-                            }
-                        });
-                    });
-                }
-            );
-        });
+                    },
+                );
+            });
 
         if save_clicked {
             save_and_reload_config(self.config.clone());
@@ -2570,7 +2792,7 @@ impl Window for LiveVocalsSwapWindow {
 struct ThemeEditorWindow {
     id: egui::Id,
     config: hachimi::Config,
-    old_config: hachimi::Config
+    old_config: hachimi::Config,
 }
 
 impl ThemeEditorWindow {
@@ -2579,7 +2801,7 @@ impl ThemeEditorWindow {
         ThemeEditorWindow {
             id: random_id(),
             config: current_cfg.clone(),
-            old_config: current_cfg
+            old_config: current_cfg,
         }
     }
 }
@@ -2614,57 +2836,85 @@ impl Window for ThemeEditorWindow {
         let mut reset_clicked = false;
 
         new_window(ctx, self.id, t!("theme_editor.title"))
-        .open(&mut open)
-        .show(ctx, |ui| {
-            simple_window_layout(ui, self.id,
-                |ui| {
-                    ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
+            .open(&mut open)
+            .show(ctx, |ui| {
+                simple_window_layout(
+                    ui,
+                    self.id,
+                    |ui| {
+                        ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
 
-                    egui::Frame::NONE
-                    .inner_margin(egui::Margin::symmetric(8, 0))
-                    .show(ui, |ui| {
-                        egui::Grid::new(self.id.with("theme_editor_grid"))
-                        .striped(true)
-                        .num_columns(2)
-                        .spacing([40.0 * scale, 4.0 * scale])
-                        .show(ui, |ui| {
-                            ui.vertical(|ui| {
-                                theme_changed |= theme_color_row(ui, &t!("theme_editor.ui_accent_color"), &mut self.config.ui_accent_color);
-                                theme_changed |= theme_color_row(ui, &t!("theme_editor.ui_window_fill"), &mut self.config.ui_window_fill);
-                                theme_changed |= theme_color_row(ui, &t!("theme_editor.ui_panel_fill"), &mut self.config.ui_panel_fill);
-                                theme_changed |= theme_color_row(ui, &t!("theme_editor.ui_extreme_bg_color"), &mut self.config.ui_extreme_bg_color);
-                                theme_changed |= theme_color_row(ui, &t!("theme_editor.ui_text_color"), &mut self.config.ui_text_color);
+                        egui::Frame::NONE
+                            .inner_margin(egui::Margin::symmetric(8, 0))
+                            .show(ui, |ui| {
+                                egui::Grid::new(self.id.with("theme_editor_grid"))
+                                    .striped(true)
+                                    .num_columns(2)
+                                    .spacing([40.0 * scale, 4.0 * scale])
+                                    .show(ui, |ui| {
+                                        ui.vertical(|ui| {
+                                            theme_changed |= theme_color_row(
+                                                ui,
+                                                &t!("theme_editor.ui_accent_color"),
+                                                &mut self.config.ui_accent_color,
+                                            );
+                                            theme_changed |= theme_color_row(
+                                                ui,
+                                                &t!("theme_editor.ui_window_fill"),
+                                                &mut self.config.ui_window_fill,
+                                            );
+                                            theme_changed |= theme_color_row(
+                                                ui,
+                                                &t!("theme_editor.ui_panel_fill"),
+                                                &mut self.config.ui_panel_fill,
+                                            );
+                                            theme_changed |= theme_color_row(
+                                                ui,
+                                                &t!("theme_editor.ui_extreme_bg_color"),
+                                                &mut self.config.ui_extreme_bg_color,
+                                            );
+                                            theme_changed |= theme_color_row(
+                                                ui,
+                                                &t!("theme_editor.ui_text_color"),
+                                                &mut self.config.ui_text_color,
+                                            );
 
-                                ui.horizontal(|ui| {
-                                    ui.label(t!("theme_editor.ui_window_rounding"));
-                                    if ui.add(egui::Slider::new(&mut self.config.ui_window_rounding, 0.0..=20.0)).changed() {
-                                        theme_changed = true;
-                                    }
-                                });
+                                            ui.horizontal(|ui| {
+                                                ui.label(t!("theme_editor.ui_window_rounding"));
+                                                if ui
+                                                    .add(egui::Slider::new(
+                                                        &mut self.config.ui_window_rounding,
+                                                        0.0..=20.0,
+                                                    ))
+                                                    .changed()
+                                                {
+                                                    theme_changed = true;
+                                                }
+                                            });
+                                        });
+                                    });
+                            });
+                    },
+                    |ui| {
+                        ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| {
+                            if ui.button(t!("config_editor.restore_defaults")).clicked() {
+                                reset_clicked = true;
+                            }
+
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
+                                if ui.button(t!("cancel")).clicked() {
+                                    cancel_clicked = true;
+                                    open2 = false;
+                                }
+                                if ui.button(t!("save")).clicked() {
+                                    save_clicked = true;
+                                    open2 = false;
+                                }
                             });
                         });
-                    });
-                },
-                |ui| {
-                    ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| {
-                        if ui.button(t!("config_editor.restore_defaults")).clicked() {
-                            reset_clicked = true;
-                        }
-
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
-                            if ui.button(t!("cancel")).clicked() {
-                                cancel_clicked = true;
-                                open2 = false;
-                            }
-                            if ui.button(t!("save")).clicked() {
-                                save_clicked = true;
-                                open2 = false;
-                            }
-                        });
-                    });
-                }
-            );
-        });
+                    },
+                );
+            });
 
         if theme_changed {
             enqueue_theme_preview(self.config.clone());
@@ -2689,7 +2939,7 @@ impl Window for ThemeEditorWindow {
             config.ui_text_color = hachimi::Config::default_text_color();
             config.ui_window_rounding = hachimi::Config::default_window_rounding();
 
-            self.config = config.clone();
+            self.config = config;
             enqueue_theme_preview(self.config.clone());
         }
 
@@ -2699,14 +2949,12 @@ impl Window for ThemeEditorWindow {
 }
 
 struct AboutWindow {
-    id: egui::Id
+    id: egui::Id,
 }
 
 impl AboutWindow {
     fn new() -> AboutWindow {
-        AboutWindow {
-            id: random_id()
-        }
+        AboutWindow { id: random_id() }
     }
 }
 
@@ -2716,52 +2964,52 @@ impl Window for AboutWindow {
         let mut open = true;
 
         new_window(ctx, self.id, t!("about.title"))
-        .max_width(310.0 * scale)
-        .open(&mut open)
-        .show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                ui.add(Gui::icon_2x(ctx));
-                ui.vertical(|ui| {
-                    ui.heading(t!("hachimi"));
-                    ui.label(env!("HACHIMI_DISPLAY_VERSION"));
+            .max_width(310.0 * scale)
+            .open(&mut open)
+            .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    ui.add(Gui::icon_2x(ctx));
+                    ui.vertical(|ui| {
+                        ui.heading(t!("hachimi"));
+                        ui.label(env!("HACHIMI_DISPLAY_VERSION"));
+                    });
+                });
+                ui.label(t!("about.copyright", year = Utc::now().year()));
+                ui.horizontal_wrapped(|ui| {
+                    ui.spacing_mut().item_spacing.x = 8.0;
+
+                    if ui.button(t!("about.view_license")).clicked() {
+                        thread::spawn(|| {
+                            Gui::instance()
+                                .expect("unexpected failure")
+                                .lock()
+                                .expect("unexpected failure")
+                                .show_window(Box::new(LicenseWindow::new()));
+                        });
+                    }
+                    ui.end_row();
+
+                    if ui.button(t!("about.open_website")).clicked() {
+                        Application::OpenURL(WEBSITE_URL.to_il2cpp_string());
+                    }
+
+                    if ui.button(t!("about.view_source_code")).clicked() {
+                        Application::OpenURL(format!("https://github.com/{}", REPO_PATH).to_il2cpp_string());
+                    }
                 });
             });
-            ui.label(t!("about.copyright", year = Utc::now().year()));
-            ui.horizontal_wrapped(|ui| {
-                ui.spacing_mut().item_spacing.x = 8.0;
-
-                if ui.button(t!("about.view_license")).clicked() {
-                    thread::spawn(|| {
-                        Gui::instance().unwrap()
-                        .lock().unwrap()
-                        .show_window(Box::new(LicenseWindow::new()));
-                    });
-                }
-                ui.end_row();
-
-                if ui.button(t!("about.open_website")).clicked() {
-                    Application::OpenURL(WEBSITE_URL.to_il2cpp_string());
-                }
-
-                if ui.button(t!("about.view_source_code")).clicked() {
-                    Application::OpenURL(format!("https://github.com/{}", REPO_PATH).to_il2cpp_string());
-                }
-            });
-        });
 
         open
     }
 }
 
 struct LicenseWindow {
-    id: egui::Id
+    id: egui::Id,
 }
 
 impl LicenseWindow {
     fn new() -> LicenseWindow {
-        LicenseWindow {
-            id: random_id()
-        }
+        LicenseWindow { id: random_id() }
     }
 }
 
@@ -2770,44 +3018,46 @@ impl Window for LicenseWindow {
         let mut open = true;
 
         new_window(ctx, self.id, t!("license.title"))
-        .open(&mut open)
-        .show(ctx, |ui| {
-            egui::ScrollArea::vertical().show(ui, |ui| {
-                ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
+            .open(&mut open)
+            .show(ctx, |ui| {
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
 
-                ui.heading(t!("hachimi"));
-                ui.collapsing(t!("license.gpl_v3_only_notice"), |ui| {
-                    ui.add(egui::TextEdit::multiline(&mut include_str!("../../LICENSE"))
-                        .font(egui::TextStyle::Monospace)
-                        .desired_rows(10)
-                        .interactive(false)
-                    );
+                    ui.heading(t!("hachimi"));
+                    ui.collapsing(t!("license.gpl_v3_only_notice"), |ui| {
+                        ui.add(
+                            egui::TextEdit::multiline(&mut include_str!("../../LICENSE"))
+                                .font(egui::TextStyle::Monospace)
+                                .desired_rows(10)
+                                .interactive(false),
+                        );
+                    });
+                    ui.separator();
+
+                    ui.heading("Open Font Licenses (OFL)");
+                    ui.label(t!("license.ofl_fonts_header"));
+                    ui.group(|ui| {
+                        ui.label(t!("license.font_inter"));
+                        ui.label(t!("license.font_font_awesome"));
+                    });
+
+                    ui.add_space(4.0);
+                    ui.collapsing(t!("license.ofl_notice"), |ui| {
+                        ui.add(
+                            egui::TextEdit::multiline(&mut include_str!("../../assets/fonts/OFL.txt"))
+                                .font(egui::TextStyle::Monospace)
+                                .desired_rows(10)
+                                .interactive(false),
+                        );
+                    });
+
+                    ui.add_space(10.0);
+                    ui.separator();
+
+                    ui.heading(t!("license.font_alibaba_header"));
+                    ui.label(t!("license.font_alibaba_body"));
                 });
-                ui.separator();
-
-                ui.heading("Open Font Licenses (OFL)");
-                ui.label(t!("license.ofl_fonts_header"));
-                ui.group(|ui| {
-                    ui.label(t!("license.font_inter"));
-                    ui.label(t!("license.font_font_awesome"));
-                });
-
-                ui.add_space(4.0);
-                ui.collapsing(t!("license.ofl_notice"), |ui| {
-                    ui.add(egui::TextEdit::multiline(&mut include_str!("../../assets/fonts/OFL.txt"))
-                        .font(egui::TextStyle::Monospace)
-                        .desired_rows(10)
-                        .interactive(false)
-                    );
-                });
-
-                ui.add_space(10.0);
-                ui.separator();
-
-                ui.heading(t!("license.font_alibaba_header"));
-                ui.label(t!("license.font_alibaba_body"));
             });
-        });
 
         open
     }
@@ -2817,7 +3067,7 @@ pub struct PersistentMessageWindow {
     id: egui::Id,
     title: String,
     content: String,
-    show: Arc<AtomicBool>
+    show: Arc<AtomicBool>,
 }
 
 impl PersistentMessageWindow {
@@ -2826,23 +3076,23 @@ impl PersistentMessageWindow {
             id: random_id(),
             title: title.to_owned(),
             content: content.to_owned(),
-            show
+            show,
         }
     }
 }
 
 impl Window for PersistentMessageWindow {
     fn run(&mut self, ctx: &egui::Context) -> bool {
-        new_window(ctx, self.id, &self.title)
-        .show(ctx, |ui| {
-            simple_window_layout(ui, self.id,
+        new_window(ctx, self.id, &self.title).show(ctx, |ui| {
+            simple_window_layout(
+                ui,
+                self.id,
                 |ui| {
                     ui.centered_and_justified(|ui| {
                         ui.label(&self.content);
                     });
                 },
-                |_| {
-                }
+                |_| {},
             );
         });
 

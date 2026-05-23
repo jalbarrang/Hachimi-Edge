@@ -1,4 +1,7 @@
-use crate::il2cpp::{symbols::{get_method_addr, get_method_overload_addr, IEnumerable}, types::*};
+use crate::il2cpp::{
+    symbols::{get_method_addr, get_method_overload_addr, IEnumerable},
+    types::*,
+};
 
 static mut TOOBJECT_ADDR: usize = 0;
 impl_addr_wrapper_fn!(ToObject, TOOBJECT_ADDR, *mut Il2CppObject, enum_type: *mut Il2CppObject, value: i32);
@@ -18,8 +21,13 @@ impl_addr_wrapper_fn!(GetValues, GETVALUES_ADDR, IEnumerable, enum_type: *mut Il
 pub fn init(mscorlib: *const Il2CppImage) {
     get_class_or_return!(mscorlib, System, Enum);
 
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe {
-        TOOBJECT_ADDR = get_method_overload_addr(Enum, "ToObject", &[Il2CppTypeEnum_IL2CPP_TYPE_CLASS, Il2CppTypeEnum_IL2CPP_TYPE_I4]);
+        TOOBJECT_ADDR = get_method_overload_addr(
+            Enum,
+            "ToObject",
+            &[Il2CppTypeEnum_IL2CPP_TYPE_CLASS, Il2CppTypeEnum_IL2CPP_TYPE_I4],
+        );
         TOSTRING_ADDR = get_method_addr(Enum, c"ToString", 0);
         // ToInt32 would make more sense here; but for some reason it doesn't exist!
         TOUINT64_ADDR = get_method_addr(Enum, c"ToUInt64", 1);

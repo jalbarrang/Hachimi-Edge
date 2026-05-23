@@ -16,8 +16,9 @@ pub fn init() {
         return;
     }
 
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe {
-        let dll_path_cstr = U16CString::from_str(dll_path.to_str().unwrap()).unwrap();
+        let dll_path_cstr = U16CString::from_str(dll_path.to_str().expect("valid UTF-8")).expect("valid UTF-8");
         let handle = LoadLibraryW(PCWSTR(dll_path_cstr.as_ptr())).expect("cri_mana_vpx.dll");
 
         criVvp9_GetAlphaInterface_orig = utils::get_proc_address(handle, c"criVvp9_GetAlphaInterface");

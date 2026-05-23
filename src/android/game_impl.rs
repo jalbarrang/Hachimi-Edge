@@ -1,5 +1,8 @@
 use procfs::process::Process;
-use std::{path::{Path, PathBuf}, process};
+use std::{
+    path::{Path, PathBuf},
+    process,
+};
 
 use crate::{android::zygisk, core::game::Region};
 
@@ -15,10 +18,13 @@ pub fn get_package_name() -> String {
                 error!("FATAL: Failed to read /proc/self/cmdline");
                 process::exit(1);
             });
-            cmdline.get(0).unwrap_or_else(|| {
-                error!("FATAL: Invalid cmdline");
-                process::exit(1);
-            }).to_owned()
+            cmdline
+                .get(0)
+                .unwrap_or_else(|| {
+                    error!("FATAL: Invalid cmdline");
+                    process::exit(1);
+                })
+                .to_owned()
         }
     }
 }
@@ -30,7 +36,7 @@ pub fn get_region(package_name: &str) -> Region {
         "com.kakaogames.umamusume" => Region::Korea,
         "com.bilibili.umamusu" => Region::China,
         "com.cygames.umamusume" => Region::Global,
-        _ => Region::Unknown
+        _ => Region::Unknown,
     }
 }
 

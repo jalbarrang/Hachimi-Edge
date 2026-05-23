@@ -1,17 +1,18 @@
-use std::{
-    sync::Mutex,
-    time::{SystemTime, UNIX_EPOCH}
+use crate::core::Error;
+use discord_rich_presence::{
+    activity::{Activity, ActivityType, Assets, Timestamps},
+    DiscordIpc, DiscordIpcClient,
 };
 use once_cell::sync::Lazy;
-use discord_rich_presence::{activity::{Activity, ActivityType, Assets, Timestamps}, DiscordIpc, DiscordIpcClient};
-use crate::core::Error;
+use std::{
+    sync::Mutex,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
-static DISCORD_CLIENT: Lazy<Mutex<Option<DiscordIpcClient>>> = Lazy::new(|| {
-    Mutex::new(None)
-});
+static DISCORD_CLIENT: Lazy<Mutex<Option<DiscordIpcClient>>> = Lazy::new(|| Mutex::new(None));
 
 pub fn start_rpc() -> Result<(), Error> {
-    let mut client_guard = DISCORD_CLIENT.lock().unwrap();
+    let mut client_guard = DISCORD_CLIENT.lock().expect("lock poisoned");
     if client_guard.is_some() {
         return Ok(());
     }
@@ -29,7 +30,8 @@ pub fn start_rpc() -> Result<(), Error> {
         .assets(Assets::new().large_image("icon"))
         .timestamps(Timestamps::new().start(now as i64));
 
-    client.set_activity(activity)
+    client
+        .set_activity(activity)
         .map_err(|e| Error::DiscordRpcError(e.to_string()))?;
     *client_guard = Some(client);
     info!("Rich presence set");
@@ -37,8 +39,8 @@ pub fn start_rpc() -> Result<(), Error> {
 }
 
 pub fn stop_rpc() -> Result<(), Error> {
-    let mut client_guard = DISCORD_CLIENT.lock().unwrap();
-    
+    let mut client_guard = DISCORD_CLIENT.lock().expect("lock poisoned");
+
     if let Some(mut client) = client_guard.take() {
         info!("Stopping Discord RPC");
         client.close().map_err(|e| Error::DiscordRpcError(e.to_string()))?;

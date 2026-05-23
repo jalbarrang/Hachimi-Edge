@@ -9,6 +9,7 @@ impl_addr_wrapper_fn!(SetOnClick, SETONCLICK_ADDR, (), this: *mut Il2CppObject, 
 pub fn init(umamusume: *const Il2CppImage) {
     get_class_or_return!(umamusume, Gallop, ButtonCommon);
 
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe {
         GET_TARGETTEXT_ADDR = get_method_addr(ButtonCommon, c"get_TargetText", 0);
         SETONCLICK_ADDR = get_method_addr(ButtonCommon, c"SetOnClick", 1);

@@ -2,6 +2,7 @@ use crate::il2cpp::{api::il2cpp_object_new, symbols::get_method_addr, types::*};
 
 static mut CLASS: *mut Il2CppClass = std::ptr::null_mut();
 pub fn class() -> *mut Il2CppClass {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe { CLASS }
 }
 
@@ -19,6 +20,7 @@ pub fn new(left: i32, right: i32, top: i32, bottom: i32) -> *mut Il2CppObject {
 pub fn init(UnityEngine_CoreModule: *const Il2CppImage) {
     get_class_or_return!(UnityEngine_CoreModule, UnityEngine, RectOffset);
 
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe {
         CLASS = RectOffset;
         CTOR_ADDR = get_method_addr(RectOffset, c".ctor", 4);

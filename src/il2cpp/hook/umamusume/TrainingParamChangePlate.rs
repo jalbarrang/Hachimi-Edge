@@ -1,14 +1,20 @@
 use crate::{
-    core::{Hachimi, game::Region},
+    core::{game::Region, Hachimi},
     il2cpp::{
-        ext::{Il2CppStringExt, StringExt}, hook::UnityEngine_TextRenderingModule::TextGenerator::IgnoreTGFiltersContext, symbols::get_method_addr, types::*
-    }
+        ext::{Il2CppStringExt, StringExt},
+        hook::UnityEngine_TextRenderingModule::TextGenerator::IgnoreTGFiltersContext,
+        symbols::get_method_addr,
+        types::*,
+    },
 };
 
 fn PlayTypeWriteCommon(mut message: *mut Il2CppString) -> *mut Il2CppString {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     let message_utf16 = unsafe { (*message).as_utf16str() };
-    if message_utf16.as_slice().contains(&36) { // 36 = dollar sign ($)
-        message = Hachimi::instance().template_parser
+    if message_utf16.as_slice().contains(&36) {
+        // 36 = dollar sign ($)
+        message = Hachimi::instance()
+            .template_parser
             .eval_with_context(&message_utf16.to_string(), &mut IgnoreTGFiltersContext())
             .to_il2cpp_string()
     }
@@ -37,8 +43,7 @@ pub fn init(umamusume: *const Il2CppImage) {
     if Hachimi::instance().game.region == Region::Japan {
         let PlayTypeWrite_addr = get_method_addr(TrainingParamChangePlate, c"PlayTypeWrite", 2);
         new_hook!(PlayTypeWrite_addr, PlayTypeWriteJp);
-    }
-    else {
+    } else {
         let PlayTypeWrite_addr = get_method_addr(TrainingParamChangePlate, c"PlayTypeWrite", 1);
         new_hook!(PlayTypeWrite_addr, PlayTypeWriteOther);
     }

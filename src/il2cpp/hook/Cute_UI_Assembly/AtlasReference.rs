@@ -2,22 +2,25 @@ use std::ptr::null_mut;
 
 use widestring::Utf16Str;
 
-use crate::{core::{ext::Utf16StringExt, Hachimi}, il2cpp::{
-    hook::{
-        UnityEngine_AssetBundleModule::AssetBundle,
-        UnityEngine_CoreModule::Sprite
+use crate::{
+    core::{ext::Utf16StringExt, Hachimi},
+    il2cpp::{
+        hook::{UnityEngine_AssetBundleModule::AssetBundle, UnityEngine_CoreModule::Sprite},
+        symbols::{get_field_from_name, get_field_object_value, Array},
+        types::*,
+        utils::replace_texture_with_diff,
     },
-    symbols::{get_field_from_name, get_field_object_value, Array},
-    types::*, utils::replace_texture_with_diff
-}};
+};
 
 static mut CLASS: *mut Il2CppClass = null_mut();
 pub fn class() -> *mut Il2CppClass {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe { CLASS }
 }
 
 static mut SPRITES_FIELD: *mut FieldInfo = null_mut();
 fn get_sprites(this: *mut Il2CppObject) -> Array {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     Array::from(get_field_object_value(this, unsafe { SPRITES_FIELD }))
 }
 
@@ -50,7 +53,8 @@ pub fn on_LoadAsset(bundle: *mut Il2CppObject, this: *mut Il2CppObject, name: &U
 
     // All of the sprites in the atlas uses the same texture so we just need to replace one of them
     let sprites = get_sprites(this);
-    if let Some(sprite) = unsafe { sprites.as_slice().get(0) } {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
+    if let Some(sprite) = unsafe { sprites.as_slice().first() } {
         replace_texture_with_diff(Sprite::get_texture(*sprite), replace_path, true);
     }
 }
@@ -58,6 +62,7 @@ pub fn on_LoadAsset(bundle: *mut Il2CppObject, this: *mut Il2CppObject, name: &U
 pub fn init(Cute_UI_Assembly: *const Il2CppImage) {
     get_class_or_return!(Cute_UI_Assembly, "Cute.UI", AtlasReference);
 
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe {
         CLASS = AtlasReference;
         SPRITES_FIELD = get_field_from_name(AtlasReference, c"sprites")

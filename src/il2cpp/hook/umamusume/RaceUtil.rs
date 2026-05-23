@@ -1,4 +1,7 @@
-use crate::{core::{game::Region, Hachimi}, il2cpp::{symbols::get_method_addr, types::*}};
+use crate::{
+    core::{game::Region, Hachimi},
+    il2cpp::{symbols::get_method_addr, types::*},
+};
 
 use super::{ApplicationSettingSaveLoader, SaveDataManager};
 
@@ -6,14 +9,17 @@ type GetRaceDynamicCameraSettingDataFn = extern "C" fn(boot_mode: *mut Il2CppObj
 extern "C" fn GetRaceDynamicCameraSettingData(boot_mode: *mut Il2CppObject) -> bool {
     if Hachimi::instance().config.load().force_allow_dynamic_camera {
         let save_data_manager = SaveDataManager::instance();
-        if save_data_manager.is_null() { return false; }
+        if save_data_manager.is_null() {
+            return false;
+        }
 
         let save_loader = SaveDataManager::get_SaveLoader(save_data_manager);
-        if save_loader.is_null() { return false; }
+        if save_loader.is_null() {
+            return false;
+        }
 
         ApplicationSettingSaveLoader::get_IsTryRaceDynamicCamera(save_loader)
-    }
-    else {
+    } else {
         get_orig_fn!(GetRaceDynamicCameraSettingData, GetRaceDynamicCameraSettingDataFn)(boot_mode)
     }
 }

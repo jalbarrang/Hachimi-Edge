@@ -9,10 +9,7 @@ use crate::{
     il2cpp::{
         ext::StringExt,
         hook::UnityEngine_AssetBundleModule::AssetBundle::{self, ASSET_PATH_PREFIX},
-        symbols::{
-            get_field_from_name, get_field_object_value, get_field_value, set_field_object_value,
-            IList,
-        },
+        symbols::{get_field_from_name, get_field_object_value, get_field_value, set_field_object_value, IList},
         types::*,
     },
 };
@@ -43,37 +40,44 @@ struct StoryParamChangeEffectInfoData {
 
 static mut CLASS: *mut Il2CppClass = null_mut();
 pub fn class() -> *mut Il2CppClass {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe { CLASS }
 }
 
 static mut PARAM_CHANGE_EFFECT_BLOCK_LIST_FIELD: *mut FieldInfo = null_mut();
 pub fn get__paramChangeEffectBlockList(this: *mut Il2CppObject) -> *mut Il2CppObject {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     get_field_object_value(this, unsafe { PARAM_CHANGE_EFFECT_BLOCK_LIST_FIELD })
 }
 
 // StoryParamChangeEffectBlockData
 static mut BLOCK_INDEX_FIELD: *mut FieldInfo = null_mut();
 pub fn get__blockIndex(this: *mut Il2CppObject) -> i32 {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     get_field_value(this, unsafe { BLOCK_INDEX_FIELD })
 }
 static mut PARAM_CHANGE_EFFECT_DATA_SET_LIST_FIELD: *mut FieldInfo = null_mut();
 pub fn get__paramChangeEffectDataSetList(this: *mut Il2CppObject) -> *mut Il2CppObject {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     get_field_object_value(this, unsafe { PARAM_CHANGE_EFFECT_DATA_SET_LIST_FIELD })
 }
 
 // StoryParamChangeEffectDataSet
 static mut PARAM_CHANGE_INFO_LIST_FIELD: *mut FieldInfo = null_mut();
 pub fn get__paramChangeInfoList(this: *mut Il2CppObject) -> *mut Il2CppObject {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     get_field_object_value(this, unsafe { PARAM_CHANGE_INFO_LIST_FIELD })
 }
 
 // StoryParamChangeEffectInfo
 static mut MESSAGE_TEXT_FIELD: *mut FieldInfo = null_mut();
 pub fn set__messageText(this: *mut Il2CppObject, value: *mut Il2CppString) {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     set_field_object_value(this, unsafe { MESSAGE_TEXT_FIELD }, value);
 }
 static mut ANIMATION_TEXT_FIELD: *mut FieldInfo = null_mut();
 pub fn set__animationText(this: *mut Il2CppObject, value: *mut Il2CppString) {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     set_field_object_value(this, unsafe { ANIMATION_TEXT_FIELD }, value);
 }
 
@@ -84,17 +88,14 @@ pub fn on_LoadAsset(bundle: *mut Il2CppObject, this: *mut Il2CppObject, name: &U
 
     let localized_data = Hachimi::instance().localized_data.load();
     let asset_info: AssetInfo<StoryParamChangeEffectScriptableObjectData> =
-        localized_data.load_asset_info(&base_path.to_string());
+        localized_data.load_asset_info(base_path.to_string());
     if !AssetBundle::check_asset_bundle_name(bundle, asset_info.metadata_ref()) {
         return;
     }
     patch_asset(this, asset_info.data.as_ref());
 }
 
-pub fn patch_asset(
-    this: *mut Il2CppObject,
-    data_opt: Option<&StoryParamChangeEffectScriptableObjectData>,
-) {
+pub fn patch_asset(this: *mut Il2CppObject, data_opt: Option<&StoryParamChangeEffectScriptableObjectData>) {
     let Some(data) = data_opt else {
         return;
     };
@@ -157,19 +158,15 @@ pub fn init(umamusume: *const Il2CppImage) {
     get_class_or_return!(umamusume, "Gallop", StoryParamChangeEffectDataSet);
     get_class_or_return!(umamusume, "Gallop", StoryParamChangeEffectInfo);
 
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe {
         CLASS = StoryParamChangeEffectScriptableObject;
-        PARAM_CHANGE_EFFECT_BLOCK_LIST_FIELD = get_field_from_name(
-            StoryParamChangeEffectScriptableObject,
-            c"_paramChangeEffectBlockList",
-        );
+        PARAM_CHANGE_EFFECT_BLOCK_LIST_FIELD =
+            get_field_from_name(StoryParamChangeEffectScriptableObject, c"_paramChangeEffectBlockList");
         BLOCK_INDEX_FIELD = get_field_from_name(StoryParamChangeEffectBlockData, c"_blockIndex");
-        PARAM_CHANGE_EFFECT_DATA_SET_LIST_FIELD = get_field_from_name(
-            StoryParamChangeEffectBlockData,
-            c"_paramChangeEffectDataSetList",
-        );
-        PARAM_CHANGE_INFO_LIST_FIELD =
-            get_field_from_name(StoryParamChangeEffectDataSet, c"_paramChangeInfoList");
+        PARAM_CHANGE_EFFECT_DATA_SET_LIST_FIELD =
+            get_field_from_name(StoryParamChangeEffectBlockData, c"_paramChangeEffectDataSetList");
+        PARAM_CHANGE_INFO_LIST_FIELD = get_field_from_name(StoryParamChangeEffectDataSet, c"_paramChangeInfoList");
 
         MESSAGE_TEXT_FIELD = get_field_from_name(StoryParamChangeEffectInfo, c"_messageText");
         ANIMATION_TEXT_FIELD = get_field_from_name(StoryParamChangeEffectInfo, c"_animationText");

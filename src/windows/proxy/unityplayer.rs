@@ -5,7 +5,10 @@ use std::path::PathBuf;
 use widestring::U16CString;
 use windows::{core::PCWSTR, Win32::System::LibraryLoader::LoadLibraryW};
 
-use crate::{core::{utils::get_file_modified_time, Hachimi}, windows::utils};
+use crate::{
+    core::{utils::get_file_modified_time, Hachimi},
+    windows::utils,
+};
 
 proxy_proc!(UnityMain, UnityMain_orig);
 
@@ -22,16 +25,15 @@ fn prepare_orig_dll() -> std::io::Result<PathBuf> {
         }
     }
 
-    match std::fs::create_dir(dest_dll.parent().unwrap()) {
+    match std::fs::create_dir(dest_dll.parent().expect("unexpected failure")) {
         Ok(()) => Ok(()),
         Err(e) => {
             if e.kind() == std::io::ErrorKind::AlreadyExists {
                 Ok(())
-            }
-            else {
+            } else {
                 Err(e)
             }
-        },
+        }
     }?;
     std::fs::copy(&src_dll, &dest_dll)?;
 
@@ -39,6 +41,7 @@ fn prepare_orig_dll() -> std::io::Result<PathBuf> {
 }
 
 pub fn init() {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe {
         let dll_path = match prepare_orig_dll() {
             Ok(v) => v,
@@ -47,7 +50,7 @@ pub fn init() {
                 std::process::exit(1);
             }
         };
-        let dll_path_cstr = U16CString::from_str(dll_path.to_str().unwrap()).unwrap();
+        let dll_path_cstr = U16CString::from_str(dll_path.to_str().expect("valid UTF-8")).expect("valid UTF-8");
         let dll_path_cstr_ptr = PCWSTR(dll_path_cstr.as_ptr());
         let handle = match LoadLibraryW(dll_path_cstr_ptr) {
             Ok(v) => v,

@@ -9,6 +9,7 @@ impl_addr_wrapper_fn!(set_RaceType, SET_RACETYPE_ADDR, (), this: *mut Il2CppObje
 pub fn init(umamusume: *const Il2CppImage) {
     get_class_or_return!(umamusume, Gallop, RaceInfo);
 
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe {
         GET_RACETYPE_ADDR = get_method_addr(RaceInfo, c"get_RaceType", 0);
         SET_RACETYPE_ADDR = get_method_addr(RaceInfo, c"set_RaceType", 1);

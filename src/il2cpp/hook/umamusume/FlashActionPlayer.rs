@@ -7,27 +7,29 @@ use crate::{
         api::{il2cpp_class_get_type, il2cpp_type_get_object},
         hook::{
             Plugins::AnimateToUnity::AnRoot, UnityEngine_AssetBundleModule::AssetBundle,
-            UnityEngine_CoreModule::GameObject
+            UnityEngine_CoreModule::GameObject,
         },
         symbols::{get_field_from_name, get_field_object_value},
-        types::*
-    }
+        types::*,
+    },
 };
 
 static mut TYPE_OBJECT: *mut Il2CppObject = 0 as _;
 pub fn type_object() -> *mut Il2CppObject {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe { TYPE_OBJECT }
 }
 
 // GameObject
 static mut _FLASHPREFAB_FIELD: *mut FieldInfo = 0 as _;
 pub fn get__flashPrefab(this: *mut Il2CppObject) -> *mut Il2CppObject {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     get_field_object_value(this, unsafe { _FLASHPREFAB_FIELD })
 }
 
 #[derive(Deserialize)]
 pub struct FlashActionPlayerData {
-    an_root: Option<AnRoot::AnRootData>
+    an_root: Option<AnRoot::AnRootData>,
 }
 
 pub fn on_LoadAsset(bundle: *mut Il2CppObject, this: *mut Il2CppObject, name: &Utf16Str) {
@@ -35,7 +37,7 @@ pub fn on_LoadAsset(bundle: *mut Il2CppObject, this: *mut Il2CppObject, name: &U
     let base_path = name[AssetBundle::ASSET_PATH_PREFIX.len()..].path_basename();
 
     let localized_data = Hachimi::instance().localized_data.load();
-    let asset_info: AssetInfo<FlashActionPlayerData> = localized_data.load_asset_info(&base_path.to_string());
+    let asset_info: AssetInfo<FlashActionPlayerData> = localized_data.load_asset_info(base_path.to_string());
     if !AssetBundle::check_asset_bundle_name(bundle, asset_info.metadata_ref()) {
         return;
     }
@@ -54,6 +56,7 @@ pub fn on_LoadAsset(bundle: *mut Il2CppObject, this: *mut Il2CppObject, name: &U
 pub fn init(umamusume: *const Il2CppImage) {
     get_class_or_return!(umamusume, Gallop, FlashActionPlayer);
 
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe {
         TYPE_OBJECT = il2cpp_type_get_object(il2cpp_class_get_type(FlashActionPlayer));
         _FLASHPREFAB_FIELD = get_field_from_name(FlashActionPlayer, c"_flashPrefab");

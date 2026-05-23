@@ -3,16 +3,21 @@ use std::ptr::null_mut;
 use crate::{
     core::Hachimi,
     il2cpp::{
-        ext::{Il2CppStringExt, StringExt}, hook::UnityEngine_TextRenderingModule::TextGenerator::IgnoreTGFiltersContext, symbols::{get_field_from_name, get_field_object_value, get_method_addr, set_field_object_value}, types::*
-    }
+        ext::{Il2CppStringExt, StringExt},
+        hook::UnityEngine_TextRenderingModule::TextGenerator::IgnoreTGFiltersContext,
+        symbols::{get_field_from_name, get_field_object_value, get_method_addr, set_field_object_value},
+        types::*,
+    },
 };
 
 static mut TEXT_FIELD: *mut FieldInfo = null_mut();
 fn get__text(this: *mut Il2CppObject) -> *mut Il2CppString {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     get_field_object_value(this, unsafe { TEXT_FIELD })
 }
 
 fn set__text(this: *mut Il2CppObject, value: *mut Il2CppString) {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     set_field_object_value(this, unsafe { TEXT_FIELD }, value);
 }
 
@@ -23,15 +28,21 @@ extern "C" fn _UpdateText(this: *mut Il2CppObject) {
         return get_orig_fn!(_UpdateText, _UpdateTextFn)(this);
     }
 
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     let text = unsafe { (*text_ptr).as_utf16str() };
 
     // doesn't run through TextGenerator, ignore its filters
-    if text.as_slice().contains(&36) { // 36 = dollar sign ($)
-        set__text(this, Hachimi::instance().template_parser
-            .eval_with_context(&text.to_string(), &mut IgnoreTGFiltersContext())
-            .to_il2cpp_string());
+    if text.as_slice().contains(&36) {
+        // 36 = dollar sign ($)
+        set__text(
+            this,
+            Hachimi::instance()
+                .template_parser
+                .eval_with_context(&text.to_string(), &mut IgnoreTGFiltersContext())
+                .to_il2cpp_string(),
+        );
     }
-    
+
     get_orig_fn!(_UpdateText, _UpdateTextFn)(this);
 }
 
@@ -42,6 +53,7 @@ pub fn init(Plugins: *const Il2CppImage) {
 
     new_hook!(_UpdateText_addr, _UpdateText);
 
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe {
         TEXT_FIELD = get_field_from_name(AnText, c"_text");
     }

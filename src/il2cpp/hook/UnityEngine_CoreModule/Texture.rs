@@ -1,6 +1,9 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
-use crate::{core::Hachimi, il2cpp::{api::il2cpp_resolve_icall, types::*}};
+use crate::{
+    core::Hachimi,
+    il2cpp::{api::il2cpp_resolve_icall, types::*},
+};
 
 // only bilinear is used in stock game
 #[allow(dead_code)]
@@ -8,17 +11,18 @@ use crate::{core::Hachimi, il2cpp::{api::il2cpp_resolve_icall, types::*}};
 enum FilterMode {
     Point,
     Bilinear,
-    Trilinear
+    Trilinear,
 }
 
 #[derive(Default, Copy, Clone, Serialize, Deserialize, Eq, PartialEq)]
 #[repr(i32)]
 pub enum AnisoLevel {
-    #[default] Default,
+    #[default]
+    Default,
     _2x = 2,
     _4x = 4,
     _8x = 8,
-    _16x = 16
+    _16x = 16,
 }
 
 static mut GETDATAWIDTH_ADDR: usize = 0;
@@ -44,10 +48,10 @@ extern "C" fn set_filterMode(this: *mut Il2CppObject, filterMode: FilterMode) {
 }
 
 pub fn init(_UnityEngine_CoreModule: *const Il2CppImage) {
-    let set_filterMode_addr = il2cpp_resolve_icall(
-        c"UnityEngine.Texture::set_filterMode(UnityEngine.FilterMode)".as_ptr()
-    );
+    let set_filterMode_addr =
+        il2cpp_resolve_icall(c"UnityEngine.Texture::set_filterMode(UnityEngine.FilterMode)".as_ptr());
 
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe {
         GETDATAWIDTH_ADDR = il2cpp_resolve_icall(c"UnityEngine.Texture::GetDataWidth()".as_ptr());
         GETDATAHEIGHT_ADDR = il2cpp_resolve_icall(c"UnityEngine.Texture::GetDataHeight()".as_ptr());

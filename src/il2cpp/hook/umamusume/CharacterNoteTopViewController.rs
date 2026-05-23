@@ -1,8 +1,16 @@
 use crate::{
     core::{hachimi::UITextConfig, Hachimi},
     il2cpp::{
-    ext::StringExt, hook::{UnityEngine_CoreModule::{Component, GameObject}, UnityEngine_TextRenderingModule::TextAnchor, UnityEngine_UI::Text}, symbols::get_method_addr, types::*
-}};
+        ext::StringExt,
+        hook::{
+            UnityEngine_CoreModule::{Component, GameObject},
+            UnityEngine_TextRenderingModule::TextAnchor,
+            UnityEngine_UI::Text,
+        },
+        symbols::get_method_addr,
+        types::*,
+    },
+};
 
 use super::{ButtonCommon, CharacterNoteTopView, TextCommon, ViewControllerBase};
 
@@ -32,6 +40,7 @@ fn apply_gallery_button_config(button: *mut Il2CppObject, config: &UITextConfig)
         let text_objects = GameObject::GetComponentsInChildren(game_object, TextCommon::type_object(), true);
 
         let empty_str = "".to_il2cpp_string();
+        // SAFETY: FFI / raw pointer operation required by IL2CPP interop
         for text_object in unsafe { text_objects.as_slice().iter() } {
             if *text_object != target_text {
                 Text::set_text(*text_object, empty_str);

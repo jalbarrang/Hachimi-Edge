@@ -6,6 +6,7 @@ impl_addr_wrapper_fn!(ReadAllBytes, READALLBYTES_ADDR, *mut Il2CppArray, path: *
 pub fn init(mscorlib: *const Il2CppImage) {
     get_class_or_return!(mscorlib, "System.IO", File);
 
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe {
         READALLBYTES_ADDR = get_method_addr(File, c"ReadAllBytes", 1);
     }

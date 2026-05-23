@@ -1,13 +1,32 @@
-use std::{fs, path::{Path, PathBuf}, process, sync::{atomic::{self, AtomicBool, AtomicI32}, Arc, Mutex}};
 use arc_swap::ArcSwap;
 use fnv::{FnvHashMap, FnvHashSet};
 use once_cell::sync::OnceCell;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    process,
+    sync::{
+        atomic::{self, AtomicBool, AtomicI32},
+        Arc, Mutex,
+    },
+};
 use textwrap::wrap_algorithms::Penalties;
 
-use crate::{core::{plugin_api::Plugin, updater}, gui_impl, hachimi_impl, il2cpp::{self, hook::umamusume::{CySpringController::SpringUpdateMode, GameSystem}, sql::{CharacterData, SkillInfo}}};
+use crate::{
+    core::{plugin_api::Plugin, updater},
+    gui_impl, hachimi_impl,
+    il2cpp::{
+        self,
+        hook::umamusume::{CySpringController::SpringUpdateMode, GameSystem},
+        sql::{CharacterData, SkillInfo},
+    },
+};
 
-use super::{game::{Game, Region}, ipc, plurals, template, template_filters, tl_repo, utils, Error, Interceptor};
+use super::{
+    game::{Game, Region},
+    ipc, plurals, template, template_filters, tl_repo, utils, Error, Interceptor,
+};
 
 pub const REPO_PATH: &str = "kairusds/Hachimi-Edge";
 pub const GITHUB_API: &str = "https://api.github.com/repos";
@@ -50,7 +69,7 @@ pub struct Hachimi {
     #[cfg(target_os = "windows")]
     pub discord_rpc: AtomicBool,
 
-    pub updater: Arc<updater::Updater>
+    pub updater: Arc<updater::Updater>,
 }
 
 static INSTANCE: OnceCell<Arc<Hachimi>> = OnceCell::new();
@@ -91,10 +110,13 @@ impl Hachimi {
     }
 
     pub fn instance() -> Arc<Hachimi> {
-        INSTANCE.get().unwrap_or_else(|| {
-            error!("FATAL: Attempted to get Hachimi instance before initialization");
-            process::exit(1);
-        }).clone()
+        INSTANCE
+            .get()
+            .unwrap_or_else(|| {
+                error!("FATAL: Attempted to get Hachimi instance before initialization");
+                process::exit(1);
+            })
+            .clone()
     }
 
     pub fn is_initialized() -> bool {
@@ -136,7 +158,7 @@ impl Hachimi {
 
             updater: Arc::default(),
 
-            config: ArcSwap::new(Arc::new(config))
+            config: ArcSwap::new(Arc::new(config)),
         })
     }
 
@@ -153,7 +175,7 @@ impl Hachimi {
                     Ok(Config::default())
                 }
             }
-        }else {
+        } else {
             Ok(Config::default())
         }
     }
@@ -220,18 +242,18 @@ impl Hachimi {
 
     pub fn on_dlopen(&self, filename: &str, handle: usize) -> bool {
         // Prevent double initialization
-        if self.hooking_finished.load(atomic::Ordering::Relaxed) { return false; }
+        if self.hooking_finished.load(atomic::Ordering::Relaxed) {
+            return false;
+        }
 
         if hachimi_impl::is_il2cpp_lib(filename) {
             info!("Got il2cpp handle");
             il2cpp::symbols::set_handle(handle);
             false
-        }
-        else if hachimi_impl::is_criware_lib(filename) {
+        } else if hachimi_impl::is_criware_lib(filename) {
             self.on_hooking_finished();
             true
-        }
-        else {
+        } else {
             false
         }
     }
@@ -257,7 +279,7 @@ impl Hachimi {
 
         hachimi_impl::on_hooking_finished(self);
 
-        for plugin in self.plugins.lock().unwrap().iter() {
+        for plugin in self.plugins.lock().expect("lock poisoned").iter() {
             info!("Initializing plugin: {}", plugin.name);
             let res = plugin.init();
             if !res.is_ok() {
@@ -392,26 +414,58 @@ pub struct Config {
 
     #[cfg(target_os = "android")]
     #[serde(flatten)]
-    pub android: hachimi_impl::Config
+    pub android: hachimi_impl::Config,
 }
 
 impl Config {
-    fn default_open_browser_url() -> String { "https://www.google.com/".to_owned() }
-    fn default_virtual_res_mult() -> f32 { 1.0 }
-    fn default_ui_scale() -> f32 { 1.0 }
-    fn default_render_scale() -> f32 { 1.0 }
-    fn default_gui_scale() -> f32 { 1.0 }
-    fn default_story_choice_auto_select_delay() -> f32 { 1.2 }
-    fn default_story_tcps_multiplier() -> f32 { 3.0 }
-    fn default_meta_index_url() -> String { "https://gitlab.com/umatl/hachimi-meta/-/raw/main/meta.json".to_owned() }
-    fn default_ui_animation_scale() -> f32 { 1.0 }
-    fn default_live_vocals_swap() -> [i32; 6] { [0; 6] }
-    pub fn default_ui_accent() -> egui::Color32 { egui::Color32::from_rgb(100, 150, 240) }
-    pub fn default_window_fill() -> egui::Color32 { egui::Color32::from_rgba_premultiplied(27, 27, 27, 220) }
-    pub fn default_panel_fill() -> egui::Color32 { egui::Color32::from_rgba_premultiplied(27, 27, 27, 220) }
-    pub fn default_extreme_bg() -> egui::Color32 { egui::Color32::from_rgb(15, 15, 15) }
-    pub fn default_text_color() -> egui::Color32 { egui::Color32::from_gray(170) }
-    pub fn default_window_rounding() -> f32 { 10.0 }
+    fn default_open_browser_url() -> String {
+        "https://www.google.com/".to_owned()
+    }
+    fn default_virtual_res_mult() -> f32 {
+        1.0
+    }
+    fn default_ui_scale() -> f32 {
+        1.0
+    }
+    fn default_render_scale() -> f32 {
+        1.0
+    }
+    fn default_gui_scale() -> f32 {
+        1.0
+    }
+    fn default_story_choice_auto_select_delay() -> f32 {
+        1.2
+    }
+    fn default_story_tcps_multiplier() -> f32 {
+        3.0
+    }
+    fn default_meta_index_url() -> String {
+        "https://gitlab.com/umatl/hachimi-meta/-/raw/main/meta.json".to_owned()
+    }
+    fn default_ui_animation_scale() -> f32 {
+        1.0
+    }
+    fn default_live_vocals_swap() -> [i32; 6] {
+        [0; 6]
+    }
+    pub fn default_ui_accent() -> egui::Color32 {
+        egui::Color32::from_rgb(100, 150, 240)
+    }
+    pub fn default_window_fill() -> egui::Color32 {
+        egui::Color32::from_rgba_premultiplied(27, 27, 27, 220)
+    }
+    pub fn default_panel_fill() -> egui::Color32 {
+        egui::Color32::from_rgba_premultiplied(27, 27, 27, 220)
+    }
+    pub fn default_extreme_bg() -> egui::Color32 {
+        egui::Color32::from_rgb(15, 15, 15)
+    }
+    pub fn default_text_color() -> egui::Color32 {
+        egui::Color32::from_gray(170)
+    }
+    pub fn default_window_rounding() -> f32 {
+        10.0
+    }
 }
 
 impl Default for Config {
@@ -426,7 +480,7 @@ pub struct OsOption<T> {
     android: Option<T>,
 
     #[cfg(target_os = "windows")]
-    windows: Option<T>
+    windows: Option<T>,
 }
 
 impl<T> OsOption<T> {
@@ -464,7 +518,7 @@ pub enum Language {
     BPortuguese,
 
     #[serde(rename = "fil")]
-    Filipino
+    Filipino,
 }
 
 impl Default for Language {
@@ -499,7 +553,7 @@ impl Language {
         Self::Indonesian.choice(),
         Self::Spanish.choice(),
         Self::BPortuguese.choice(),
-        Self::Filipino.choice()
+        Self::Filipino.choice(),
     ];
 
     pub fn set_locale(&self) {
@@ -515,7 +569,7 @@ impl Language {
             Language::Indonesian => "id",
             Language::Spanish => "es",
             Language::BPortuguese => "pt-br",
-            Language::Filipino => "fil"
+            Language::Filipino => "fil",
         }
     }
 
@@ -528,7 +582,7 @@ impl Language {
             Language::Indonesian => "Bahasa Indonesia",
             Language::Spanish => "Español (ES)",
             Language::BPortuguese => "Português (Brasil)",
-            Language::Filipino => "Filipino"
+            Language::Filipino => "Filipino",
         }
     }
 
@@ -546,14 +600,14 @@ pub struct LocalizedData {
     pub hashed_dict: FnvHashMap<u64, String>,
     pub text_data_dict: FnvHashMap<i32, FnvHashMap<i32, String>>, // {"category": {"index": "text"}}
     pub character_system_text_dict: FnvHashMap<i32, FnvHashMap<i32, String>>, // {"character_id": {"voice_id": "text"}}
-    pub race_jikkyo_comment_dict: FnvHashMap<i32, String>, // {"id": "text"}
-    pub race_jikkyo_message_dict: FnvHashMap<i32, String>, // {"id": "text"}
+    pub race_jikkyo_comment_dict: FnvHashMap<i32, String>,        // {"id": "text"}
+    pub race_jikkyo_message_dict: FnvHashMap<i32, String>,        // {"id": "text"}
     assets_path: Option<PathBuf>,
 
     pub plural_form: plurals::Resolver,
     pub ordinal_form: plurals::Resolver,
 
-    pub wrapper_penalties: Penalties
+    pub wrapper_penalties: Penalties,
 }
 
 impl LocalizedData {
@@ -568,7 +622,12 @@ impl LocalizedData {
 
             // Create .nomedia
             #[cfg(target_os = "android")]
-            { _ = fs::OpenOptions::new().create_new(true).write(true).open(ld_path.join(".nomedia")); }
+            {
+                _ = fs::OpenOptions::new()
+                    .create_new(true)
+                    .write(true)
+                    .open(ld_path.join(".nomedia"));
+            }
 
             let ld_config_path = ld_path.join("config.json");
             path = Some(ld_path);
@@ -576,13 +635,11 @@ impl LocalizedData {
             if fs::metadata(&ld_config_path).is_ok() {
                 let json = fs::read_to_string(&ld_config_path)?;
                 serde_json::from_str(&json)?
-            }
-            else {
+            } else {
                 warn!("Localized data config not found");
                 LocalizedDataConfig::default()
             }
-        }
-        else {
+        } else {
             path = None;
             LocalizedDataConfig::default()
         };
@@ -596,13 +653,15 @@ impl LocalizedData {
             localize_dict: Self::load_dict_static(&path, config.localize_dict.as_ref()).unwrap_or_default(),
             hashed_dict: Self::load_dict_static(&path, config.hashed_dict.as_ref()).unwrap_or_default(),
             text_data_dict: Self::load_dict_static(&path, config.text_data_dict.as_ref()).unwrap_or_default(),
-            character_system_text_dict: Self::load_dict_static(&path, config.character_system_text_dict.as_ref()).unwrap_or_default(),
-            race_jikkyo_comment_dict: Self::load_dict_static(&path, config.race_jikkyo_comment_dict.as_ref()).unwrap_or_default(),
-            race_jikkyo_message_dict: Self::load_dict_static(&path, config.race_jikkyo_message_dict.as_ref()).unwrap_or_default(),
-            assets_path: path.as_ref()
-                .map(|p| config.assets_dir.as_ref()
-                    .map(|dir| p.join(dir))
-                )
+            character_system_text_dict: Self::load_dict_static(&path, config.character_system_text_dict.as_ref())
+                .unwrap_or_default(),
+            race_jikkyo_comment_dict: Self::load_dict_static(&path, config.race_jikkyo_comment_dict.as_ref())
+                .unwrap_or_default(),
+            race_jikkyo_message_dict: Self::load_dict_static(&path, config.race_jikkyo_message_dict.as_ref())
+                .unwrap_or_default(),
+            assets_path: path
+                .as_ref()
+                .map(|p| config.assets_dir.as_ref().map(|dir| p.join(dir)))
                 .unwrap_or_default(),
 
             plural_form,
@@ -611,17 +670,17 @@ impl LocalizedData {
             wrapper_penalties,
 
             config,
-            path
+            path,
         })
     }
 
-    fn load_dict_static_ex<T: DeserializeOwned, P: AsRef<Path>>(ld_path_opt: &Option<PathBuf>, rel_path_opt: Option<P>, silent_fs_error: bool) -> Option<T> {
-        let Some(ld_path) = ld_path_opt else {
-            return None;
-        };
-        let Some(rel_path) = rel_path_opt else {
-            return None;
-        };
+    fn load_dict_static_ex<T: DeserializeOwned, P: AsRef<Path>>(
+        ld_path_opt: &Option<PathBuf>,
+        rel_path_opt: Option<P>,
+        silent_fs_error: bool,
+    ) -> Option<T> {
+        let ld_path = ld_path_opt.as_ref()?;
+        let rel_path = rel_path_opt?;
 
         let path = ld_path.join(rel_path);
         let json = match fs::read_to_string(&path) {
@@ -645,7 +704,10 @@ impl LocalizedData {
         Some(dict)
     }
 
-    fn load_dict_static<T: DeserializeOwned, P: AsRef<Path>>(ld_path_opt: &Option<PathBuf>, rel_path_opt: Option<P>) -> Option<T> {
+    fn load_dict_static<T: DeserializeOwned, P: AsRef<Path>>(
+        ld_path_opt: &Option<PathBuf>,
+        rel_path_opt: Option<P>,
+    ) -> Option<T> {
         Self::load_dict_static_ex(ld_path_opt, rel_path_opt, false)
     }
 
@@ -660,22 +722,19 @@ impl LocalizedData {
     fn parse_plural_form_or_default(opt: &Option<String>) -> Result<plurals::Resolver, Error> {
         if let Some(plural_form) = opt {
             Ok(plurals::Resolver::Expr(plurals::Ast::parse(plural_form)?))
-        }
-        else {
+        } else {
             Ok(plurals::Resolver::Function(|_| 0))
         }
     }
 
     fn parse_wrap_penalties_or_default(opt: &Option<PenaltiesConfig>) -> Penalties {
-        let Some(cfg) = opt else {
-            return Penalties::new()
-        };
+        let Some(cfg) = opt else { return Penalties::new() };
         Penalties {
             nline_penalty: cfg.nline_penalty,
             overflow_penalty: cfg.overflow_penalty,
             short_last_line_fraction: cfg.short_last_line_fraction,
             short_last_line_penalty: cfg.short_last_line_penalty,
-            hyphen_penalty: cfg.hyphen_penalty
+            hyphen_penalty: cfg.hyphen_penalty,
         }
     }
 
@@ -690,13 +749,15 @@ impl LocalizedData {
     pub fn load_asset_metadata<P: AsRef<Path>>(&self, rel_path: P) -> AssetMetadata {
         let mut path = rel_path.as_ref().to_owned();
         path.set_extension("json");
-        self.load_assets_dict(Some(path)).unwrap_or_else(|| AssetInfo::<()>::default()).metadata()
+        self.load_assets_dict::<AssetInfo<()>, _>(Some(path))
+            .unwrap_or_default()
+            .metadata()
     }
 
     pub fn load_asset_info<P: AsRef<Path>, T: DeserializeOwned>(&self, rel_path: P) -> AssetInfo<T> {
         let mut path = rel_path.as_ref().to_owned();
         path.set_extension("json");
-        self.load_assets_dict(Some(path)).unwrap_or_else(|| AssetInfo::default())
+        self.load_assets_dict(Some(path)).unwrap_or_default()
     }
 }
 
@@ -751,14 +812,14 @@ pub struct LocalizedDataConfig {
 
     // RESERVED
     #[serde(default)]
-    pub _debug: i32
+    pub _debug: i32,
 }
 
 #[derive(Deserialize, Clone)]
 pub struct UITextConfig {
     pub text: Option<String>,
     pub font_size: Option<i32>,
-    pub line_spacing: Option<f32>
+    pub line_spacing: Option<f32>,
 }
 
 impl Default for LocalizedDataConfig {
@@ -777,7 +838,7 @@ pub struct AssetInfo<T> {
     #[serde(default)]
     windows: AssetMetadata,
 
-    pub data: Option<T>
+    pub data: Option<T>,
 }
 
 // Can't derive(Default), see rust-lang/rust#26925
@@ -790,7 +851,7 @@ impl<T> Default for AssetInfo<T> {
             #[cfg(target_os = "windows")]
             windows: Default::default(),
 
-            data: None
+            data: None,
         }
     }
 }
@@ -815,7 +876,7 @@ impl<T> AssetInfo<T> {
 
 #[derive(Deserialize, Clone, Default)]
 pub struct AssetMetadata {
-    pub bundle_name: Option<String>
+    pub bundle_name: Option<String>,
 }
 
 #[derive(Deserialize, Clone)]
@@ -824,7 +885,7 @@ pub struct PenaltiesConfig {
     overflow_penalty: usize,
     short_last_line_fraction: usize,
     short_last_line_penalty: usize,
-    hyphen_penalty: usize
+    hyphen_penalty: usize,
 }
 
 #[derive(Deserialize, Clone)]
@@ -842,9 +903,15 @@ pub struct SkillFormatting {
     pub name_sp_mult: f32,
 }
 impl SkillFormatting {
-    fn default_length() -> i32 { 18 }
-    fn default_lines() -> i32 { 1 }
-    fn default_mult() -> f32 { 1.0 }
+    fn default_length() -> i32 {
+        18
+    }
+    fn default_lines() -> i32 {
+        1
+    }
+    fn default_mult() -> f32 {
+        1.0
+    }
 }
 
 impl Default for SkillFormatting {
@@ -854,6 +921,7 @@ impl Default for SkillFormatting {
             desc_length: 18,
             name_short_lines: 1,
             name_short_mult: 1.0,
-            name_sp_mult: 1.0 }
+            name_sp_mult: 1.0,
+        }
     }
 }

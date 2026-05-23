@@ -18,7 +18,7 @@ pub enum FormType {
     BIG_ONE_BUTTON = 9,
     BIG_TWO_BUTTON = 10,
     BIG_THREE_BUTTON = 11,
-    WITHOUT_FRAME = 12
+    WITHOUT_FRAME = 12,
 }
 
 pub fn init(umamusume: *const Il2CppImage) {

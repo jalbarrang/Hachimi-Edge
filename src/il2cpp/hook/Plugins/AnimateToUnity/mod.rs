@@ -1,17 +1,17 @@
 use crate::il2cpp::types::Il2CppImage;
 
-mod AnText;
+mod AnGlobalData;
+mod AnKeyParameter;
 mod AnMeshInfoParameterGroup;
 mod AnMeshParameter;
-pub mod AnRoot;
 mod AnMeshParameterGroup;
-mod AnRootParameter;
-mod AnMotionParameterGroup;
 mod AnMotionParameter;
-mod AnTextParameter;
-mod AnKeyParameter;
+mod AnMotionParameterGroup;
 mod AnObjectParameterBase;
-mod AnGlobalData;
+pub mod AnRoot;
+mod AnRootParameter;
+mod AnText;
+mod AnTextParameter;
 
 pub fn init(image: *const Il2CppImage) {
     AnText::init(image);

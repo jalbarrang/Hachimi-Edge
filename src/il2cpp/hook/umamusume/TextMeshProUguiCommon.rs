@@ -1,4 +1,7 @@
-use crate::{core::Hachimi, il2cpp::{ext::LocalizedDataExt, hook::Unity_TextMeshPro::TMP_Text, symbols::get_method_addr, types::*}};
+use crate::{
+    core::Hachimi,
+    il2cpp::{ext::LocalizedDataExt, hook::Unity_TextMeshPro::TMP_Text, symbols::get_method_addr, types::*},
+};
 
 type AwakeFn = extern "C" fn(this: *mut Il2CppObject);
 extern "C" fn Awake(this: *mut Il2CppObject) {

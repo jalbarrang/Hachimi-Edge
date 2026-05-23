@@ -1,0 +1,34 @@
+# =============================================================================
+# Clippy Configuration — Hachimi Edge
+# Tuned for an unsafe-heavy IL2CPP hooking codebase where most code is AI-generated.
+# =============================================================================
+
+# Cognitive complexity: default 25 is too generous for AI code.
+# AI generates deeply nested match/if chains. Force decomposition.
+cognitive-complexity-threshold = 20
+
+# Max function body lines. AI loves monolithic functions.
+too-many-lines-threshold = 100
+
+# Type complexity: IL2CPP generics can be legitimately complex,
+# but AI also generates needlessly nested types.
+type-complexity-threshold = 250
+
+# Enum variant count: IL2CPP enums can be large.
+enum-variant-size-threshold = 200
+
+# Disallowed methods: catch AI's favorite shortcuts.
+# These will trigger clippy::disallowed_methods when used outside of tests.
+disallowed-methods = [
+    # AI loves unwrap(). Every unwrap() in non-test code needs justification.
+    { path = "core::result::Result::unwrap", reason = "Use `?`, `.unwrap_or()`, `.expect(\"reason\")`, or handle the error. unwrap() panics in production." },
+    { path = "core::option::Option::unwrap", reason = "Use `?`, `.unwrap_or()`, `.expect(\"reason\")`, or handle the None case. unwrap() panics in production." },
+]
+
+# Disallowed types: uncomment when the codebase is migrated.
+# disallowed-types = [
+#     { path = "std::collections::HashMap", reason = "Use `fnv::FnvHashMap` for small maps (better perf) or justify std HashMap for large/DoS-resistant maps." },
+# ]
+
+# MSRV — prevent AI from using features not yet stable.
+msrv = "1.87.0"

@@ -1,17 +1,26 @@
-use crate::{core::Hachimi, il2cpp::{ext::{Il2CppStringExt, StringExt}, symbols::get_method_addr, types::*}};
+use crate::{
+    core::Hachimi,
+    il2cpp::{
+        ext::{Il2CppStringExt, StringExt},
+        symbols::get_method_addr,
+        types::*,
+    },
+};
 
 type GetCaptionTextFn = extern "C" fn(this: *mut Il2CppObject, info: *mut Il2CppObject) -> *mut Il2CppString;
 extern "C" fn GetCaptionText(this: *mut Il2CppObject, info: *mut Il2CppObject) -> *mut Il2CppString {
     let text = get_orig_fn!(GetCaptionText, GetCaptionTextFn)(this, info);
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     let text_utf16 = unsafe { (*text).as_utf16str() };
 
     // doesn't run through TextGenerator, remove filters
-    if text_utf16.as_slice().contains(&36) { // 36 = dollar sign ($)
-        Hachimi::instance().template_parser
+    if text_utf16.as_slice().contains(&36) {
+        // 36 = dollar sign ($)
+        Hachimi::instance()
+            .template_parser
             .remove_filters(&text_utf16.to_string())
             .to_il2cpp_string()
-    }
-    else {
+    } else {
         text
     }
 }

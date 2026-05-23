@@ -3,14 +3,15 @@ use crate::{
     il2cpp::{
         hook::UnityEngine_UI::Text,
         symbols::{get_field_from_name, get_field_object_value, get_method_addr},
-        types::*
-    }
+        types::*,
+    },
 };
 
 use super::TextFrame;
 
 static mut _TEXTFRAME_FIELD: *mut FieldInfo = 0 as _;
 fn get__textFrame(this: *mut Il2CppObject) -> *mut Il2CppObject {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     get_field_object_value(this, unsafe { _TEXTFRAME_FIELD })
 }
 
@@ -18,7 +19,12 @@ type SetFontSizeFn = extern "C" fn(this: *mut Il2CppObject, font_size: i32);
 extern "C" fn SetFontSize(this: *mut Il2CppObject, font_size: i32) {
     get_orig_fn!(SetFontSize, SetFontSizeFn)(this, font_size);
 
-    if let Some(mult) = Hachimi::instance().localized_data.load().config.text_frame_font_size_multiplier {
+    if let Some(mult) = Hachimi::instance()
+        .localized_data
+        .load()
+        .config
+        .text_frame_font_size_multiplier
+    {
         let text_frame = get__textFrame(this);
         let text_label = TextFrame::get_TextLabel(text_frame);
         let font_size = Text::get_fontSize(text_label);
@@ -30,7 +36,12 @@ type SetLineSpacingFn = extern "C" fn(this: *mut Il2CppObject, fontSize: i32);
 extern "C" fn SetLineSpacing(this: *mut Il2CppObject, fontSize: i32) {
     get_orig_fn!(SetLineSpacing, SetLineSpacingFn)(this, fontSize);
 
-    if let Some(mult) = Hachimi::instance().localized_data.load().config.text_frame_line_spacing_multiplier {
+    if let Some(mult) = Hachimi::instance()
+        .localized_data
+        .load()
+        .config
+        .text_frame_line_spacing_multiplier
+    {
         let text_frame = get__textFrame(this);
         let text_label = TextFrame::get_TextLabel(text_frame);
         let line_spacing = Text::get_lineSpacing(text_label);
@@ -47,6 +58,7 @@ pub fn init(umamusume: *const Il2CppImage) {
     new_hook!(SetFontSize_addr, SetFontSize);
     new_hook!(SetLineSpacing_addr, SetLineSpacing);
 
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe {
         _TEXTFRAME_FIELD = get_field_from_name(StoryViewTextControllerLandscape, c"_textFrame");
     }

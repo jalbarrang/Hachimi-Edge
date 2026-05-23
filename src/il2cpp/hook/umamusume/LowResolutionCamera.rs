@@ -2,7 +2,7 @@ use std::sync::atomic::{self, AtomicBool};
 
 use crate::{
     core::{game::Region, Hachimi},
-    il2cpp::{symbols::get_method_addr, types::*}
+    il2cpp::{symbols::get_method_addr, types::*},
 };
 
 static CREATING_RENDER_TEXTURE: AtomicBool = AtomicBool::new(false);

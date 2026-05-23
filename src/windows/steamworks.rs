@@ -14,29 +14,31 @@ pub struct SteamUtils(NonNull<c_void>);
 
 impl SteamUtils {
     pub fn get() -> Option<SteamUtils> {
+        // SAFETY: FFI / raw pointer operation required by IL2CPP interop
         if unsafe { SteamAPI_SteamUtils_v010_addr } == 0 {
             return None;
         }
 
-        let orig_fn: extern "C" fn() -> *mut c_void = unsafe {
-            std::mem::transmute(SteamAPI_SteamUtils_v010_addr)
-        };
+        // SAFETY: Transmute required for IL2CPP type conversion
+        let orig_fn: extern "C" fn() -> *mut c_void = unsafe { std::mem::transmute(SteamAPI_SteamUtils_v010_addr) };
 
-        NonNull::new(orig_fn()).map(|p| Self(p))
+        NonNull::new(orig_fn()).map(Self)
     }
 
     pub fn is_overlay_enabled(&self) -> bool {
-        let orig_fn: extern "C" fn(*mut c_void) -> bool = unsafe {
-            std::mem::transmute(SteamAPI_ISteamUtils_IsOverlayEnabled_addr)
-        };
+        let orig_fn: extern "C" fn(*mut c_void) -> bool =
+            // SAFETY: Transmute required for IL2CPP type conversion
+            unsafe { std::mem::transmute(SteamAPI_ISteamUtils_IsOverlayEnabled_addr) };
         orig_fn(self.0.as_ptr())
     }
 }
 
 pub fn init(steam_api: HMODULE) {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe {
         SteamAPI_SteamUtils_v010_addr = utils::get_proc_address(steam_api, c"SteamAPI_SteamUtils_v010");
-        SteamAPI_ISteamUtils_IsOverlayEnabled_addr = utils::get_proc_address(steam_api, c"SteamAPI_ISteamUtils_IsOverlayEnabled");
+        SteamAPI_ISteamUtils_IsOverlayEnabled_addr =
+            utils::get_proc_address(steam_api, c"SteamAPI_ISteamUtils_IsOverlayEnabled");
     }
 }
 

@@ -2,23 +2,19 @@ use std::sync::Mutex;
 
 use fnv::FnvHashMap;
 use once_cell::sync::Lazy;
-use sqlparser::{
-    ast::BinaryOperator,
-    dialect::SQLiteDialect,
-    keywords::Keyword,
-    parser::Parser
-};
+use sqlparser::{ast::BinaryOperator, dialect::SQLiteDialect, keywords::Keyword, parser::Parser};
 
 use crate::il2cpp::{
     api::{il2cpp_object_new, il2cpp_runtime_object_init},
     ext::Il2CppStringExt,
     sql::{self, ExprExt, SelectExt, SelectItemExt},
     symbols::get_method_addr,
-    types::*
+    types::*,
 };
 
 static mut CLASS: *mut Il2CppClass = std::ptr::null_mut();
 pub fn class() -> *mut Il2CppClass {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe { CLASS }
 }
 
@@ -33,6 +29,7 @@ pub static SELECT_QUERIES: Lazy<Mutex<FnvHashMap<usize, Box<dyn sql::SelectQuery
 
 #[inline(never)]
 fn parse_query(query: *mut Il2CppObject, sql: *const Il2CppString) {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     let sql_str = unsafe { (*sql).as_utf16str() }.to_string();
 
     // quick escape!!!11
@@ -65,7 +62,7 @@ fn parse_query(query: *mut Il2CppObject, sql: *const Il2CppString) {
             "character_system_text" => Box::new(sql::CharacterSystemTextQuery::default()),
             "race_jikkyo_comment" => Box::new(sql::RaceJikkyoCommentQuery::default()),
             "race_jikkyo_message" => Box::new(sql::RaceJikkyoMessageQuery::default()),
-            _ => return
+            _ => return,
         };
 
         // Add columns
@@ -82,7 +79,9 @@ fn parse_query(query: *mut Il2CppObject, sql: *const Il2CppString) {
         if let Some(selection) = select.selection {
             // this should visit them in order (column1 = ? AND column2 = ? ...)
             for expr in selection.binary_op_iter() {
-                if *expr.op != BinaryOperator::Eq { continue; }
+                if *expr.op != BinaryOperator::Eq {
+                    continue;
+                }
 
                 if let Some(name) = expr.left.get_ident_value() {
                     if expr.right.is_placeholder_value() {
@@ -94,7 +93,10 @@ fn parse_query(query: *mut Il2CppObject, sql: *const Il2CppString) {
         }
 
         // Add query state
-        SELECT_QUERIES.lock().unwrap().insert(query as usize, query_state);
+        SELECT_QUERIES
+            .lock()
+            .expect("lock poisoned")
+            .insert(query as usize, query_state);
     }
 }
 
@@ -131,6 +133,7 @@ pub fn init(LibNative_Runtime: *const Il2CppImage) {
     new_hook!(Query_addr, Query);
     new_hook!(PreparedQuery_addr, PreparedQuery);
 
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe {
         CLASS = Connection;
         OPEN_ADDR = get_method_addr(Connection, c"Open", 4);

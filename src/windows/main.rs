@@ -1,9 +1,18 @@
 use std::os::raw::{c_ulong, c_void};
 
 use widestring::U16CString;
-use windows::{core::PCWSTR, Win32::{Foundation::{HMODULE, TRUE}, System::LibraryLoader::LoadLibraryW}};
+use windows::{
+    core::PCWSTR,
+    Win32::{
+        Foundation::{HMODULE, TRUE},
+        System::LibraryLoader::LoadLibraryW,
+    },
+};
 
-use crate::{core::{plugin_api::Plugin, Hachimi}, windows::utils};
+use crate::{
+    core::{plugin_api::Plugin, Hachimi},
+    windows::utils,
+};
 
 use super::{hook, wnd_hook};
 
@@ -17,6 +26,7 @@ pub fn load_libraries() -> Vec<Plugin> {
             warn!("Invalid library name: {}", name);
             continue;
         };
+        // SAFETY: FFI / raw pointer operation required by IL2CPP interop
         let res = unsafe { LoadLibraryW(PCWSTR(name_cstr.as_ptr())) };
 
         if let Ok(handle) = res {
@@ -27,7 +37,8 @@ pub fn load_libraries() -> Vec<Plugin> {
                 if hachimi_init_addr != 0 {
                     plugins.push(Plugin {
                         name: name.clone(),
-                        init_fn: unsafe { std::mem::transmute(hachimi_init_addr) }
+                        // SAFETY: Transmute required for IL2CPP type conversion
+                        init_fn: unsafe { std::mem::transmute(hachimi_init_addr) },
                     });
                 }
 
@@ -47,18 +58,20 @@ pub static mut DLL_HMODULE: HMODULE = HMODULE(0 as _);
 #[allow(non_snake_case)]
 pub extern "C" fn DllMain(hmodule: HMODULE, call_reason: c_ulong, _reserved: *mut c_void) -> bool {
     if call_reason == DLL_PROCESS_ATTACH {
-        unsafe { DLL_HMODULE = hmodule; }
+        // SAFETY: FFI / raw pointer operation required by IL2CPP interop
+        unsafe {
+            DLL_HMODULE = hmodule;
+        }
         if !Hachimi::init() {
             return TRUE.into();
         }
 
         let hachimi = Hachimi::instance();
-        *hachimi.plugins.lock().unwrap() = load_libraries();
+        *hachimi.plugins.lock().expect("lock poisoned") = load_libraries();
 
         hook::init();
         info!("Attach completed");
-    }
-    else if call_reason == DLL_PROCESS_DETACH && Hachimi::is_initialized() {
+    } else if call_reason == DLL_PROCESS_DETACH && Hachimi::is_initialized() {
         wnd_hook::uninit();
 
         info!("Unhooking everything");

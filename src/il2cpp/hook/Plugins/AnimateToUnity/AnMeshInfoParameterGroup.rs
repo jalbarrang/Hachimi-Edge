@@ -1,23 +1,29 @@
 use std::ptr::null_mut;
 
-use crate::il2cpp::{symbols::{get_field_from_name, get_field_object_value, get_method_addr}, types::*};
+use crate::il2cpp::{
+    symbols::{get_field_from_name, get_field_object_value, get_method_addr},
+    types::*,
+};
 
 static mut GET_TEXTURESETNAME_ADDR: usize = 0;
 impl_addr_wrapper_fn!(get_TextureSetName, GET_TEXTURESETNAME_ADDR, *mut Il2CppString, this: *mut Il2CppObject);
 
 static mut _TEXTURESETCOLOR_FIELD: *mut FieldInfo = null_mut();
 pub fn get__textureSetColor(this: *mut Il2CppObject) -> *mut Il2CppObject {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     get_field_object_value(this, unsafe { _TEXTURESETCOLOR_FIELD })
 }
 
 static mut _TEXTURESETA_FIELD: *mut FieldInfo = null_mut();
 pub fn get__textureSetA(this: *mut Il2CppObject) -> *mut Il2CppObject {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     get_field_object_value(this, unsafe { _TEXTURESETA_FIELD })
 }
 
 pub fn init(Plugins: *const Il2CppImage) {
     get_class_or_return!(Plugins, AnimateToUnity, AnMeshInfoParameterGroup);
 
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe {
         GET_TEXTURESETNAME_ADDR = get_method_addr(AnMeshInfoParameterGroup, c"get_TextureSetName", 0);
         _TEXTURESETCOLOR_FIELD = get_field_from_name(AnMeshInfoParameterGroup, c"_textureSetColor");

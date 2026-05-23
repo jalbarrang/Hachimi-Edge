@@ -10,6 +10,7 @@ use crate::{
 
 type SetTextFn = extern "C" fn(this: *mut Il2CppObject, text: *mut Il2CppString);
 extern "C" fn SetText(this: *mut Il2CppObject, text: *mut Il2CppString) {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     let utf_str = unsafe { (*text).as_utf16str() };
     // doesn't run through TextGenerator, ignore its filters
     // 36 = dollar sign ($)

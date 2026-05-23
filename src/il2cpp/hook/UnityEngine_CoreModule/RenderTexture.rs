@@ -15,16 +15,13 @@ impl_addr_wrapper_fn!(SetActive, SETACTIVE_ADDR, (), value: *mut Il2CppObject);
 pub fn init(UnityEngine_CoreModule: *const Il2CppImage) {
     get_class_or_return!(UnityEngine_CoreModule, UnityEngine, RenderTexture);
 
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe {
         GETTEMPORARY_ADDR = get_method_addr(RenderTexture, c"GetTemporary", 2);
-        RELEASETEMPORARY_ADDR = il2cpp_resolve_icall(
-            c"UnityEngine.RenderTexture::ReleaseTemporary(UnityEngine.RenderTexture)".as_ptr()
-        );
-        GETACTIVE_ADDR = il2cpp_resolve_icall(
-            c"UnityEngine.RenderTexture::GetActive()".as_ptr()
-        );
-        SETACTIVE_ADDR = il2cpp_resolve_icall(
-            c"UnityEngine.RenderTexture::SetActive(UnityEngine.RenderTexture)".as_ptr()
-        )
+        RELEASETEMPORARY_ADDR =
+            il2cpp_resolve_icall(c"UnityEngine.RenderTexture::ReleaseTemporary(UnityEngine.RenderTexture)".as_ptr());
+        GETACTIVE_ADDR = il2cpp_resolve_icall(c"UnityEngine.RenderTexture::GetActive()".as_ptr());
+        SETACTIVE_ADDR =
+            il2cpp_resolve_icall(c"UnityEngine.RenderTexture::SetActive(UnityEngine.RenderTexture)".as_ptr())
     }
 }

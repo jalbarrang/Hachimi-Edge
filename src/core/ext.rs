@@ -16,8 +16,7 @@ impl Utf16StringExt for Utf16Str {
                 if c != c2 {
                     return false;
                 }
-            }
-            else {
+            } else {
                 return true;
             }
         }
@@ -33,8 +32,7 @@ impl Utf16StringExt for Utf16Str {
                 if c != c2 {
                     return false;
                 }
-            }
-            else {
+            } else {
                 return true;
             }
         }
@@ -47,7 +45,8 @@ impl Utf16StringExt for Utf16Str {
         let slice = self.as_slice();
         let mut i = slice.len();
         for c in slice.iter().rev() {
-            if *c == 47 || *c == 92 { // '/' OR '\\'
+            if *c == 47 || *c == 92 {
+                // '/' OR '\\'
                 break;
             }
             i -= 1;
@@ -61,7 +60,8 @@ impl Utf16StringExt for Utf16Str {
         let mut i = slice.len();
         for c in self.as_slice().iter().rev() {
             i -= 1;
-            if *c == 46 { // '.'
+            if *c == 46 {
+                // '.'
                 return &self[..i];
             }
         }
@@ -76,8 +76,7 @@ impl Utf16StringExt for Utf16Str {
                 if c != c2 {
                     return false;
                 }
-            }
-            else {
+            } else {
                 return false;
             }
         }

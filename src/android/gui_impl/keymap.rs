@@ -166,6 +166,6 @@ pub fn get_key(key_code: jint) -> Option<Key> {
         KEYCODE_F10 => Some(Key::F10),
         KEYCODE_F11 => Some(Key::F11),
         KEYCODE_F12 => Some(Key::F12),
-        _ => None
+        _ => None,
     }
 }

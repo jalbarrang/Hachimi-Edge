@@ -1,11 +1,18 @@
-use crate::il2cpp::{hook::UnityEngine_UI::Text, sql::{self, TextDataQuery}, symbols::{get_field_from_name, get_field_object_value, get_method_addr}, types::*};
+use crate::il2cpp::{
+    hook::UnityEngine_UI::Text,
+    sql::{self, TextDataQuery},
+    symbols::{get_field_from_name, get_field_object_value, get_method_addr},
+    types::*,
+};
 
 static mut NAMETEXT_FIELD: *mut FieldInfo = 0 as _;
 fn get__nameText(this: *mut Il2CppObject) -> *mut Il2CppObject {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     get_field_object_value(this, unsafe { NAMETEXT_FIELD })
 }
 static mut DESCTEXT_FIELD: *mut FieldInfo = 0 as _;
 fn get__descText(this: *mut Il2CppObject) -> *mut Il2CppObject {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     get_field_object_value(this, unsafe { DESCTEXT_FIELD })
 }
 
@@ -16,14 +23,14 @@ extern "C" fn UpdateCurrent(this: *mut Il2CppObject) {
 
     let mut skill_cfg = sql::SkillTextFormatting::default();
     if !name.is_null() {
-        skill_cfg.name = Some(sql::TextFormatting{
+        skill_cfg.name = Some(sql::TextFormatting {
             line_len: 13,
             line_count: 1,
             font_size: Text::get_fontSize(name),
         });
     }
     if !desc.is_null() {
-        skill_cfg.desc = Some(sql::TextFormatting{
+        skill_cfg.desc = Some(sql::TextFormatting {
             line_len: 18,
             line_count: 4,
             font_size: Text::get_fontSize(desc),
@@ -39,7 +46,7 @@ extern "C" fn UpdateCurrent(this: *mut Il2CppObject) {
             Text::set_horizontalOverflow(name, 1);
         }
         if !desc.is_null() {
-           Text::set_horizontalOverflow(desc, 1);
+            Text::set_horizontalOverflow(desc, 1);
         }
     }
 }
@@ -51,6 +58,7 @@ pub fn init(umamusume: *const Il2CppImage) {
 
     new_hook!(UpdateCurrent_addr, UpdateCurrent);
 
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe {
         NAMETEXT_FIELD = get_field_from_name(PartsSingleModeSkillLearningListItem, c"_nameText");
         DESCTEXT_FIELD = get_field_from_name(PartsSingleModeSkillLearningListItem, c"_descriptionText");

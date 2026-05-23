@@ -1,14 +1,25 @@
-use crate::{core::{game::Region, Hachimi}, il2cpp::{symbols::get_method_addr, types::*}};
+use crate::{
+    core::{game::Region, Hachimi},
+    il2cpp::{symbols::get_method_addr, types::*},
+};
 
 use super::RaceInfo;
 
 type SetupAndOpenFn = extern "C" fn(
-    this: *mut Il2CppObject, dialog_data: *mut Il2CppObject, on_selected: *mut Il2CppObject,
-    on_cancel: *mut Il2CppObject, is_special_unlock_race: bool, race_info: *mut Il2CppObject
+    this: *mut Il2CppObject,
+    dialog_data: *mut Il2CppObject,
+    on_selected: *mut Il2CppObject,
+    on_cancel: *mut Il2CppObject,
+    is_special_unlock_race: bool,
+    race_info: *mut Il2CppObject,
 );
 extern "C" fn SetupAndOpen(
-    this: *mut Il2CppObject, dialog_data: *mut Il2CppObject, on_selected: *mut Il2CppObject,
-    on_cancel: *mut Il2CppObject, is_special_unlock_race: bool, race_info: *mut Il2CppObject
+    this: *mut Il2CppObject,
+    dialog_data: *mut Il2CppObject,
+    on_selected: *mut Il2CppObject,
+    on_cancel: *mut Il2CppObject,
+    is_special_unlock_race: bool,
+    race_info: *mut Il2CppObject,
 ) {
     let force_allow_dynamic_camera = Hachimi::instance().config.load().force_allow_dynamic_camera;
     let mut orig_race_type = None;
@@ -18,7 +29,12 @@ extern "C" fn SetupAndOpen(
     }
 
     get_orig_fn!(SetupAndOpen, SetupAndOpenFn)(
-        this, dialog_data, on_selected, on_cancel, is_special_unlock_race, race_info
+        this,
+        dialog_data,
+        on_selected,
+        on_cancel,
+        is_special_unlock_race,
+        race_info,
     );
 
     if let Some(race_type) = orig_race_type {

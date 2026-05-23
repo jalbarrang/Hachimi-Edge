@@ -1,0 +1,9 @@
+# =============================================================================
+# Cargo Configuration — Hachimi Edge
+# =============================================================================
+
+# Aliases for common quality-gate commands
+[alias]
+lint = "clippy --all-targets -- -D warnings"
+lint-fix = "clippy --all-targets --fix --allow-dirty -- -D warnings"
+qa = "check --all-targets"

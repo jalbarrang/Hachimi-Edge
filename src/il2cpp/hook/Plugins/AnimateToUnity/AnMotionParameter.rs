@@ -1,19 +1,25 @@
-use crate::il2cpp::{symbols::{get_field_from_name, get_field_object_value}, types::*};
+use crate::il2cpp::{
+    symbols::{get_field_from_name, get_field_object_value},
+    types::*,
+};
 
 // List<AnTextParameter>
 static mut _TEXTPARAMLIST_FIELD: *mut FieldInfo = 0 as _;
 pub fn get__textParamList(this: *mut Il2CppObject) -> *mut Il2CppObject {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     get_field_object_value(this, unsafe { _TEXTPARAMLIST_FIELD })
 }
 
 static mut _PLANEPARAMLIST_FIELD: *mut FieldInfo = 0 as _;
 pub fn get__planeParamList(this: *mut Il2CppObject) -> *mut Il2CppObject {
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     get_field_object_value(this, unsafe { _PLANEPARAMLIST_FIELD })
 }
 
 pub fn init(Plugins: *const Il2CppImage) {
     get_class_or_return!(Plugins, AnimateToUnity, AnMotionParameter);
 
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe {
         _TEXTPARAMLIST_FIELD = get_field_from_name(AnMotionParameter, c"_textParamList");
         _PLANEPARAMLIST_FIELD = get_field_from_name(AnMotionParameter, c"_planeParamList");

@@ -16,8 +16,7 @@ pub enum KeyboardType {
     Social,
     Search,
     DecimalPad,
-    OneTimeCode
+    OneTimeCode,
 }
 
-pub fn init(_UnityEngine_CoreModule: *const Il2CppImage) {
-}
+pub fn init(_UnityEngine_CoreModule: *const Il2CppImage) {}

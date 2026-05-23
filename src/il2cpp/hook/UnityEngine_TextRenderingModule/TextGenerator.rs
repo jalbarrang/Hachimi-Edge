@@ -1,14 +1,25 @@
 use std::ops::Not;
 
-use crate::{core::{template, Hachimi}, il2cpp::{ext::{Il2CppStringExt, StringExt}, symbols::get_method_addr, types::*}};
+use crate::{
+    core::{template, Hachimi},
+    il2cpp::{
+        ext::{Il2CppStringExt, StringExt},
+        symbols::get_method_addr,
+        types::*,
+    },
+};
 
 type PopulateWithErrorsFn = extern "C" fn(
-    this: *mut Il2CppObject, str: *mut Il2CppString,
-    settings: TextGenerationSettings_t, context: *mut Il2CppObject
+    this: *mut Il2CppObject,
+    str: *mut Il2CppString,
+    settings: TextGenerationSettings_t,
+    context: *mut Il2CppObject,
 ) -> bool;
 extern "C" fn PopulateWithErrors(
-    this: *mut Il2CppObject, str_: *mut Il2CppString,
-    mut settings: TextGenerationSettings_t, context: *mut Il2CppObject
+    this: *mut Il2CppObject,
+    str_: *mut Il2CppString,
+    mut settings: TextGenerationSettings_t,
+    context: *mut Il2CppObject,
 ) -> bool {
     let orig_fn = get_orig_fn!(PopulateWithErrors, PopulateWithErrorsFn);
     let localized_data = &Hachimi::instance().localized_data.load();
@@ -19,7 +30,10 @@ extern "C" fn PopulateWithErrors(
     let ld_str: String;
 
     // Check if the hashed dict has a match.
-    let hashed_text = hashed_dict.is_empty().not()
+    let hashed_text = hashed_dict
+        .is_empty()
+        .not()
+        // SAFETY: FFI / raw pointer operation required by IL2CPP interop
         .then(|| hashed_dict.get(&unsafe { (*str_).hash() }))
         .flatten();
     if let Some(text) = hashed_text {
@@ -28,8 +42,10 @@ extern "C" fn PopulateWithErrors(
     }
     // The string can be localized or original. Skip if we are sure it's not localized.
     else if !localized_data.localize_dict.is_empty() || !localized_data.text_data_dict.is_empty() {
+        // SAFETY: FFI / raw pointer operation required by IL2CPP interop
         let utf_str = unsafe { (*str_).as_utf16str() };
-        if utf_str.as_slice().contains(&36) { // 36 = dollar sign ($)
+        if utf_str.as_slice().contains(&36) {
+            // 36 = dollar sign ($)
             has_template = true;
             ld_str = utf_str.to_string();
             new_str = Some(&ld_str);
@@ -40,22 +56,22 @@ extern "C" fn PopulateWithErrors(
         // Only try to evaluate a template if it looked like one
         if has_template {
             let mut template_context = TemplateContext {
-                settings: &mut settings
+                settings: &mut settings,
             };
-            let tpl_text = &Hachimi::instance().template_parser.eval_with_context(text, &mut template_context);
+            let tpl_text = &Hachimi::instance()
+                .template_parser
+                .eval_with_context(text, &mut template_context);
             orig_fn(this, tpl_text.to_il2cpp_string(), settings, context)
-        }
-        else {
+        } else {
             orig_fn(this, text.to_il2cpp_string(), settings, context)
         }
-    }
-    else {
+    } else {
         orig_fn(this, str_, settings, context)
     }
 }
 
 struct TemplateContext<'a> {
-    settings: &'a mut TextGenerationSettings_t
+    settings: &'a mut TextGenerationSettings_t,
 }
 
 impl<'a> template::Context for TemplateContext<'a> {
@@ -73,12 +89,12 @@ impl<'a> template::Context for TemplateContext<'a> {
                 // 4  5  6
                 // 7  8  9
                 // Example: $(anchor 6) = middle right
-                let value = args.get(0)?;
+                let value = args.first()?;
                 let template::Token::NumberLit(anchor_num) = *value else {
                     return None;
                 };
                 let anchor = (anchor_num as i32) - 1;
-                if anchor < 0 || anchor > 8 {
+                if !(0..=8).contains(&anchor) {
                     return None;
                 }
                 self.settings.textAnchor = anchor;
@@ -86,7 +102,7 @@ impl<'a> template::Context for TemplateContext<'a> {
 
             "scale" => {
                 // Example: $(scale 80) = scale font size to 80%
-                let value = args.get(0)?;
+                let value = args.first()?;
                 let template::Token::NumberLit(percentage) = value else {
                     return None;
                 };
@@ -95,7 +111,7 @@ impl<'a> template::Context for TemplateContext<'a> {
 
             "ho" => {
                 // $(ho 0) or $(ho 1)
-                let value = args.get(0)?;
+                let value = args.first()?;
                 let template::Token::NumberLit(overflow_num) = *value else {
                     return None;
                 };
@@ -108,7 +124,7 @@ impl<'a> template::Context for TemplateContext<'a> {
 
             "vo" => {
                 // $(vo 0) or $(vo 1)
-                let value = args.get(0)?;
+                let value = args.first()?;
                 let template::Token::NumberLit(overflow_num) = *value else {
                     return None;
                 };
@@ -120,7 +136,7 @@ impl<'a> template::Context for TemplateContext<'a> {
             }
 
             "ls" => {
-                let value = args.get(0)?;
+                let value = args.first()?;
                 let template::Token::NumberLit(ls) = *value else {
                     return None;
                 };
@@ -131,7 +147,7 @@ impl<'a> template::Context for TemplateContext<'a> {
                 self.settings.updateBounds = true;
             }
 
-            _ => return None
+            _ => return None,
         }
 
         Some(String::new())
@@ -145,7 +161,7 @@ impl template::Context for IgnoreTGFiltersContext {
     fn on_filter_eval(&mut self, _name: &str, _args: &[template::Token]) -> Option<String> {
         match _name {
             "nb" | "anchor" | "scale" | "ho" | "vo" | "ls" | "ub" => Some(String::new()),
-            _ => None
+            _ => None,
         }
     }
 }

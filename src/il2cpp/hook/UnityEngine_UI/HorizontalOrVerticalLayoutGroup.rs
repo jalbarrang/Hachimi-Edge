@@ -8,9 +8,11 @@ impl_addr_wrapper_fn!(set_childControlHeight, SET_CHILDCONTROLHEIGHT_ADDR, (), t
 
 pub fn init(UnityEngine_UI: *const Il2CppImage) {
     get_class_or_return!(UnityEngine_UI, "UnityEngine.UI", HorizontalOrVerticalLayoutGroup);
-    
+
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe {
-        SET_CHILDFORCEEXPANDHEIGHT_ADDR = get_method_addr(HorizontalOrVerticalLayoutGroup, c"set_childForceExpandHeight", 1);
+        SET_CHILDFORCEEXPANDHEIGHT_ADDR =
+            get_method_addr(HorizontalOrVerticalLayoutGroup, c"set_childForceExpandHeight", 1);
         SET_CHILDCONTROLHEIGHT_ADDR = get_method_addr(HorizontalOrVerticalLayoutGroup, c"set_childControlHeight", 1);
     }
 }

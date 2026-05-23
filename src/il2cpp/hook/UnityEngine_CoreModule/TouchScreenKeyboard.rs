@@ -1,11 +1,14 @@
-use crate::{il2cpp::{symbols::{get_method_addr, get_method_overload_addr}, types::*}};
 use super::TouchScreenKeyboardType;
+use crate::il2cpp::{
+    symbols::{get_method_addr, get_method_overload_addr},
+    types::*,
+};
 
 static mut OPEN_ADDR: usize = 0;
 impl_addr_wrapper_fn!(
-    Open, 
-    OPEN_ADDR, 
-    *mut Il2CppObject, 
+    Open,
+    OPEN_ADDR,
+    *mut Il2CppObject,
     text: *mut Il2CppString,
     keyboardType: TouchScreenKeyboardType::KeyboardType,
     autocorrection: bool,
@@ -22,7 +25,7 @@ pub enum Status {
     Visible,
     Done,
     Canceled,
-    LostFocus
+    LostFocus,
 }
 
 static mut GET_STATUS_ADDR: usize = 0;
@@ -40,17 +43,18 @@ impl_addr_wrapper_fn!(set_selection, SET_SELECTION_ADDR, (), this: *mut Il2CppOb
 pub fn init(UnityEngine_CoreModule: *const Il2CppImage) {
     get_class_or_return!(UnityEngine_CoreModule, UnityEngine, TouchScreenKeyboard);
 
+    // SAFETY: FFI / raw pointer operation required by IL2CPP interop
     unsafe {
         OPEN_ADDR = get_method_overload_addr(
-            TouchScreenKeyboard, 
-            "Open", 
+            TouchScreenKeyboard,
+            "Open",
             &[
-                Il2CppTypeEnum_IL2CPP_TYPE_STRING,   // String text
+                Il2CppTypeEnum_IL2CPP_TYPE_STRING,    // String text
                 Il2CppTypeEnum_IL2CPP_TYPE_VALUETYPE, // TouchScreenKeyboardType (Enum)
-                Il2CppTypeEnum_IL2CPP_TYPE_BOOLEAN,  // Boolean autocorrection
-                Il2CppTypeEnum_IL2CPP_TYPE_BOOLEAN,  // Boolean multiline
-                Il2CppTypeEnum_IL2CPP_TYPE_BOOLEAN,  // Boolean secure
-            ]
+                Il2CppTypeEnum_IL2CPP_TYPE_BOOLEAN,   // Boolean autocorrection
+                Il2CppTypeEnum_IL2CPP_TYPE_BOOLEAN,   // Boolean multiline
+                Il2CppTypeEnum_IL2CPP_TYPE_BOOLEAN,   // Boolean secure
+            ],
         );
         GET_TEXT_ADDR = get_method_addr(TouchScreenKeyboard, c"get_text", 0);
         GET_STATUS_ADDR = get_method_addr(TouchScreenKeyboard, c"get_status", 0);
