@@ -600,7 +600,7 @@ unsafe extern "C" fn gui_register_overlay(
         let Ok(id) = CStr::from_ptr(id).to_str() else {
             return false;
         };
-        gui::register_plugin_overlay(id.to_owned(), callback, userdata);
+        super::overlay::register_plugin_overlay(id.to_owned(), callback, userdata);
         true
     }
 }

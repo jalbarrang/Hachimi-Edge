@@ -51,6 +51,10 @@ use crate::il2cpp::hook::UnityEngine_CoreModule::QualitySettings;
 use super::{
     hachimi::{self, Language, REPO_PATH, WEBSITE_URL},
     http::AsyncRequest,
+    plugin::{
+        overlay,
+        types::{GuiMenuCallback as PluginMenuCallback, GuiMenuSectionCallback as PluginMenuSectionCallback},
+    },
     tl_repo::{self, RepoInfo},
     utils::{self, get_localized_string, SendPtr},
     Hachimi,
@@ -121,10 +125,6 @@ static PLUGIN_MENU_ITEMS: Lazy<Mutex<Vec<PluginMenuItem>>> = Lazy::new(|| Mutex:
 static PLUGIN_MENU_SECTIONS: Lazy<Mutex<Vec<PluginMenuSection>>> = Lazy::new(|| Mutex::new(Vec::new()));
 static PLUGIN_MENU_ICONS: Lazy<Mutex<HashMap<String, PluginMenuIcon>>> = Lazy::new(|| Mutex::new(HashMap::new()));
 static PLUGIN_NOTIFICATIONS: Lazy<Mutex<Vec<String>>> = Lazy::new(|| Mutex::new(Vec::new()));
-static PLUGIN_OVERLAYS: Lazy<Mutex<Vec<PluginOverlay>>> = Lazy::new(|| Mutex::new(Vec::new()));
-
-pub type PluginMenuCallback = extern "C" fn(userdata: *mut c_void);
-pub type PluginMenuSectionCallback = extern "C" fn(ui: *mut c_void, userdata: *mut c_void);
 
 #[derive(Clone)]
 struct PluginMenuItem {
@@ -143,13 +143,6 @@ struct PluginMenuIcon {
 struct PluginMenuSection {
     title: Option<String>,
     icon: Option<PluginMenuIcon>,
-    callback: PluginMenuSectionCallback,
-    userdata: usize,
-}
-
-#[derive(Clone)]
-struct PluginOverlay {
-    id: String,
     callback: PluginMenuSectionCallback,
     userdata: usize,
 }
@@ -215,18 +208,6 @@ pub fn register_plugin_menu_icon(label: String, uri: String, bytes: Vec<u8>) -> 
 
 pub fn enqueue_plugin_notification(message: String) {
     PLUGIN_NOTIFICATIONS.lock().expect("lock poisoned").push(message);
-}
-
-pub fn register_plugin_overlay(id: String, callback: PluginMenuSectionCallback, userdata: *mut c_void) {
-    PLUGIN_OVERLAYS.lock().expect("lock poisoned").push(PluginOverlay {
-        id,
-        callback,
-        userdata: userdata as usize,
-    });
-}
-
-fn get_plugin_overlays() -> Vec<PluginOverlay> {
-    PLUGIN_OVERLAYS.lock().expect("lock poisoned").clone()
 }
 
 fn get_plugin_menu_items() -> Vec<PluginMenuItem> {
@@ -1414,7 +1395,7 @@ impl Gui {
     }
 
     fn run_overlays(&mut self) {
-        let overlays = get_plugin_overlays();
+        let overlays = overlay::get_plugin_overlays();
         if overlays.is_empty() {
             return;
         }
@@ -1433,7 +1414,12 @@ impl Gui {
                         .corner_radius(egui::CornerRadius::same((6.0 * scale) as u8))
                         .inner_margin(egui::Margin::same((8.0 * scale) as i8))
                         .show(ui, |ui| {
-                            (overlay.callback)(ui as *mut egui::Ui as *mut c_void, overlay.userdata as *mut c_void);
+                            let _ = panic::catch_unwind(AssertUnwindSafe(|| {
+                                (overlay.callback)(ui as *mut egui::Ui as *mut c_void, overlay.userdata as *mut c_void);
+                            }))
+                            .inspect_err(|_| {
+                                error!("plugin overlay callback panicked: {}", overlay.id);
+                            });
                         });
                 });
         }
@@ -1449,7 +1435,7 @@ impl Gui {
             && !self.update_progress_visible
             && self.notifications.is_empty()
             && self.windows.is_empty()
-            && PLUGIN_OVERLAYS.lock().map_or(true, |o| o.is_empty())
+            && !overlay::has_plugin_overlays()
     }
 
     pub fn is_consuming_input(&self) -> bool {
