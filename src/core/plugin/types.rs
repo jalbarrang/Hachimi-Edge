@@ -1,3 +1,7 @@
+//! Shared Rust-side plugin SDK types.
+//! Defines plugin metadata, init result values, and callback signatures used by the ABI.
+//! These types are referenced by `api` and by plugin loading code.
+
 use std::ffi::c_void;
 
 use super::api::{init_plugin, Vtable};

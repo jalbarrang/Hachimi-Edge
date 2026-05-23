@@ -1,3 +1,8 @@
+//! Plugin menu registration and shared menu state.
+//! Stores plugin menu items, custom sections, and optional icon payloads.
+//! State is guarded by `Lazy<Mutex<_>>` so plugins can register entries safely across threads.
+//! GUI consumers read cloned snapshots and lookup helpers instead of owning this state.
+
 use std::{
     collections::HashMap,
     ffi::c_void,

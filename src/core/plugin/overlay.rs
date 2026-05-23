@@ -1,3 +1,8 @@
+//! Plugin overlay registration and shared overlay state.
+//! Overlays are registered once, stored behind `Lazy<Mutex<_>>`, and may be queued from plugin init.
+//! The render side clones a snapshot via `get_plugin_overlays()` before invoking callbacks.
+//! This snap-and-render pattern keeps lock scope short on the render thread.
+
 use std::{ffi::c_void, sync::Mutex};
 
 use once_cell::sync::Lazy;

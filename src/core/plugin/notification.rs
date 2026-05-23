@@ -1,3 +1,7 @@
+//! Plugin notification queue shared with the GUI layer.
+//! Plugins may enqueue messages from any thread through a `Lazy<Mutex<_>>` buffer.
+//! The render thread drains the queue in batches before displaying notifications.
+
 use std::sync::Mutex;
 
 use once_cell::sync::Lazy;

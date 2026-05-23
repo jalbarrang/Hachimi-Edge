@@ -1,3 +1,8 @@
+//! C ABI surface for the plugin SDK.
+//! `Vtable` is passed to plugins during init and is version-gated by `VERSION`.
+//! Field order is part of the ABI: append new entries only at the end.
+//! The functions in this module are the host-side FFI wrappers behind that table.
+
 use std::ffi::{c_char, c_void, CStr};
 
 use egui::Align;
