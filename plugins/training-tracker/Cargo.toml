@@ -1,0 +1,72 @@
+[package]
+name = "hachimi-training-tracker"
+version = "0.1.0"
+edition = "2021"
+description = "Hachimi plugin that tracks training facility visits during career mode"
+
+[lib]
+name = "hachimi_training_tracker"
+crate-type = ["cdylib", "lib"]
+
+# ============================================================================
+# Lint Configuration — mirrors core crate policy
+# CI runs `clippy -- -D warnings` so all warns become errors in pipeline.
+# ============================================================================
+[lints.rust]
+unsafe_op_in_unsafe_fn = "warn"
+improper_ctypes = "warn"
+improper_ctypes_definitions = "warn"
+non_ascii_idents = "deny"
+unnecessary_transmutes = "allow"
+
+[lints.clippy]
+correctness = { level = "deny", priority = -1 }
+suspicious = { level = "warn", priority = -1 }
+style = { level = "warn", priority = -1 }
+complexity = { level = "warn", priority = -1 }
+perf = { level = "warn", priority = -1 }
+
+# Safety-critical
+undocumented_unsafe_blocks = "warn"
+transmute_ptr_to_ref = "warn"
+
+# Anti-AI-slop
+unwrap_in_result = "allow"
+panic_in_result_fn = "allow"
+redundant_clone = "warn"
+cloned_instead_of_copied = "warn"
+implicit_clone = "warn"
+
+# IL2CPP FFI patterns — allow inherent unsafe patterns
+as_underscore = "allow"
+fn_to_numeric_cast = "allow"
+fn_to_numeric_cast_any = "allow"
+ptr_as_ptr = "allow"
+cast_possible_truncation = "allow"
+cast_sign_loss = "allow"
+cast_possible_wrap = "allow"
+needless_pass_by_value = "allow"
+missing_safety_doc = "allow"
+missing_transmute_annotations = "allow"
+useless_transmute = "allow"
+transmute_undefined_repr = "allow"
+type_complexity = "allow"
+len_without_is_empty = "allow"
+too_many_lines = "allow"
+cognitive_complexity = "allow"
+
+# Explicitly allow
+module_name_repetitions = "allow"
+too_many_arguments = "allow"
+wildcard_imports = "allow"
+cast_lossless = "allow"
+used_underscore_binding = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+doc_markdown = "allow"
+
+[profile.release]
+opt-level = 3
+strip = true
+lto = "fat"
+codegen-units = 1

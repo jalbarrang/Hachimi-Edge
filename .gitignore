@@ -1,7 +1,7 @@
 /build
 /target
 /.vscode
-/plugins
+
 dump.cs
 
 # Beads / Dolt files (added by bd init)
