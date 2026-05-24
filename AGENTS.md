@@ -1,4 +1,11 @@
-# Agent Guidelines — Hachimi Edge
+# Agent Instructions
+
+## Code Conventions
+
+- Always run clippy and rust-fmt after writing code.
+- Test the code generated and avoid regressions.
+- The lesser the code the better maintainability.
+    - If a file starts to get bigger, decompose it.
 
 ## Hard Rules
 
@@ -6,7 +13,7 @@
 - **Never kill game processes.** Do not use `taskkill` or equivalent on game processes.
 - **Never modify the backup DLL** at `cri_mana_vpx.dll.backup` in the game directory.
 
-## Documentation
+## Extra Documentation
 
 Read these on demand — don't load everything upfront.
 

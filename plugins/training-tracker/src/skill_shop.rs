@@ -51,7 +51,10 @@ pub fn get_cached() -> Vec<SkillShopEntry> {
 pub fn refresh() {
     let entries = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(read_skill_shop)) {
         Ok(v) => v,
-        Err(_) => { hlog_error!("skill shop refresh PANICKED"); Vec::new() }
+        Err(_) => {
+            hlog_error!("skill shop refresh PANICKED");
+            Vec::new()
+        }
     };
     if let Ok(mut guard) = SHOP_CACHE.lock() {
         *guard = entries;
@@ -65,14 +68,14 @@ pub fn refresh() {
 struct Resolved {
     // MasterDataManager (singleton)
     mdm_klass: *mut c_void,
-    m_get_master_skill_data: *const c_void,      // → MasterSkillData
-    m_get_skill_need_point: *const c_void,        // → MasterSingleModeSkillNeedPoint
+    m_get_master_skill_data: *const c_void, // → MasterSkillData
+    m_get_skill_need_point: *const c_void,  // → MasterSingleModeSkillNeedPoint
 
     // MasterSkillData
-    m_msd_get_list_by_group: *const c_void,       // GetListWithGroupIdOrderByIdAsc(int)
+    m_msd_get_list_by_group: *const c_void, // GetListWithGroupIdOrderByIdAsc(int)
 
     // MasterSingleModeSkillNeedPoint
-    m_snp_get: *const c_void,                     // Get(int) → SingleModeSkillNeedPoint
+    m_snp_get: *const c_void, // Get(int) → SingleModeSkillNeedPoint
 
     // MasterSkillData.SkillData fields/methods
     f_sd_id: *mut c_void,
@@ -94,7 +97,9 @@ struct Resolved {
     f_skill_point: *mut c_void,
 }
 
+// SAFETY: IL2CPP pointers are stable for process lifetime.
 unsafe impl Send for Resolved {}
+// SAFETY: IL2CPP pointers are stable for process lifetime.
 unsafe impl Sync for Resolved {}
 
 static RESOLVED: OnceLock<Resolved> = OnceLock::new();
@@ -104,43 +109,56 @@ static RESOLVED: OnceLock<Resolved> = OnceLock::new();
 // ---------------------------------------------------------------------------
 
 #[inline]
-unsafe fn mptr(mi: *const c_void) -> usize { unsafe { *(mi as *const usize) } }
+unsafe fn mptr(mi: *const c_void) -> usize {
+    // SAFETY: Reading field or calling method on non-null IL2CPP object pointer.
+    unsafe { *(mi as *const usize) }
+}
 
 #[inline]
 unsafe fn call_obj(this: *mut c_void, mi: *const c_void) -> *mut c_void {
+    // SAFETY: Transmuting IL2CPP MethodInfo pointer to callable function pointer.
     let f: extern "C" fn(*mut c_void, *const c_void) -> *mut c_void = unsafe { std::mem::transmute(mptr(mi)) };
     f(this, mi)
 }
 
 #[inline]
 unsafe fn call_i32(this: *mut c_void, mi: *const c_void) -> i32 {
+    // SAFETY: Transmuting IL2CPP MethodInfo pointer to callable function pointer.
     let f: extern "C" fn(*mut c_void, *const c_void) -> i32 = unsafe { std::mem::transmute(mptr(mi)) };
     f(this, mi)
 }
 
 #[inline]
 unsafe fn call_obj_i32(this: *mut c_void, mi: *const c_void, arg: i32) -> *mut c_void {
+    // SAFETY: Transmuting IL2CPP MethodInfo pointer to callable function pointer.
     let f: extern "C" fn(*mut c_void, i32, *const c_void) -> *mut c_void = unsafe { std::mem::transmute(mptr(mi)) };
     f(this, arg, mi)
 }
 
 unsafe fn read_string(s: *mut c_void) -> Option<String> {
+    // SAFETY: Reading field or calling method on non-null IL2CPP object pointer.
     unsafe {
-        if s.is_null() { return None; }
+        if s.is_null() {
+            return None;
+        }
         let len = *(s.byte_add(0x10) as *const i32);
-        if len <= 0 || len > 4096 { return None; }
+        if len <= 0 || len > 4096 {
+            return None;
+        }
         String::from_utf16(std::slice::from_raw_parts(s.byte_add(0x14) as *const u16, len as usize)).ok()
     }
 }
 
 unsafe fn read_field_i32(obj: *mut c_void, field: *mut c_void) -> i32 {
     let mut v: i32 = 0;
+    // SAFETY: IL2CPP FFI call; host vtable and resolved symbols are valid for process lifetime.
     unsafe { (vt().il2cpp_get_field_value)(obj.cast(), field.cast(), &mut v as *mut _ as *mut c_void) };
     v
 }
 
 unsafe fn decrypt_obscured_int(obj: *mut c_void, field: *mut c_void) -> i32 {
     let mut buf = [0u8; 16];
+    // SAFETY: IL2CPP FFI call; host vtable and resolved symbols are valid for process lifetime.
     unsafe { (vt().il2cpp_get_field_value)(obj.cast(), field.cast(), buf.as_mut_ptr() as *mut c_void) };
     let raw: [u8; 8] = [buf[0], buf[1], buf[2], buf[3], buf[4], buf[5], buf[6], buf[7]];
     decrypt_obscured_int_raw(&raw)
@@ -151,42 +169,81 @@ unsafe fn decrypt_obscured_int(obj: *mut c_void, field: *mut c_void) -> i32 {
 // ---------------------------------------------------------------------------
 
 fn ensure_resolved() -> bool {
-    if RESOLVED.get().is_some() { return true; }
+    if RESOLVED.get().is_some() {
+        return true;
+    }
     match try_resolve() {
-        Ok(r) => { let _ = RESOLVED.set(r); true }
-        Err(e) => { hlog_error!("Skill shop resolution failed: {}", e); false }
+        Ok(r) => {
+            let _ = RESOLVED.set(r);
+            true
+        }
+        Err(e) => {
+            hlog_error!("Skill shop resolution failed: {}", e);
+            false
+        }
     }
 }
 
 macro_rules! resolve {
     (class $img:expr, $ns:literal, $name:literal) => {{
-        let k = unsafe { (vt().il2cpp_get_class)($img, concat!($ns, "\0").as_ptr().cast(), concat!($name, "\0").as_ptr().cast()) };
-        if k.is_null() { return Err(concat!($name, " not found")); }
+        // SAFETY: IL2CPP FFI call; class namespace and name are valid C strings.
+        let k = unsafe {
+            (vt().il2cpp_get_class)(
+                $img,
+                concat!($ns, "\0").as_ptr() as *const std::ffi::c_char,
+                concat!($name, "\0").as_ptr() as *const std::ffi::c_char,
+            )
+        };
+        if k.is_null() {
+            return Err(concat!($name, " not found"));
+        }
         k
     }};
     (nested $parent:expr, $name:literal) => {{
-        let k = unsafe { (vt().il2cpp_find_nested_class)($parent, concat!($name, "\0").as_ptr().cast()) };
-        if k.is_null() { return Err(concat!("nested ", $name, " not found")); }
+        // SAFETY: IL2CPP FFI call; nested class name is a valid C string.
+        let k = unsafe {
+            (vt().il2cpp_find_nested_class)($parent, concat!($name, "\0").as_ptr() as *const std::ffi::c_char)
+        };
+        if k.is_null() {
+            return Err(concat!("nested ", $name, " not found"));
+        }
         k
     }};
     (method $klass:expr, $name:literal, $args:expr) => {{
-        let m = unsafe { (vt().il2cpp_get_method)($klass, concat!($name, "\0").as_ptr().cast(), $args) };
-        if m.is_null() { return Err(concat!($name, " method not found")); }
+        // SAFETY: IL2CPP FFI call; method name is a valid C string.
+        let m = unsafe {
+            (vt().il2cpp_get_method)($klass, concat!($name, "\0").as_ptr() as *const std::ffi::c_char, $args)
+        };
+        if m.is_null() {
+            return Err(concat!($name, " method not found"));
+        }
         m as *const c_void
     }};
     (field $klass:expr, $name:literal) => {{
-        let f = unsafe { (vt().il2cpp_get_field_from_name)($klass, concat!($name, "\0").as_ptr().cast()) };
-        if f.is_null() { return Err(concat!($name, " field not found")); }
+        // SAFETY: IL2CPP FFI call; field name is a valid C string.
+        let f = unsafe {
+            (vt().il2cpp_get_field_from_name)($klass, concat!($name, "\0").as_ptr() as *const std::ffi::c_char)
+        };
+        if f.is_null() {
+            return Err(concat!($name, " field not found"));
+        }
         f as *mut c_void
     }};
     (field_opt $klass:expr, $name:literal) => {{
-        unsafe { (vt().il2cpp_get_field_from_name)($klass, concat!($name, "\0").as_ptr().cast()) as *mut c_void }
+        // SAFETY: IL2CPP FFI call; field name is a valid C string.
+        unsafe {
+            (vt().il2cpp_get_field_from_name)($klass, concat!($name, "\0").as_ptr() as *const std::ffi::c_char)
+                as *mut c_void
+        }
     }};
 }
 
 fn try_resolve() -> Result<Resolved, &'static str> {
-    let img = unsafe { (vt().il2cpp_get_assembly_image)(b"umamusume.dll\0".as_ptr().cast()) };
-    if img.is_null() { return Err("umamusume.dll not found"); }
+    // SAFETY: IL2CPP FFI call; host vtable and resolved symbols are valid for process lifetime.
+    let img = unsafe { (vt().il2cpp_get_assembly_image)(c"umamusume.dll".as_ptr()) };
+    if img.is_null() {
+        return Err("umamusume.dll not found");
+    }
 
     // MasterDataManager (singleton hub)
     let mdm = resolve!(class img, "Gallop", "MasterDataManager");
@@ -228,9 +285,15 @@ fn try_resolve() -> Result<Resolved, &'static str> {
         m_get_skill_need_point: m_get_snp,
         m_msd_get_list_by_group: m_msd_get_list,
         m_snp_get,
-        f_sd_id, f_sd_rarity, f_sd_group_rate: f_sd_grate, f_sd_grade_value: f_sd_grade, m_sd_get_name: m_sd_name,
+        f_sd_id,
+        f_sd_rarity,
+        f_sd_group_rate: f_sd_grate,
+        f_sd_grade_value: f_sd_grade,
+        m_sd_get_name: m_sd_name,
         f_snp_need_skill_point: f_snp_cost,
-        f_tips_group_id: f_gid, f_tips_rarity: f_rar, f_tips_level: f_lvl,
+        f_tips_group_id: f_gid,
+        f_tips_rarity: f_rar,
+        f_tips_level: f_lvl,
         f_skill_point: f_sp,
     })
 }
@@ -241,8 +304,11 @@ fn try_resolve() -> Result<Resolved, &'static str> {
 
 pub fn read_skill_points() -> Option<i32> {
     let r = RESOLVED.get()?;
-    if r.f_skill_point.is_null() { return None; }
+    if r.f_skill_point.is_null() {
+        return None;
+    }
     let chara = memory_reader::get_chara_ptr()?;
+    // SAFETY: Reading field or calling method on non-null IL2CPP object pointer.
     Some(unsafe { decrypt_obscured_int(chara, r.f_skill_point) })
 }
 
@@ -251,98 +317,150 @@ pub fn read_skill_points() -> Option<i32> {
 // ---------------------------------------------------------------------------
 
 fn read_skill_shop() -> Vec<SkillShopEntry> {
-    if !ensure_resolved() { return Vec::new(); }
-    let r = match RESOLVED.get() { Some(r) => r, None => return Vec::new() };
+    if !ensure_resolved() {
+        return Vec::new();
+    }
+    let r = match RESOLVED.get() {
+        Some(r) => r,
+        None => return Vec::new(),
+    };
 
-    let chara = match memory_reader::get_chara_ptr() { Some(c) => c, None => return Vec::new() };
+    let chara = match memory_reader::get_chara_ptr() {
+        Some(c) => c,
+        None => return Vec::new(),
+    };
 
     // Get MasterDataManager singleton
+    // SAFETY: IL2CPP FFI call; host vtable and resolved symbols are valid for process lifetime.
     let mdm = unsafe { (vt().il2cpp_get_singleton_like_instance)(r.mdm_klass.cast()) };
-    if mdm.is_null() { hlog_warn!("MasterDataManager singleton is null"); return Vec::new(); }
-    let mdm = mdm as *mut c_void;
+    if mdm.is_null() {
+        hlog_warn!("MasterDataManager singleton is null");
+        return Vec::new();
+    }
 
     // Get master data table instances
+    // SAFETY: Reading field or calling method on non-null IL2CPP object pointer.
     let msd = unsafe { call_obj(mdm, r.m_get_master_skill_data) };
+    // SAFETY: Reading field or calling method on non-null IL2CPP object pointer.
     let snp = unsafe { call_obj(mdm, r.m_get_skill_need_point) };
-    if msd.is_null() { hlog_warn!("MasterSkillData is null"); return Vec::new(); }
+    if msd.is_null() {
+        hlog_warn!("MasterSkillData is null");
+        return Vec::new();
+    }
 
     // Learned IDs
     let learned = memory_reader::read_acquired_skills();
     let learned_ids: Vec<i32> = learned.iter().map(|s| s.master_id).collect();
 
     // Read tips
-    let (list_ptr, count, m_get_item) = match unsafe { memory_reader::read_list_field(chara, b"_skillTipsList\0") } {
+    // SAFETY: Reading field or calling method on non-null IL2CPP object pointer.
+    let (list_ptr, count, m_get_item) = match unsafe { memory_reader::read_list_field(chara, c"_skillTipsList") } {
         Some(v) => v,
         None => return Vec::new(),
     };
-    if count <= 0 || count > 500 { return Vec::new(); }
+    if count <= 0 || count > 500 {
+        return Vec::new();
+    }
 
     let mut entries = Vec::new();
 
     for i in 0..count {
+        // SAFETY: Reading field or calling method on non-null IL2CPP object pointer.
         let item = unsafe { call_obj_i32(list_ptr, m_get_item, i) };
-        if item.is_null() { continue; }
+        if item.is_null() {
+            continue;
+        }
 
+        // SAFETY: Reading field or calling method on non-null IL2CPP object pointer.
         let group_id = unsafe { decrypt_obscured_int(item, r.f_tips_group_id) };
+        // SAFETY: Reading field or calling method on non-null IL2CPP object pointer.
         let tip_rarity = unsafe { decrypt_obscured_int(item, r.f_tips_rarity) };
+        // SAFETY: Reading field or calling method on non-null IL2CPP object pointer.
         let level = unsafe { decrypt_obscured_int(item, r.f_tips_level) };
 
         // Expand group → concrete skills via MasterSkillData
+        // SAFETY: Reading field or calling method on non-null IL2CPP object pointer.
         let skill_list = unsafe { call_obj_i32(msd, r.m_msd_get_list_by_group, group_id) };
-        if skill_list.is_null() { continue; }
+        if skill_list.is_null() {
+            continue;
+        }
 
+        // SAFETY: IL2CPP FFI call; host vtable and resolved symbols are valid for process lifetime.
         let list_klass = unsafe { *(skill_list as *const *mut c_void) };
-        let m_cnt = unsafe { (vt().il2cpp_get_method)(list_klass, b"get_Count\0".as_ptr().cast(), 0) };
-        let m_itm = unsafe { (vt().il2cpp_get_method)(list_klass, b"get_Item\0".as_ptr().cast(), 1) };
-        if m_cnt.is_null() || m_itm.is_null() { continue; }
+        // SAFETY: IL2CPP FFI call; host vtable and resolved symbols are valid for process lifetime.
+        let m_cnt = unsafe { (vt().il2cpp_get_method)(list_klass, c"get_Count".as_ptr(), 0) };
+        // SAFETY: IL2CPP FFI call; host vtable and resolved symbols are valid for process lifetime.
+        let m_itm = unsafe { (vt().il2cpp_get_method)(list_klass, c"get_Item".as_ptr(), 1) };
+        if m_cnt.is_null() || m_itm.is_null() {
+            continue;
+        }
 
-        let sk_count = unsafe { call_i32(skill_list, m_cnt as _) };
+        // SAFETY: Reading field or calling method on non-null IL2CPP object pointer.
+        let sk_count = unsafe { call_i32(skill_list, m_cnt) };
 
         // Find the lowest group_rate skill matching this tip's rarity
         // that hasn't been learned yet. The game requires buying skills
         // in order (○ before ◎), so show the next one to buy.
-        // Collect all matching skills first, sorted by group_rate ascending.
-        let mut candidates: Vec<(*mut c_void, i32, i32)> = Vec::new(); // (sd_ptr, group_rate, skill_id)
+        let mut candidates: Vec<(*mut c_void, SkillCandidate)> = Vec::new();
         for j in 0..sk_count.min(20) {
-            let sd = unsafe { call_obj_i32(skill_list, m_itm as _, j) };
-            if sd.is_null() { continue; }
+            // SAFETY: Reading field or calling method on non-null IL2CPP object pointer.
+            let sd = unsafe { call_obj_i32(skill_list, m_itm, j) };
+            if sd.is_null() {
+                continue;
+            }
 
+            // SAFETY: Reading field or calling method on non-null IL2CPP object pointer.
             let rarity = unsafe { read_field_i32(sd, r.f_sd_rarity) };
-            if rarity != tip_rarity { continue; }
+            if rarity != tip_rarity {
+                continue;
+            }
 
+            // SAFETY: Reading field or calling method on non-null IL2CPP object pointer.
             let group_rate = unsafe { read_field_i32(sd, r.f_sd_group_rate) };
-            if group_rate <= 0 { continue; } // skip × debuff variants
+            if group_rate <= 0 {
+                continue;
+            } // skip × debuff variants
 
-            let sid = unsafe { read_field_i32(sd, r.f_sd_id) };
-            candidates.push((sd, group_rate, sid));
+            // SAFETY: Reading field or calling method on non-null IL2CPP object pointer.
+            let skill_id = unsafe { read_field_i32(sd, r.f_sd_id) };
+            candidates.push((sd, SkillCandidate { skill_id, group_rate }));
         }
-        candidates.sort_by_key(|c| c.1);
 
-        // Pick the lowest group_rate that isn't learned yet
-        let pick = candidates.iter()
-            .find(|(_, _, sid)| !learned_ids.contains(sid))
-            .or(candidates.last()); // all learned → show the top one as "learned"
-
-        let Some(&(sd, _, _)) = pick else { continue };
-
-        let skill_id = unsafe { read_field_i32(sd, r.f_sd_id) };
+        let pure: Vec<SkillCandidate> = candidates.iter().map(|(_, c)| c.clone()).collect();
+        let Some((skill_id, is_learned)) = pick_best_variant(&pure, &learned_ids) else {
+            continue;
+        };
+        let Some(&(sd, _)) = candidates.iter().find(|(_, c)| c.skill_id == skill_id) else {
+            continue;
+        };
+        // SAFETY: Reading field or calling method on non-null IL2CPP object pointer.
         let name = unsafe { read_string(call_obj(sd, r.m_sd_get_name)) }.unwrap_or_default();
 
         let base_cost = if !snp.is_null() {
+            // SAFETY: Reading field or calling method on non-null IL2CPP object pointer.
             let row = unsafe { call_obj_i32(snp, r.m_snp_get, skill_id) };
-            if !row.is_null() { unsafe { read_field_i32(row, r.f_snp_need_skill_point) } } else { 0 }
-        } else { 0 };
-
-        let is_learned = learned_ids.contains(&skill_id);
+            if !row.is_null() {
+                // SAFETY: Reading field or calling method on non-null IL2CPP object pointer.
+                unsafe { read_field_i32(row, r.f_snp_need_skill_point) }
+            } else {
+                0
+            }
+        } else {
+            0
+        };
 
         entries.push(SkillShopEntry {
-            skill_id, group_id, rarity: tip_rarity, hint_level: level,
-            name, base_cost, is_learned,
+            skill_id,
+            group_id,
+            rarity: tip_rarity,
+            hint_level: level,
+            name,
+            base_cost,
+            is_learned,
         });
     }
 
-    // Sort: gold first, then by name
-    entries.sort_by(|a, b| b.rarity.cmp(&a.rarity).then(a.name.cmp(&b.name)));
+    sort_shop_entries(&mut entries);
     entries
 }
 
@@ -352,7 +470,12 @@ fn read_skill_shop() -> Vec<SkillShopEntry> {
 
 pub fn discount_pct(hint_level: i32, has_kiremono: bool) -> i32 {
     let base = match hint_level {
-        0 => 0, 1 => 10, 2 => 20, 3 => 30, 4 => 35, _ => 40,
+        0 => 0,
+        1 => 10,
+        2 => 20,
+        3 => 30,
+        4 => 35,
+        _ => 40,
     };
     base + if has_kiremono { 10 } else { 0 }
 }
@@ -391,11 +514,10 @@ pub struct SkillCandidate {
 /// and mark it learned.
 ///
 /// Returns `(skill_id, is_learned)` or `None` if candidates is empty.
-pub fn pick_best_variant(
-    candidates: &[SkillCandidate],
-    learned_ids: &[i32],
-) -> Option<(i32, bool)> {
-    if candidates.is_empty() { return None; }
+pub fn pick_best_variant(candidates: &[SkillCandidate], learned_ids: &[i32]) -> Option<(i32, bool)> {
+    if candidates.is_empty() {
+        return None;
+    }
 
     let mut sorted: Vec<&SkillCandidate> = candidates.iter().collect();
     sorted.sort_by_key(|c| c.group_rate);
@@ -457,7 +579,7 @@ mod tests {
     fn discounted_cost_basic() {
         assert_eq!(discounted_cost(100, 0, false), 100);
         assert_eq!(discounted_cost(100, 1, false), 90);
-        assert_eq!(discounted_cost(100, 3, true), 60);  // 30+10=40% off
+        assert_eq!(discounted_cost(100, 3, true), 60); // 30+10=40% off
         assert_eq!(discounted_cost(170, 2, false), 136); // 170 * 80 / 100
     }
 
@@ -486,16 +608,28 @@ mod tests {
 
     #[test]
     fn pick_single_unlearned() {
-        let cs = [SkillCandidate { skill_id: 100, group_rate: 1 }];
+        let cs = [SkillCandidate {
+            skill_id: 100,
+            group_rate: 1,
+        }];
         assert_eq!(pick_best_variant(&cs, &[]), Some((100, false)));
     }
 
     #[test]
     fn pick_lowest_group_rate_first() {
         let cs = [
-            SkillCandidate { skill_id: 200, group_rate: 2 },
-            SkillCandidate { skill_id: 100, group_rate: 1 },
-            SkillCandidate { skill_id: 300, group_rate: 3 },
+            SkillCandidate {
+                skill_id: 200,
+                group_rate: 2,
+            },
+            SkillCandidate {
+                skill_id: 100,
+                group_rate: 1,
+            },
+            SkillCandidate {
+                skill_id: 300,
+                group_rate: 3,
+            },
         ];
         // Should pick skill_id=100 (lowest group_rate)
         assert_eq!(pick_best_variant(&cs, &[]), Some((100, false)));
@@ -504,8 +638,14 @@ mod tests {
     #[test]
     fn pick_skips_learned() {
         let cs = [
-            SkillCandidate { skill_id: 100, group_rate: 1 },
-            SkillCandidate { skill_id: 200, group_rate: 2 },
+            SkillCandidate {
+                skill_id: 100,
+                group_rate: 1,
+            },
+            SkillCandidate {
+                skill_id: 200,
+                group_rate: 2,
+            },
         ];
         // 100 is learned, should pick 200
         assert_eq!(pick_best_variant(&cs, &[100]), Some((200, false)));
@@ -514,8 +654,14 @@ mod tests {
     #[test]
     fn pick_all_learned_returns_highest() {
         let cs = [
-            SkillCandidate { skill_id: 100, group_rate: 1 },
-            SkillCandidate { skill_id: 200, group_rate: 2 },
+            SkillCandidate {
+                skill_id: 100,
+                group_rate: 1,
+            },
+            SkillCandidate {
+                skill_id: 200,
+                group_rate: 2,
+            },
         ];
         assert_eq!(pick_best_variant(&cs, &[100, 200]), Some((200, true)));
     }
@@ -524,8 +670,13 @@ mod tests {
 
     fn entry(name: &str, rarity: i32) -> SkillShopEntry {
         SkillShopEntry {
-            skill_id: 0, group_id: 0, rarity, hint_level: 0,
-            name: name.to_string(), base_cost: 0, is_learned: false,
+            skill_id: 0,
+            group_id: 0,
+            rarity,
+            hint_level: 0,
+            name: name.to_string(),
+            base_cost: 0,
+            is_learned: false,
         }
     }
 

@@ -44,10 +44,11 @@ impl TypeIntrospection {
     /// Returns None if any symbol fails to resolve.
     fn resolve() -> Option<Self> {
         let vt = vt();
+        // SAFETY: IL2CPP FFI call; host vtable and resolved symbols are valid for process lifetime.
         unsafe {
-            let type_get_name = (vt.il2cpp_resolve_symbol)(b"il2cpp_type_get_name\0".as_ptr().cast());
-            let class_get_name = (vt.il2cpp_resolve_symbol)(b"il2cpp_class_get_name\0".as_ptr().cast());
-            let class_get_fields = (vt.il2cpp_resolve_symbol)(b"il2cpp_class_get_fields\0".as_ptr().cast());
+            let type_get_name = (vt.il2cpp_resolve_symbol)(c"il2cpp_type_get_name".as_ptr());
+            let class_get_name = (vt.il2cpp_resolve_symbol)(c"il2cpp_class_get_name".as_ptr());
+            let class_get_fields = (vt.il2cpp_resolve_symbol)(c"il2cpp_class_get_fields".as_ptr());
 
             if type_get_name.is_null() || class_get_name.is_null() || class_get_fields.is_null() {
                 hlog_warn!("Failed to resolve type introspection symbols: type_get_name={:?} class_get_name={:?} class_get_fields={:?}",
@@ -55,7 +56,7 @@ impl TypeIntrospection {
                 return None;
             }
 
-            let free_fn = (vt.il2cpp_resolve_symbol)(b"il2cpp_free\0".as_ptr().cast());
+            let free_fn = (vt.il2cpp_resolve_symbol)(c"il2cpp_free".as_ptr());
             if free_fn.is_null() {
                 hlog_warn!("Failed to resolve il2cpp_free");
                 return None;
@@ -75,6 +76,7 @@ impl TypeIntrospection {
         if type_ptr.is_null() {
             return "void".to_string();
         }
+        // SAFETY: Reading field or calling method on non-null IL2CPP object pointer.
         unsafe {
             let name_ptr = (self.type_get_name)(type_ptr);
             if name_ptr.is_null() {
@@ -89,104 +91,104 @@ impl TypeIntrospection {
 }
 
 /// Classes to probe for career/training state.
-const PROBE_CLASSES: &[(&[u8], &[u8], &[u8])] = &[
+const PROBE_CLASSES: &[(&CStr, &CStr, &CStr)] = &[
     // (assembly, namespace, class)
-    (b"umamusume.dll\0", b"Gallop\0", b"SingleModeMainViewController\0"),
-    (b"umamusume.dll\0", b"Gallop\0", b"TrainingView\0"),
-    (b"umamusume.dll\0", b"Gallop\0", b"TrainingController\0"),
-    (b"umamusume.dll\0", b"Gallop\0", b"SingleModeChara\0"),
-    (b"umamusume.dll\0", b"Gallop\0", b"SingleModeHomeInfo\0"),
-    (b"umamusume.dll\0", b"Gallop\0", b"SingleModeCommandInfo\0"),
-    (b"umamusume.dll\0", b"Gallop\0", b"TrainingLevelInfo\0"),
-    (b"umamusume.dll\0", b"Gallop\0", b"WorkSingleModeData\0"),
-    (b"umamusume.dll\0", b"Gallop\0", b"WorkSingleModeCharaData\0"),
-    (b"umamusume.dll\0", b"Gallop\0", b"WorkSingleModeHomeInfo\0"),
+    (c"umamusume.dll", c"Gallop", c"SingleModeMainViewController"),
+    (c"umamusume.dll", c"Gallop", c"TrainingView"),
+    (c"umamusume.dll", c"Gallop", c"TrainingController"),
+    (c"umamusume.dll", c"Gallop", c"SingleModeChara"),
+    (c"umamusume.dll", c"Gallop", c"SingleModeHomeInfo"),
+    (c"umamusume.dll", c"Gallop", c"SingleModeCommandInfo"),
+    (c"umamusume.dll", c"Gallop", c"TrainingLevelInfo"),
+    (c"umamusume.dll", c"Gallop", c"WorkSingleModeData"),
+    (c"umamusume.dll", c"Gallop", c"WorkSingleModeCharaData"),
+    (c"umamusume.dll", c"Gallop", c"WorkSingleModeHomeInfo"),
     // Manager / controller singletons that might hold WorkSingleMode* references
-    (b"umamusume.dll\0", b"Gallop\0", b"SingleModeSceneController\0"),
-    (b"umamusume.dll\0", b"Gallop\0", b"GameSystem\0"),
-    (b"umamusume.dll\0", b"Gallop\0", b"GameManager\0"),
-    (b"umamusume.dll\0", b"Gallop\0", b"SingleModeManager\0"),
-    (b"umamusume.dll\0", b"Gallop\0", b"SingleModeWorkDataManager\0"),
-    (b"umamusume.dll\0", b"Gallop\0", b"WorkDataManager\0"),
-    (b"umamusume.dll\0", b"Gallop\0", b"WorkManager\0"),
-    (b"umamusume.dll\0", b"Gallop\0", b"ViewManager\0"),
-    (b"umamusume.dll\0", b"Gallop\0", b"SceneManager\0"),
-    (b"umamusume.dll\0", b"Gallop\0", b"UIManager\0"),
-    (b"umamusume.dll\0", b"Gallop\0", b"MasterDataManager\0"),
-    (b"umamusume.dll\0", b"Gallop\0", b"SingleModeGameSystem\0"),
-    (b"umamusume.dll\0", b"Gallop\0", b"SingleModeContext\0"),
-    (b"umamusume.dll\0", b"Gallop\0", b"SingleModeDataManager\0"),
+    (c"umamusume.dll", c"Gallop", c"SingleModeSceneController"),
+    (c"umamusume.dll", c"Gallop", c"GameSystem"),
+    (c"umamusume.dll", c"Gallop", c"GameManager"),
+    (c"umamusume.dll", c"Gallop", c"SingleModeManager"),
+    (c"umamusume.dll", c"Gallop", c"SingleModeWorkDataManager"),
+    (c"umamusume.dll", c"Gallop", c"WorkDataManager"),
+    (c"umamusume.dll", c"Gallop", c"WorkManager"),
+    (c"umamusume.dll", c"Gallop", c"ViewManager"),
+    (c"umamusume.dll", c"Gallop", c"SceneManager"),
+    (c"umamusume.dll", c"Gallop", c"UIManager"),
+    (c"umamusume.dll", c"Gallop", c"MasterDataManager"),
+    (c"umamusume.dll", c"Gallop", c"SingleModeGameSystem"),
+    (c"umamusume.dll", c"Gallop", c"SingleModeContext"),
+    (c"umamusume.dll", c"Gallop", c"SingleModeDataManager"),
 ];
 
 /// Known field names worth probing.
 /// The plugin API does not expose field iteration, so this is a targeted probe.
-const PROBE_FIELD_NAMES: &[&[u8]] = &[
+const PROBE_FIELD_NAMES: &[&CStr] = &[
     // SingleModeMainViewController likely fields
-    b"_instance\0",
-    b"_commandId\0",
-    b"_commandType\0",
-    b"_currentCommandId\0",
-    b"_trainingCommandId\0",
-    b"_selectedCommandId\0",
-    b"_singleModeData\0",
-    b"_singleModeCharaData\0",
-    b"_trainingLevelDic\0",
-    b"_trainingPartnerInfoArray\0",
-    b"_turnInfo\0",
-    b"_currentTurn\0",
-    b"_turn\0",
+    c"_instance",
+    c"_commandId",
+    c"_commandType",
+    c"_currentCommandId",
+    c"_trainingCommandId",
+    c"_selectedCommandId",
+    c"_singleModeData",
+    c"_singleModeCharaData",
+    c"_trainingLevelDic",
+    c"_trainingPartnerInfoArray",
+    c"_turnInfo",
+    c"_currentTurn",
+    c"_turn",
     // SingleModeChara / HomeInfo / CommandInfo fields
-    b"turn\0",
-    b"command_id\0",
-    b"command_type\0",
-    b"level\0",
-    b"training_level_info_array\0",
-    b"command_info_array\0",
-    b"disable_command_id_array\0",
-    b"training_partner_array\0",
-    b"failure_rate\0",
-    b"chara_id\0",
-    b"scenario_id\0",
-    b"speed\0",
-    b"stamina\0",
-    b"power\0",
-    b"guts\0",
-    b"wiz\0",
-    b"skill_point\0",
-    b"vital\0",
-    b"max_vital\0",
-    b"motivation\0",
-    b"fans\0",
-    b"is_playing\0",
+    c"turn",
+    c"command_id",
+    c"command_type",
+    c"level",
+    c"training_level_info_array",
+    c"command_info_array",
+    c"disable_command_id_array",
+    c"training_partner_array",
+    c"failure_rate",
+    c"chara_id",
+    c"scenario_id",
+    c"speed",
+    c"stamina",
+    c"power",
+    c"guts",
+    c"wiz",
+    c"skill_point",
+    c"vital",
+    c"max_vital",
+    c"motivation",
+    c"fans",
+    c"is_playing",
     // Manager fields that might hold WorkSingleMode* references
-    b"_data\0",
-    b"_workData\0",
-    b"_singleModeWorkData\0",
-    b"_workSingleModeData\0",
-    b"_singleModeData\0",
-    b"_charaData\0",
-    b"_workCharaData\0",
-    b"_homeInfo\0",
-    b"_workHomeInfo\0",
-    b"_mainViewController\0",
-    b"_controller\0",
-    b"_viewController\0",
-    b"_model\0",
-    b"_context\0",
-    b"_currentData\0",
+    c"_data",
+    c"_workData",
+    c"_singleModeWorkData",
+    c"_workSingleModeData",
+    c"_singleModeData",
+    c"_charaData",
+    c"_workCharaData",
+    c"_homeInfo",
+    c"_workHomeInfo",
+    c"_mainViewController",
+    c"_controller",
+    c"_viewController",
+    c"_model",
+    c"_context",
+    c"_currentData",
     // Common property backing fields
-    b"<SelectedTrainingCommandId>k__BackingField\0",
-    b"<TrainingCommandId>k__BackingField\0",
-    b"<IsInTraining>k__BackingField\0",
-    b"<TrainingStatus>k__BackingField\0",
-    b"<TrainingLevel>k__BackingField\0",
-    b"<TrainingRank>k__BackingField\0",
-    b"<Instance>k__BackingField\0",
-    b"<Data>k__BackingField\0",
-    b"<CurrentData>k__BackingField\0",
-    b"<WorkData>k__BackingField\0",
-    b"<Character>k__BackingField\0",
-    b"<HomeInfo>k__BackingField\0",
+    c"<SelectedTrainingCommandId>k__BackingField",
+    c"<TrainingCommandId>k__BackingField",
+    c"<IsInTraining>k__BackingField",
+    c"<TrainingStatus>k__BackingField",
+    c"<TrainingLevel>k__BackingField",
+    c"<TrainingRank>k__BackingField",
+    c"<Instance>k__BackingField",
+    c"<Data>k__BackingField",
+    c"<CurrentData>k__BackingField",
+    c"<WorkData>k__BackingField",
+    c"<Character>k__BackingField",
+    c"<HomeInfo>k__BackingField",
 ];
 
 /// Dump all methods on a class to the log, including return type names.
@@ -233,11 +235,13 @@ fn dump_all_fields(class_label: &str, klass: *mut c_void, introspect: &TypeIntro
 
     hlog_info!("  All fields on {}:", class_label);
     loop {
+        // SAFETY: Reading field or calling method on non-null IL2CPP object pointer.
         let field = unsafe { (introspect.class_get_fields)(klass, &mut iter) };
         if field.is_null() {
             break;
         }
 
+        // SAFETY: Reading field or calling method on non-null IL2CPP object pointer.
         unsafe {
             let fi = &*(field as *const FieldInfoCompat);
             let field_name = if fi.name.is_null() {
@@ -277,7 +281,8 @@ fn probe_fields(class_label: &str, klass: *mut c_void) {
     hlog_info!("  Probing fields on {}:", class_label);
     for name_bytes in PROBE_FIELD_NAMES {
         // SAFETY: Plugin FFI interop with Hachimi vtable
-        let field = unsafe { (vt.il2cpp_get_field_from_name)(klass.cast(), name_bytes.as_ptr().cast()) };
+        // SAFETY: IL2CPP FFI call; field name is a valid C string.
+        let field = unsafe { (vt.il2cpp_get_field_from_name)(klass.cast(), name_bytes.as_ptr()) };
         if !field.is_null() {
             let field_name = field_name_from_info(field.cast());
             hlog_info!("    ✓ field found: {} (FieldInfo={:?})", field_name, field);
@@ -315,20 +320,20 @@ fn deep_dive_class(label: &str, klass: *mut c_void, introspect: &TypeIntrospecti
 }
 
 /// Classes that get the full deep-dive treatment (field iteration + return types).
-const DEEP_DIVE_CLASSES: &[(&[u8], &[u8], &[u8])] = &[
-    (b"umamusume.dll\0", b"Gallop\0", b"WorkDataManager\0"),
-    (b"umamusume.dll\0", b"Gallop\0", b"WorkSingleModeData\0"),
-    (b"umamusume.dll\0", b"Gallop\0", b"WorkSingleModeCharaData\0"),
-    (b"umamusume.dll\0", b"Gallop\0", b"WorkSingleModeHomeInfo\0"),
-    (b"umamusume.dll\0", b"Gallop\0", b"SingleModeManager\0"),
-    (b"umamusume.dll\0", b"Gallop\0", b"SingleModeWorkDataManager\0"),
-    (b"umamusume.dll\0", b"Gallop\0", b"SingleModeContext\0"),
-    (b"umamusume.dll\0", b"Gallop\0", b"SingleModeDataManager\0"),
-    (b"umamusume.dll\0", b"Gallop\0", b"AcquiredSkill\0"),
-    (b"umamusume.dll\0", b"Gallop\0", b"SkillTips\0"),
-    (b"umamusume.dll\0", b"Gallop\0", b"SkillData\0"),
-    (b"umamusume.dll\0", b"Gallop\0", b"SkillManager\0"),
-    (b"umamusume.dll\0", b"Gallop\0", b"SkillBase\0"),
+const DEEP_DIVE_CLASSES: &[(&CStr, &CStr, &CStr)] = &[
+    (c"umamusume.dll", c"Gallop", c"WorkDataManager"),
+    (c"umamusume.dll", c"Gallop", c"WorkSingleModeData"),
+    (c"umamusume.dll", c"Gallop", c"WorkSingleModeCharaData"),
+    (c"umamusume.dll", c"Gallop", c"WorkSingleModeHomeInfo"),
+    (c"umamusume.dll", c"Gallop", c"SingleModeManager"),
+    (c"umamusume.dll", c"Gallop", c"SingleModeWorkDataManager"),
+    (c"umamusume.dll", c"Gallop", c"SingleModeContext"),
+    (c"umamusume.dll", c"Gallop", c"SingleModeDataManager"),
+    (c"umamusume.dll", c"Gallop", c"AcquiredSkill"),
+    (c"umamusume.dll", c"Gallop", c"SkillTips"),
+    (c"umamusume.dll", c"Gallop", c"SkillData"),
+    (c"umamusume.dll", c"Gallop", c"SkillManager"),
+    (c"umamusume.dll", c"Gallop", c"SkillBase"),
 ];
 
 /// Run the full diagnostic dump. Call from a menu button click.
@@ -349,14 +354,16 @@ pub fn run_diagnostics() {
     if let Some(ref intro) = introspect {
         hlog_info!("\n=== PHASE 1: DEEP DIVE ON KEY CLASSES ===");
         for &(asm, ns, class) in DEEP_DIVE_CLASSES {
-            let class_name = CStr::from_bytes_with_nul(class)
-                .map(|c| c.to_str().unwrap_or("?"))
-                .unwrap_or("?");
+            let class_name = class.to_str().unwrap_or("?");
 
-            let image = unsafe { (vt.il2cpp_get_assembly_image)(asm.as_ptr().cast()) };
-            if image.is_null() { continue; }
+            // SAFETY: IL2CPP FFI call; assembly name is a valid C string.
+            let image = unsafe { (vt.il2cpp_get_assembly_image)(asm.as_ptr()) };
+            if image.is_null() {
+                continue;
+            }
 
-            let klass = unsafe { (vt.il2cpp_get_class)(image, ns.as_ptr().cast(), class.as_ptr().cast()) };
+            // SAFETY: IL2CPP FFI call; namespace and class names are valid C strings.
+            let klass = unsafe { (vt.il2cpp_get_class)(image, ns.as_ptr(), class.as_ptr()) };
             if klass.is_null() {
                 hlog_info!("[DEEP] {} — class NOT FOUND", class_name);
                 continue;
@@ -369,17 +376,17 @@ pub fn run_diagnostics() {
     // Phase 2: Broad scan of all probe classes (lighter: singleton + probe fields + basic methods)
     hlog_info!("\n=== PHASE 2: BROAD CLASS SCAN ===");
     for &(asm, ns, class) in PROBE_CLASSES {
-        let class_name = CStr::from_bytes_with_nul(class)
-            .map(|c| c.to_str().unwrap_or("?"))
-            .unwrap_or("?");
+        let class_name = class.to_str().unwrap_or("?");
 
-        let image = unsafe { (vt.il2cpp_get_assembly_image)(asm.as_ptr().cast()) };
+        // SAFETY: IL2CPP FFI call; assembly name is a valid C string.
+        let image = unsafe { (vt.il2cpp_get_assembly_image)(asm.as_ptr()) };
         if image.is_null() {
             hlog_warn!("Assembly not found for {}", class_name);
             continue;
         }
 
-        let klass = unsafe { (vt.il2cpp_get_class)(image, ns.as_ptr().cast(), class.as_ptr().cast()) };
+        // SAFETY: IL2CPP FFI call; namespace and class names are valid C strings.
+        let klass = unsafe { (vt.il2cpp_get_class)(image, ns.as_ptr(), class.as_ptr()) };
         if klass.is_null() {
             hlog_info!("[{}] — class NOT FOUND", class_name);
             continue;
@@ -396,36 +403,36 @@ pub fn run_diagnostics() {
 }
 
 /// Focused dump of skill-related classes for wiring up the skills panel.
-const SKILL_CLASSES: &[(&[u8], &[u8], &[u8])] = &[
-    (b"umamusume.dll\0", b"Gallop\0", b"AcquiredSkill\0"),
-    (b"umamusume.dll\0", b"Gallop\0", b"SkillTips\0"),
-    (b"umamusume.dll\0", b"Gallop\0", b"SkillData\0"),
-    (b"umamusume.dll\0", b"Gallop\0", b"SkillBase\0"),
-    (b"umamusume.dll\0", b"Gallop\0", b"SkillManager\0"),
-    (b"umamusume.dll\0", b"Gallop\0", b"SingleModeAcquiredSkill\0"),
-    (b"umamusume.dll\0", b"Gallop\0", b"WorkSingleModeSkillData\0"),
-    (b"umamusume.dll\0", b"Gallop\0", b"MasterSkillData\0"),
-    (b"umamusume.dll\0", b"Gallop\0", b"SkillDataManager\0"),
-    (b"umamusume.dll\0", b"Gallop\0", b"WorkSkillData\0"),
+const SKILL_CLASSES: &[(&CStr, &CStr, &CStr)] = &[
+    (c"umamusume.dll", c"Gallop", c"AcquiredSkill"),
+    (c"umamusume.dll", c"Gallop", c"SkillTips"),
+    (c"umamusume.dll", c"Gallop", c"SkillData"),
+    (c"umamusume.dll", c"Gallop", c"SkillBase"),
+    (c"umamusume.dll", c"Gallop", c"SkillManager"),
+    (c"umamusume.dll", c"Gallop", c"SingleModeAcquiredSkill"),
+    (c"umamusume.dll", c"Gallop", c"WorkSingleModeSkillData"),
+    (c"umamusume.dll", c"Gallop", c"MasterSkillData"),
+    (c"umamusume.dll", c"Gallop", c"SkillDataManager"),
+    (c"umamusume.dll", c"Gallop", c"WorkSkillData"),
     // Friendship / bond / evaluation classes
-    (b"umamusume.dll\0", b"Gallop\0", b"EvaluationInfo\0"),
-    (b"umamusume.dll\0", b"Gallop\0", b"WorkSingleModeEvaluationInfo\0"),
-    (b"umamusume.dll\0", b"Gallop\0", b"SingleModeEvaluationInfo\0"),
-    (b"umamusume.dll\0", b"Gallop\0", b"WorkSupportCardData\0"),
-    (b"umamusume.dll\0", b"Gallop\0", b"SingleModeSupportCard\0"),
-    (b"umamusume.dll\0", b"Gallop\0", b"WorkSingleModeSupportCard\0"),
-    (b"umamusume.dll\0", b"Gallop\0", b"SingleModeEvaluation\0"),
-    (b"umamusume.dll\0", b"Gallop\0", b"MasterSingleModeEvaluation\0"),
-    (b"umamusume.dll\0", b"Gallop\0", b"TrainingPartnerInfo\0"),
+    (c"umamusume.dll", c"Gallop", c"EvaluationInfo"),
+    (c"umamusume.dll", c"Gallop", c"WorkSingleModeEvaluationInfo"),
+    (c"umamusume.dll", c"Gallop", c"SingleModeEvaluationInfo"),
+    (c"umamusume.dll", c"Gallop", c"WorkSupportCardData"),
+    (c"umamusume.dll", c"Gallop", c"SingleModeSupportCard"),
+    (c"umamusume.dll", c"Gallop", c"WorkSingleModeSupportCard"),
+    (c"umamusume.dll", c"Gallop", c"SingleModeEvaluation"),
+    (c"umamusume.dll", c"Gallop", c"MasterSingleModeEvaluation"),
+    (c"umamusume.dll", c"Gallop", c"TrainingPartnerInfo"),
     // Skill cost / master data utilities
-    (b"umamusume.dll\0", b"Gallop\0", b"MasterDataUtil\0"),
-    (b"umamusume.dll\0", b"Gallop\0", b"MasterSingleModeSkillNeedPoint\0"),
+    (c"umamusume.dll", c"Gallop", c"MasterDataUtil"),
+    (c"umamusume.dll", c"Gallop", c"MasterSingleModeSkillNeedPoint"),
     // Master data instance holders
-    (b"umamusume.dll\0", b"Gallop\0", b"MasterDataManager\0"),
-    (b"umamusume.dll\0", b"Gallop\0", b"MasterHolder\0"),
-    (b"umamusume.dll\0", b"Gallop\0", b"MasterBanker\0"),
-    (b"umamusume.dll\0", b"Gallop\0", b"MasterSingleModeDatabase\0"),
-    (b"umamusume.dll\0", b"Gallop\0", b"MasterCardDatabase\0"),
+    (c"umamusume.dll", c"Gallop", c"MasterDataManager"),
+    (c"umamusume.dll", c"Gallop", c"MasterHolder"),
+    (c"umamusume.dll", c"Gallop", c"MasterBanker"),
+    (c"umamusume.dll", c"Gallop", c"MasterSingleModeDatabase"),
+    (c"umamusume.dll", c"Gallop", c"MasterCardDatabase"),
 ];
 
 pub fn dump_skill_classes() {
@@ -438,14 +445,16 @@ pub fn dump_skill_classes() {
     }
 
     for &(asm, ns, class) in SKILL_CLASSES {
-        let class_name = CStr::from_bytes_with_nul(class)
-            .map(|c| c.to_str().unwrap_or("?"))
-            .unwrap_or("?");
+        let class_name = class.to_str().unwrap_or("?");
 
-        let image = unsafe { (vt.il2cpp_get_assembly_image)(asm.as_ptr().cast()) };
-        if image.is_null() { continue; }
+        // SAFETY: IL2CPP FFI call; assembly name is a valid C string.
+        let image = unsafe { (vt.il2cpp_get_assembly_image)(asm.as_ptr()) };
+        if image.is_null() {
+            continue;
+        }
 
-        let klass = unsafe { (vt.il2cpp_get_class)(image, ns.as_ptr().cast(), class.as_ptr().cast()) };
+        // SAFETY: IL2CPP FFI call; namespace and class names are valid C strings.
+        let klass = unsafe { (vt.il2cpp_get_class)(image, ns.as_ptr(), class.as_ptr()) };
         if klass.is_null() {
             hlog_info!("[SKILL] {} — NOT FOUND", class_name);
             continue;
@@ -465,21 +474,25 @@ pub fn dump_skill_classes() {
         hlog_info!("_acquiredSkillList: {} items (list={:?})", count, list_ptr);
 
         if count > 0 {
+            // SAFETY: IL2CPP FFI call; host vtable and resolved symbols are valid for process lifetime.
             unsafe {
                 // Get the list's inflated class and call get_Item(0)
                 let list_klass = *(list_ptr as *const *mut c_void);
-                let m_get_item =
-                    (vt.il2cpp_get_method)(list_klass.cast(), b"get_Item\0".as_ptr().cast(), 1);
+                let m_get_item = (vt.il2cpp_get_method)(list_klass.cast(), c"get_Item".as_ptr(), 1);
                 if !m_get_item.is_null() {
                     // call_obj_with_i32 equivalent inline
-                    let mi = m_get_item as *const c_void;
+                    let mi = m_get_item;
                     let fp: extern "C" fn(*mut c_void, i32, *const c_void) -> *mut c_void =
                         std::mem::transmute(*(mi as *const usize));
                     let first_item = fp(list_ptr, 0, mi);
 
                     if !first_item.is_null() {
                         let item_klass = *(first_item as *const *mut c_void);
-                        hlog_info!("First AcquiredSkill element: obj={:?} klass={:?}", first_item, item_klass);
+                        hlog_info!(
+                            "First AcquiredSkill element: obj={:?} klass={:?}",
+                            first_item,
+                            item_klass
+                        );
 
                         if let Some(ref intro) = introspect {
                             let class_name_ptr = (intro.class_get_name)(item_klass);
@@ -492,9 +505,8 @@ pub fn dump_skill_classes() {
                             deep_dive_class(class_name, item_klass, intro);
 
                             // Walk parent class chain to find inherited fields
-                            let il2cpp_class_get_parent = (vt.il2cpp_resolve_symbol)(
-                                b"il2cpp_class_get_parent\0".as_ptr().cast(),
-                            );
+                            let il2cpp_class_get_parent =
+                                (vt.il2cpp_resolve_symbol)(c"il2cpp_class_get_parent".as_ptr());
                             if !il2cpp_class_get_parent.is_null() {
                                 let get_parent: extern "C" fn(*mut c_void) -> *mut c_void =
                                     std::mem::transmute(il2cpp_class_get_parent);
@@ -532,47 +544,52 @@ pub fn dump_skill_classes() {
 
     // Phase 3: Probe for nested classes that weren't found as top-level
     hlog_info!("\n=== NESTED CLASS PROBE ===");
-    let image = unsafe { (vt.il2cpp_get_assembly_image)(b"umamusume.dll\0".as_ptr().cast()) };
+    // SAFETY: IL2CPP FFI call; host vtable and resolved symbols are valid for process lifetime.
+    let image = unsafe { (vt.il2cpp_get_assembly_image)(c"umamusume.dll".as_ptr()) };
     if !image.is_null() {
         // AcquiredSkill / SkillTips might be nested inside these parent classes
-        let parent_candidates: &[(&[u8], &str)] = &[
-            (b"WorkSingleModeCharaData\0", "WorkSingleModeCharaData"),
-            (b"SingleModeChara\0", "SingleModeChara"),
-            (b"WorkSingleModeData\0", "WorkSingleModeData"),
-            (b"SingleModeHomeInfo\0", "SingleModeHomeInfo"),
-            (b"MasterSkillData\0", "MasterSkillData"),
-            (b"WorkSkillData\0", "WorkSkillData"),
-            (b"WorkSingleModeHomeInfo\0", "WorkSingleModeHomeInfo"),
-            (b"WorkSupportCardData\0", "WorkSupportCardData"),
-            (b"MasterSingleModeSkillNeedPoint\0", "MasterSingleModeSkillNeedPoint"),
+        let parent_candidates: &[(&CStr, &str)] = &[
+            (c"WorkSingleModeCharaData", "WorkSingleModeCharaData"),
+            (c"SingleModeChara", "SingleModeChara"),
+            (c"WorkSingleModeData", "WorkSingleModeData"),
+            (c"SingleModeHomeInfo", "SingleModeHomeInfo"),
+            (c"MasterSkillData", "MasterSkillData"),
+            (c"WorkSkillData", "WorkSkillData"),
+            (c"WorkSingleModeHomeInfo", "WorkSingleModeHomeInfo"),
+            (c"WorkSupportCardData", "WorkSupportCardData"),
+            (c"MasterSingleModeSkillNeedPoint", "MasterSingleModeSkillNeedPoint"),
         ];
-        let nested_names: &[(&[u8], &str)] = &[
-            (b"AcquiredSkill\0", "AcquiredSkill"),
-            (b"SkillTips\0", "SkillTips"),
-            (b"SkillData\0", "SkillData"),
-            (b"Skill\0", "Skill"),
+        let nested_names: &[(&CStr, &str)] = &[
+            (c"AcquiredSkill", "AcquiredSkill"),
+            (c"SkillTips", "SkillTips"),
+            (c"SkillData", "SkillData"),
+            (c"Skill", "Skill"),
             // Friendship / evaluation nested classes
-            (b"EvaluationInfo\0", "EvaluationInfo"),
-            (b"Evaluation\0", "Evaluation"),
-            (b"SupportCard\0", "SupportCard"),
-            (b"TrainingPartner\0", "TrainingPartner"),
-            (b"SingleModeSkillNeedPoint\0", "SingleModeSkillNeedPoint"),
+            (c"EvaluationInfo", "EvaluationInfo"),
+            (c"Evaluation", "Evaluation"),
+            (c"SupportCard", "SupportCard"),
+            (c"TrainingPartner", "TrainingPartner"),
+            (c"SingleModeSkillNeedPoint", "SingleModeSkillNeedPoint"),
         ];
 
         for &(parent_bytes, parent_label) in parent_candidates {
-            let parent_klass = unsafe {
-                (vt.il2cpp_get_class)(image, b"Gallop\0".as_ptr().cast(), parent_bytes.as_ptr().cast())
-            };
+            let parent_klass =
+                // SAFETY: IL2CPP FFI call; host vtable and resolved symbols are valid for process lifetime.
+                unsafe { (vt.il2cpp_get_class)(image, c"Gallop".as_ptr(), parent_bytes.as_ptr()) };
             if parent_klass.is_null() {
                 continue;
             }
 
             for &(nested_bytes, nested_label) in nested_names {
-                let nested = unsafe {
-                    (vt.il2cpp_find_nested_class)(parent_klass, nested_bytes.as_ptr().cast())
-                };
+                // SAFETY: IL2CPP FFI call; host vtable and resolved symbols are valid for process lifetime.
+                let nested = unsafe { (vt.il2cpp_find_nested_class)(parent_klass, nested_bytes.as_ptr()) };
                 if !nested.is_null() {
-                    hlog_info!("  \u{2705} FOUND nested: {}.{} at {:?}", parent_label, nested_label, nested);
+                    hlog_info!(
+                        "  \u{2705} FOUND nested: {}.{} at {:?}",
+                        parent_label,
+                        nested_label,
+                        nested
+                    );
                     if let Some(ref intro) = introspect {
                         let label = format!("{}.{}", parent_label, nested_label);
                         deep_dive_class(&label, nested.cast(), intro);

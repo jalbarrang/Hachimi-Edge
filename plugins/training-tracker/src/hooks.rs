@@ -38,7 +38,7 @@
 //! intercepts training commands. The `UmaControllerType` enum from TLG shows
 //! Training=0x2 and TrainingTop=0xa as distinct controller modes.
 
-use std::ffi::c_void;
+use std::ffi::{c_void, CStr};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::tracker::{Facility, TRACKER};
@@ -229,10 +229,10 @@ pub fn try_install_hooks() -> bool {
     //   - TrainingView, TrainingController, TrainingMain (classes)
     //   - get_SelectedTrainingCommandId, get_TrainingCommandId (properties)
     let candidates: &[(
-        &[u8],         // assembly name (null-terminated)
-        &[u8],         // namespace
-        &[u8],         // class name
-        &[u8],         // method name
+        &CStr,         // assembly name
+        &CStr,         // namespace
+        &CStr,         // class name
+        &CStr,         // method name
         i32,           // arg count
         *const c_void, // hook function pointer
     )] = &[
@@ -240,40 +240,40 @@ pub fn try_install_hooks() -> bool {
         // training facility button. The arg is likely the menu index or command_id.
         // Discovered via runtime method enumeration 2026-05-23.
         (
-            b"umamusume.dll\0",
-            b"Gallop\0",
-            b"SingleModeMainViewController\0",
-            b"OnClickTrainingMenu\0",
+            c"umamusume.dll",
+            c"Gallop",
+            c"SingleModeMainViewController",
+            c"OnClickTrainingMenu",
             1,
             hook_on_click_training as *const c_void,
         ),
         // Candidate 2: CommonSendCommandAsync(2) — simpler command sender,
         // likely (commandType, commandId) or similar.
         (
-            b"umamusume.dll\0",
-            b"Gallop\0",
-            b"SingleModeMainViewController\0",
-            b"CommonSendCommandAsync\0",
+            c"umamusume.dll",
+            c"Gallop",
+            c"SingleModeMainViewController",
+            c"CommonSendCommandAsync",
             2,
             hook_on_select_command as *const c_void,
         ),
         // Candidate 3: SendCommandAsync(6) — full command submission with all params.
         // We hook this to log all 6 args and identify which carries command_id.
         (
-            b"umamusume.dll\0",
-            b"Gallop\0",
-            b"SingleModeMainViewController\0",
-            b"SendCommandAsync\0",
+            c"umamusume.dll",
+            c"Gallop",
+            c"SingleModeMainViewController",
+            c"SendCommandAsync",
             6,
             hook_send_command_async as *const c_void,
         ),
         // Candidate 4: OnClickTraining(0) — no-arg, opens the training view.
         // May not carry command_id but confirms training flow entry.
         (
-            b"umamusume.dll\0",
-            b"Gallop\0",
-            b"SingleModeMainViewController\0",
-            b"OnClickTraining\0",
+            c"umamusume.dll",
+            c"Gallop",
+            c"SingleModeMainViewController",
+            c"OnClickTraining",
             0,
             hook_on_click_training_no_args as *const c_void,
         ),
@@ -284,14 +284,11 @@ pub fn try_install_hooks() -> bool {
     // --- Diagnostic: enumerate methods on key classes ---
     // SAFETY: Plugin FFI interop with Hachimi vtable
     unsafe {
-        let image = (vt.il2cpp_get_assembly_image)(c"umamusume.dll".as_ptr().cast());
+        // SAFETY: IL2CPP FFI call; assembly and class names are valid C strings.
+        let image = (vt.il2cpp_get_assembly_image)(c"umamusume.dll".as_ptr());
         if !image.is_null() {
             // Probe SingleModeMainViewController
-            let klass = (vt.il2cpp_get_class)(
-                image,
-                c"Gallop".as_ptr().cast(),
-                c"SingleModeMainViewController".as_ptr().cast(),
-            );
+            let klass = (vt.il2cpp_get_class)(image, c"Gallop".as_ptr(), c"SingleModeMainViewController".as_ptr());
             if !klass.is_null() {
                 dump_class_methods("SingleModeMainViewController", klass as _);
             } else {
@@ -300,16 +297,16 @@ pub fn try_install_hooks() -> bool {
 
             // Probe some other training-related classes
             for probe_class in [
-                &b"TrainingView\0"[..],
-                b"TrainingController\0",
-                b"TrainingSelectDecide\0",
-                b"TrainingMain\0",
-                b"TrainingMenu\0",
-                b"SingleModeViewController\0",
-                b"SingleModeSceneController\0",
+                c"TrainingView",
+                c"TrainingController",
+                c"TrainingSelectDecide",
+                c"TrainingMain",
+                c"TrainingMenu",
+                c"SingleModeViewController",
+                c"SingleModeSceneController",
             ] {
-                let k = (vt.il2cpp_get_class)(image, c"Gallop".as_ptr().cast(), probe_class.as_ptr().cast());
-                let name = std::str::from_utf8(&probe_class[..probe_class.len() - 1]).unwrap_or("?");
+                let k = (vt.il2cpp_get_class)(image, c"Gallop".as_ptr(), probe_class.as_ptr());
+                let name = probe_class.to_str().unwrap_or("?");
                 if !k.is_null() {
                     dump_class_methods(name, k as _);
                 } else {
@@ -322,27 +319,27 @@ pub fn try_install_hooks() -> bool {
     for (asm, ns, class, method, args, hook_fn) in candidates {
         hlog_info!(
             "Trying hook: {}::{}::{} (args={})",
-            std::str::from_utf8(&asm[..asm.len() - 1]).unwrap_or("?"),
-            std::str::from_utf8(&class[..class.len() - 1]).unwrap_or("?"),
-            std::str::from_utf8(&method[..method.len() - 1]).unwrap_or("?"),
+            asm.to_str().unwrap_or("?"),
+            class.to_str().unwrap_or("?"),
+            method.to_str().unwrap_or("?"),
             args,
         );
 
         // SAFETY: Plugin FFI interop with Hachimi vtable
         unsafe {
-            let image = (vt.il2cpp_get_assembly_image)(asm.as_ptr() as _);
+            let image = (vt.il2cpp_get_assembly_image)(asm.as_ptr());
             if image.is_null() {
                 hlog_warn!("  Assembly not found, skipping");
                 continue;
             }
 
-            let klass = (vt.il2cpp_get_class)(image, ns.as_ptr() as _, class.as_ptr() as _);
+            let klass = (vt.il2cpp_get_class)(image, ns.as_ptr(), class.as_ptr());
             if klass.is_null() {
                 hlog_warn!("  Class not found, skipping");
                 continue;
             }
 
-            let addr = (vt.il2cpp_get_method_addr)(klass, method.as_ptr() as _, *args);
+            let addr = (vt.il2cpp_get_method_addr)(klass, method.as_ptr(), *args);
             if addr.is_null() {
                 hlog_warn!("  Method not found, skipping");
                 continue;

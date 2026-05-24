@@ -44,6 +44,7 @@ pub fn register_ui(api_version: i32) {
     API_VERSION.store(api_version, Ordering::Relaxed);
 
     let vt = vt();
+    // SAFETY: IL2CPP FFI call; host vtable and resolved symbols are valid for process lifetime.
     unsafe {
         (vt.gui_register_menu_section)(Some(draw_menu_section), std::ptr::null_mut());
 
@@ -61,9 +62,10 @@ pub fn register_ui(api_version: i32) {
 // ===========================================================================
 
 extern "C" fn draw_menu_section(ui: *mut c_void, _userdata: *mut c_void) {
-    if let Err(_) = panic::catch_unwind(AssertUnwindSafe(|| draw_menu_section_inner(ui))) {
+    if panic::catch_unwind(AssertUnwindSafe(|| draw_menu_section_inner(ui))).is_err() {
         hlog_error!("draw_menu_section PANICKED");
         let vt = vt();
+        // SAFETY: IL2CPP FFI call; host vtable and resolved symbols are valid for process lifetime.
         unsafe {
             (vt.gui_ui_colored_label)(ui, 255, 70, 70, 255, c"[Training Tracker: menu render error]".as_ptr());
         }
@@ -74,6 +76,7 @@ fn draw_menu_section_inner(ui: *mut c_void) {
     let vt = vt();
     let api_version = API_VERSION.load(Ordering::Relaxed);
 
+    // SAFETY: IL2CPP FFI call; host vtable and resolved symbols are valid for process lifetime.
     unsafe {
         let heading = c"\u{1f3cb} Training Tracker";
         (vt.gui_ui_heading)(ui, heading.as_ptr());
@@ -98,18 +101,15 @@ fn draw_menu_section_inner(ui: *mut c_void) {
             let label = c"Overlay font size (px):";
             (vt.gui_ui_small)(ui, label.as_ptr());
 
-            static mut FONT_BUF: [u8; 8] = [0; 8];
-            // Initialize buffer from current value on first use
-            if FONT_BUF[0] == 0 {
-                let s = format!("{:.0}", get_font_size());
-                let bytes = s.as_bytes();
-                let len = bytes.len().min(7);
-                FONT_BUF[..len].copy_from_slice(&bytes[..len]);
-                FONT_BUF[len] = 0;
-            }
-            if (vt.gui_ui_text_edit_singleline)(ui, FONT_BUF.as_mut_ptr() as *mut std::ffi::c_char, FONT_BUF.len()) {
-                let end = FONT_BUF.iter().position(|b| *b == 0).unwrap_or(FONT_BUF.len());
-                if let Ok(s) = std::str::from_utf8(&FONT_BUF[..end]) {
+            let mut font_buf = [0u8; 8];
+            let s = format!("{:.0}", get_font_size());
+            let bytes = s.as_bytes();
+            let len = bytes.len().min(7);
+            font_buf[..len].copy_from_slice(&bytes[..len]);
+            font_buf[len] = 0;
+            if (vt.gui_ui_text_edit_singleline)(ui, font_buf.as_mut_ptr() as *mut std::ffi::c_char, font_buf.len()) {
+                let end = font_buf.iter().position(|b| *b == 0).unwrap_or(font_buf.len());
+                if let Ok(s) = std::str::from_utf8(&font_buf[..end]) {
                     if let Ok(v) = s.trim().parse::<f32>() {
                         set_font_size(v);
                     }
@@ -143,17 +143,20 @@ fn draw_tracking_controls(ui: *mut c_void) {
         // SAFETY: Plugin FFI interop with Hachimi vtable
         if unsafe { (vt.gui_ui_button)(ui, btn.as_ptr()) } {
             match memory_reader::start_tracking() {
+                // SAFETY: IL2CPP FFI call; host vtable and resolved symbols are valid for process lifetime.
                 Ok(()) => unsafe {
                     (vt.gui_show_notification)(c"Memory tracking started!".as_ptr());
                 },
                 Err(e) => {
                     let msg = CString::new(format!("Failed: {}", e)).unwrap_or_default();
+                    // SAFETY: IL2CPP FFI call; host vtable and resolved symbols are valid for process lifetime.
                     unsafe { (vt.gui_show_notification)(msg.as_ptr()) };
                     hlog_error!("start_tracking failed: {}", e);
                 }
             }
         }
         let hint = c"Reads stats directly from game memory via IL2CPP";
+        // SAFETY: IL2CPP FFI call; host vtable and resolved symbols are valid for process lifetime.
         unsafe { (vt.gui_ui_small)(ui, hint.as_ptr()) };
         return;
     }
@@ -162,6 +165,7 @@ fn draw_tracking_controls(ui: *mut c_void) {
     // SAFETY: Plugin FFI interop with Hachimi vtable
     if unsafe { (vt.gui_ui_button)(ui, btn.as_ptr()) } {
         memory_reader::stop_tracking();
+        // SAFETY: IL2CPP FFI call; host vtable and resolved symbols are valid for process lifetime.
         unsafe { (vt.gui_show_notification)(c"Memory tracking stopped".as_ptr()) };
         return;
     }
@@ -176,6 +180,7 @@ fn draw_tracking_controls(ui: *mut c_void) {
         Some(_) => c"\u{23f8} No active career".to_owned(),
         None => c"\u{26a0} Singleton unavailable".to_owned(),
     };
+    // SAFETY: IL2CPP FFI call; host vtable and resolved symbols are valid for process lifetime.
     unsafe { (vt.gui_ui_small)(ui, status.as_ptr()) };
 }
 
@@ -203,6 +208,7 @@ fn draw_hook_status(ui: *mut c_void) {
     if unsafe { (vt.gui_ui_small_button)(ui, reset.as_ptr()) } {
         if let Ok(mut t) = TRACKER.lock() {
             t.counts = [0; 5];
+            // SAFETY: IL2CPP FFI call; host vtable and resolved symbols are valid for process lifetime.
             unsafe { (vt.gui_show_notification)(c"Training counts reset!".as_ptr()) };
         }
     }
@@ -213,9 +219,10 @@ fn draw_hook_status(ui: *mut c_void) {
 // ===========================================================================
 
 extern "C" fn draw_overlay(ui: *mut c_void, _userdata: *mut c_void) {
-    if let Err(_) = panic::catch_unwind(AssertUnwindSafe(|| draw_overlay_inner(ui))) {
+    if panic::catch_unwind(AssertUnwindSafe(|| draw_overlay_inner(ui))).is_err() {
         hlog_error!("draw_overlay PANICKED");
         let vt = vt();
+        // SAFETY: IL2CPP FFI call; host vtable and resolved symbols are valid for process lifetime.
         unsafe {
             (vt.gui_ui_colored_label)(ui, 255, 70, 70, 255, c"[overlay render error]".as_ptr());
         }
@@ -227,10 +234,12 @@ fn draw_overlay_inner(ui: *mut c_void) {
 
     let tracking = memory_reader::TRACKING.load(Ordering::Relaxed);
 
+    // SAFETY: IL2CPP FFI call; host vtable and resolved symbols are valid for process lifetime.
     unsafe {
         (vt.gui_ui_set_font_size)(ui, get_font_size());
     }
 
+    // SAFETY: IL2CPP FFI call; host vtable and resolved symbols are valid for process lifetime.
     unsafe {
         (vt.gui_ui_set_min_width)(ui, 300.0);
     }
@@ -249,6 +258,7 @@ fn draw_overlay_memory(ui: *mut c_void) {
     let snap = match memory_reader::read_snapshot() {
         Some(s) if s.is_playing => s,
         Some(_) => {
+            // SAFETY: IL2CPP FFI call; host vtable and resolved symbols are valid for process lifetime.
             unsafe {
                 (vt.gui_ui_small)(ui, c"\u{1f3cb} No active career".as_ptr());
             }
@@ -257,6 +267,7 @@ fn draw_overlay_memory(ui: *mut c_void) {
         None => return, // Singleton unavailable, show nothing
     };
 
+    // SAFETY: Reading field or calling method on non-null IL2CPP object pointer.
     unsafe {
         // Header with turn
         let header = CString::new(format!(
@@ -274,7 +285,6 @@ fn draw_overlay_memory(ui: *mut c_void) {
         ))
         .unwrap_or_default();
         (vt.gui_ui_small)(ui, row1.as_ptr());
-
 
         let row2 = CString::new(format!(
             "Guts {:>4}(L{})  Wit {:>4}(L{})  Total {:>4}",
@@ -334,7 +344,7 @@ fn draw_overlay_memory(ui: *mut c_void) {
 
 /// Draw the skills panel inside a collapsing header.
 extern "C" fn draw_skills_panel(ui: *mut c_void, _userdata: *mut c_void) {
-    if let Err(_) = panic::catch_unwind(AssertUnwindSafe(|| draw_skills_panel_inner(ui))) {
+    if panic::catch_unwind(AssertUnwindSafe(|| draw_skills_panel_inner(ui))).is_err() {
         hlog_error!("draw_skills_panel PANICKED");
     }
 }
@@ -344,6 +354,7 @@ fn draw_skills_panel_inner(ui: *mut c_void) {
     let skills = memory_reader::read_acquired_skills();
 
     if skills.is_empty() {
+        // SAFETY: IL2CPP FFI call; host vtable and resolved symbols are valid for process lifetime.
         unsafe { (vt.gui_ui_small)(ui, c"No skills acquired yet".as_ptr()) };
         return;
     }
@@ -354,16 +365,18 @@ fn draw_skills_panel_inner(ui: *mut c_void) {
         } else {
             CString::new(format!("Lv.{} \u{2022} {}", skill.level, skill.name)).unwrap_or_default()
         };
+        // SAFETY: IL2CPP FFI call; host vtable and resolved symbols are valid for process lifetime.
         unsafe { (vt.gui_ui_small)(ui, label.as_ptr()) };
     }
 
     let count = CString::new(format!("{} skills", skills.len())).unwrap_or_default();
+    // SAFETY: IL2CPP FFI call; host vtable and resolved symbols are valid for process lifetime.
     unsafe { (vt.gui_ui_colored_label)(ui, 150, 150, 150, 255, count.as_ptr()) };
 }
 
 /// Draw the bonds/friendship panel inside a collapsing header.
 extern "C" fn draw_bonds_panel(ui: *mut c_void, _userdata: *mut c_void) {
-    if let Err(_) = panic::catch_unwind(AssertUnwindSafe(|| draw_bonds_panel_inner(ui))) {
+    if panic::catch_unwind(AssertUnwindSafe(|| draw_bonds_panel_inner(ui))).is_err() {
         hlog_error!("draw_bonds_panel PANICKED");
     }
 }
@@ -373,13 +386,16 @@ fn draw_bonds_panel_inner(ui: *mut c_void) {
     let evals = memory_reader::read_evaluations();
 
     if evals.is_empty() {
+        // SAFETY: IL2CPP FFI call; host vtable and resolved symbols are valid for process lifetime.
         unsafe { (vt.gui_ui_small)(ui, c"No bond data available".as_ptr()) };
         return;
     }
 
     for eval in &evals {
         // Filter out NPCs that aren't present in this career
-        if !eval.is_appear { continue; }
+        if !eval.is_appear {
+            continue;
+        }
 
         let (r, g, b) = bond_color(eval.value);
         let name = if eval.name.is_empty() {
@@ -388,6 +404,7 @@ fn draw_bonds_panel_inner(ui: *mut c_void) {
             eval.name.clone()
         };
         let label = CString::new(format!("{} - {}/100", name, eval.value)).unwrap_or_default();
+        // SAFETY: IL2CPP FFI call; host vtable and resolved symbols are valid for process lifetime.
         unsafe { (vt.gui_ui_colored_label)(ui, r, g, b, 255, label.as_ptr()) };
     }
 }
@@ -395,18 +412,20 @@ fn draw_bonds_panel_inner(ui: *mut c_void) {
 /// Draw refresh button + SP display in a horizontal row.
 extern "C" fn draw_skill_shop_header(ui: *mut c_void, _userdata: *mut c_void) {
     let vt = vt();
+    // SAFETY: IL2CPP FFI call; host vtable and resolved symbols are valid for process lifetime.
     if unsafe { (vt.gui_ui_small_button)(ui, c"\u{1f504} Refresh".as_ptr()) } {
         skill_shop::refresh();
     }
     if let Some(sp) = skill_shop::read_skill_points() {
         let label = CString::new(format!("SP: {}", sp)).unwrap_or_default();
+        // SAFETY: IL2CPP FFI call; host vtable and resolved symbols are valid for process lifetime.
         unsafe { (vt.gui_ui_small)(ui, label.as_ptr()) };
     }
 }
 
 /// Draw the skill shop panel inside a collapsing header.
 extern "C" fn draw_skill_shop_panel(ui: *mut c_void, _userdata: *mut c_void) {
-    if let Err(_) = panic::catch_unwind(AssertUnwindSafe(|| draw_skill_shop_panel_inner(ui))) {
+    if panic::catch_unwind(AssertUnwindSafe(|| draw_skill_shop_panel_inner(ui))).is_err() {
         hlog_error!("draw_skill_shop_panel PANICKED");
     }
 }
@@ -415,6 +434,7 @@ fn draw_skill_shop_panel_inner(ui: *mut c_void) {
     let vt = vt();
 
     // Refresh button + current SP
+    // SAFETY: IL2CPP FFI call; host vtable and resolved symbols are valid for process lifetime.
     unsafe {
         (vt.gui_ui_horizontal)(ui, Some(draw_skill_shop_header), std::ptr::null_mut());
     }
@@ -426,11 +446,17 @@ fn draw_skill_shop_panel_inner(ui: *mut c_void) {
     }
 
     for entry in &entries {
-        if entry.is_learned { continue; }
+        if entry.is_learned {
+            continue;
+        }
 
         let icon = skill_shop::rarity_label(entry.rarity);
         let discount = skill_shop::discount_pct(entry.hint_level, false);
-        let (r, g, b) = if entry.rarity >= 2 { (255, 200, 50) } else { (220, 220, 220) };
+        let (r, g, b) = if entry.rarity >= 2 {
+            (255, 200, 50)
+        } else {
+            (220, 220, 220)
+        };
 
         let name = if entry.name.is_empty() {
             format!("#{}", entry.group_id)
@@ -439,7 +465,7 @@ fn draw_skill_shop_panel_inner(ui: *mut c_void) {
         };
 
         let cost_str = if entry.base_cost > 0 {
-            let discounted = entry.base_cost * (100 - discount) / 100;
+            let discounted = skill_shop::discounted_cost(entry.base_cost, entry.hint_level, false);
             format!(" {}pt", discounted)
         } else {
             String::new()
@@ -448,8 +474,19 @@ fn draw_skill_shop_panel_inner(ui: *mut c_void) {
         let label = if discount > 0 {
             CString::new(format!("{} {} (-{}%{})", icon, name, discount, cost_str)).unwrap_or_default()
         } else {
-            CString::new(format!("{} {}{}", icon, name, if cost_str.is_empty() { String::new() } else { format!(" ({})", cost_str.trim()) })).unwrap_or_default()
+            CString::new(format!(
+                "{} {}{}",
+                icon,
+                name,
+                if cost_str.is_empty() {
+                    String::new()
+                } else {
+                    format!(" ({})", cost_str.trim())
+                }
+            ))
+            .unwrap_or_default()
         };
+        // SAFETY: IL2CPP FFI call; host vtable and resolved symbols are valid for process lifetime.
         unsafe { (vt.gui_ui_colored_label)(ui, r, g, b, 255, label.as_ptr()) };
     }
 }
@@ -457,9 +494,9 @@ fn draw_skill_shop_panel_inner(ui: *mut c_void) {
 /// Color for bond/friendship value: blue → green → orange → gold (max).
 pub fn bond_color(value: i32) -> (u8, u8, u8) {
     if value >= 100 {
-        (255, 200, 50)  // Gold - maxed
+        (255, 200, 50) // Gold - maxed
     } else if value >= 80 {
-        (255, 160, 40)  // Orange - high
+        (255, 160, 40) // Orange - high
     } else if value >= 40 {
         (100, 220, 100) // Green - medium
     } else {
@@ -484,6 +521,7 @@ fn draw_overlay_hooks(ui: *mut c_void) {
     let total = tracker.total();
     drop(tracker);
 
+    // SAFETY: IL2CPP FFI call; host vtable and resolved symbols are valid for process lifetime.
     unsafe {
         let heading = c"\u{1f3cb} Training";
         (vt.gui_ui_small)(ui, heading.as_ptr());
@@ -576,9 +614,14 @@ mod tests {
         let colors: Vec<_> = Facility::ALL.iter().map(|f| facility_color(*f)).collect();
         // All 5 should be different
         for i in 0..colors.len() {
-            for j in (i+1)..colors.len() {
-                assert_ne!(colors[i], colors[j], "Facilities {:?} and {:?} share color",
-                    Facility::ALL[i], Facility::ALL[j]);
+            for j in (i + 1)..colors.len() {
+                assert_ne!(
+                    colors[i],
+                    colors[j],
+                    "Facilities {:?} and {:?} share color",
+                    Facility::ALL[i],
+                    Facility::ALL[j]
+                );
             }
         }
     }
@@ -597,7 +640,7 @@ mod tests {
     fn motivation_colors_distinct() {
         let colors: Vec<_> = (1..=5).map(memory_reader::motivation_color).collect();
         for i in 0..colors.len() {
-            for j in (i+1)..colors.len() {
+            for j in (i + 1)..colors.len() {
                 assert_ne!(colors[i], colors[j]);
             }
         }

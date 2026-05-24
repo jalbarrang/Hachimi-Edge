@@ -140,6 +140,7 @@ extern "system" fn wnd_proc(hwnd: HWND, umsg: c_uint, wparam: WPARAM, lparam: LP
     // Hold ALT to interact with plugin overlays (drag, close, collapse).
     // When ALT is held, mouse input goes to egui instead of the game.
     if !Gui::is_consuming_input_atomic() {
+        // SAFETY: Win32 API — reads async key state for ALT (VK_MENU).
         let alt_held = unsafe { GetAsyncKeyState(VK_MENU.0 as i32) } & (1i16 << 15) != 0;
         if alt_held && input::is_handled_msg(umsg) {
             let wp = wparam;

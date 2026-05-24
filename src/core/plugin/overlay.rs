@@ -6,11 +6,7 @@
 //! Visibility is tracked in a separate map so the render thread can toggle it
 //! (via egui::Window close button) without holding the registration lock.
 
-use std::{
-    collections::HashMap,
-    ffi::c_void,
-    sync::Mutex,
-};
+use std::{collections::HashMap, ffi::c_void, sync::Mutex};
 
 use once_cell::sync::Lazy;
 
@@ -52,9 +48,7 @@ pub(crate) fn has_plugin_overlays() -> bool {
 
 /// Get the visibility state for an overlay. Returns `true` if unknown.
 pub(crate) fn is_overlay_visible(id: &str) -> bool {
-    OVERLAY_VISIBILITY
-        .lock()
-        .map_or(true, |m| *m.get(id).unwrap_or(&true))
+    OVERLAY_VISIBILITY.lock().map_or(true, |m| *m.get(id).unwrap_or(&true))
 }
 
 /// Set visibility for an overlay by ID (used by host close-button and plugin vtable call).
