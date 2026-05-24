@@ -34,12 +34,17 @@ Hachimi Edge exposes a native C ABI plugin system. Plugins are dynamic libraries
 // Must be exported with C linkage
 extern "C" int hachimi_init(const Vtable* vtable, int version);
 // Returns 1 for success, 0 for error
-// Current API version: 2
+// Current API version: 7 (see hachimi_plugin_abi::API_VERSION)
 ```
+
+Rust plugins should use workspace crates:
+
+- `hachimi-plugin-abi` — `Vtable`, `vt()`, `hlog_*` macros
+- `hachimi-plugin-sdk` — `Sdk::init`, `ApiVersion`, safe wrappers
 
 ## Vtable Capabilities
 
-The vtable contains **52 function pointer slots** total, organized into the following groups.
+The vtable contains **57 function pointer slots** total, organized into the following groups.
 
 ### Host Access (2 functions)
 | Function | Signature | Purpose |
@@ -139,13 +144,44 @@ The GUI is built on **egui** (rendered via egui_glow on Android, egui-directx11 
 
 No-ops on Windows.
 
+### Overlay & layout (v3–v7, appended slots)
+
+| Version | Functions |
+|---------|-----------|
+| v3+ | `gui_register_overlay` |
+| v4+ | `gui_ui_set_min_width` |
+| v5+ | `gui_overlay_set_visible` |
+| v6+ | `gui_ui_collapsing` |
+| v7+ | `gui_ui_set_font_size` |
+
+Check `Sdk::get().version().supports_*()` or compare `version >= N` against `hachimi_plugin_abi::API_VERSION`.
+
 ## Plugin Patterns
+
+### Init (recommended)
+
+```rust
+use hachimi_plugin_sdk::{init_result_to_i32, Sdk};
+use hachimi_plugin_abi::{InitResult, Vtable};
+
+#[no_mangle]
+pub extern "C" fn hachimi_init(vtable_ptr: *const std::ffi::c_void, version: i32) -> i32 {
+    // SAFETY: Host passes valid vtable at load.
+    match unsafe { Sdk::init(vtable_ptr as *const Vtable, version) } {
+        Ok(()) => { /* register hooks / UI */ init_result_to_i32(InitResult::Ok) }
+        Err(_) => init_result_to_i32(InitResult::Error),
+    }
+}
+```
 
 ### Typical Hook Installation
 
 ```rust
+use hachimi_plugin_abi::vt;
+
 unsafe {
-    let image = (vt.il2cpp_get_assembly_image)(b"umamusume.dll\0".as_ptr() as _);
+    let vt = vt();
+    let image = (vt.il2cpp_get_assembly_image)(c"umamusume.dll".as_ptr());
     let klass = (vt.il2cpp_get_class)(image, b"Gallop\0".as_ptr() as _, b"ClassName\0".as_ptr() as _);
     let addr = (vt.il2cpp_get_method_addr)(klass, b"MethodName\0".as_ptr() as _, arg_count);
     

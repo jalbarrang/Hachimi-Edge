@@ -2,8 +2,12 @@
 
 ## Build
 
-- **Core**: `cargo build --release` → `target/release/hachimi.dll`
-- **Plugin**: `cargo build --release` from `plugins/training-tracker/` → `plugins/training-tracker/target/release/hachimi_training_tracker.dll`
+The repo is a Cargo workspace (root + `crates/*` + `plugins/training-tracker`). Build from the repo root:
+
+- **Core**: `cargo build --release -p hachimi` → `target/release/hachimi.dll`
+- **Plugin ABI tests**: `cargo test -p hachimi-plugin-abi`
+- **Training tracker plugin**: `cargo build --release -p hachimi-training-tracker` → `target/release/hachimi_training_tracker.dll`
+- **ABI guardrail** (optional): `scripts/check-plugin-api.sh`
 
 ## Deploy
 

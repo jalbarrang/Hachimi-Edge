@@ -6,15 +6,14 @@
 
 use std::ffi::{c_void, CString};
 use std::panic::{self, AssertUnwindSafe};
-use std::sync::atomic::{AtomicI32, Ordering};
+use std::sync::atomic::Ordering;
+
+use hachimi_plugin_abi::vt;
+use hachimi_plugin_sdk::Sdk;
 
 use crate::memory_reader;
 use crate::skill_shop;
 use crate::tracker::{Facility, TRACKER};
-use crate::vtable::vt;
-
-/// Host plugin API version captured during registration.
-static API_VERSION: AtomicI32 = AtomicI32::new(0);
 
 /// Overlay font size in pixels. Stored as f32 bits in an AtomicU32.
 static OVERLAY_FONT_SIZE: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
@@ -40,20 +39,20 @@ fn set_font_size(size: f32) {
 const OVERLAY_ID: &std::ffi::CStr = c"training_tracker_overlay";
 
 /// Register the plugin's UI components with the Hachimi GUI.
-pub fn register_ui(api_version: i32) {
-    API_VERSION.store(api_version, Ordering::Relaxed);
+pub fn register_ui() {
+    let sdk = Sdk::get();
+    let version = sdk.version();
 
-    let vt = vt();
-    // SAFETY: IL2CPP FFI call; host vtable and resolved symbols are valid for process lifetime.
-    unsafe {
-        (vt.gui_register_menu_section)(Some(draw_menu_section), std::ptr::null_mut());
+    sdk.register_menu_section(draw_menu_section, std::ptr::null_mut());
 
-        if api_version >= 3 {
-            (vt.gui_register_overlay)(OVERLAY_ID.as_ptr(), Some(draw_overlay), std::ptr::null_mut());
-            hlog_info!("UI registered (menu + overlay)");
-        } else {
-            hlog_info!("UI registered (menu only, host API v{} < 3)", api_version);
-        }
+    if sdk.register_overlay("training_tracker_overlay", draw_overlay, std::ptr::null_mut()) {
+        hlog_info!(target: "training-tracker", "UI registered (menu + overlay)");
+    } else {
+        hlog_info!(
+            target: "training-tracker",
+            "UI registered (menu only, host API v{} < 3)",
+            version.raw()
+        );
     }
 }
 
@@ -74,7 +73,7 @@ extern "C" fn draw_menu_section(ui: *mut c_void, _userdata: *mut c_void) {
 
 fn draw_menu_section_inner(ui: *mut c_void) {
     let vt = vt();
-    let api_version = API_VERSION.load(Ordering::Relaxed);
+    let api_version = Sdk::get().version();
 
     // SAFETY: IL2CPP FFI call; host vtable and resolved symbols are valid for process lifetime.
     unsafe {
@@ -88,7 +87,7 @@ fn draw_menu_section_inner(ui: *mut c_void) {
         draw_hook_status(ui);
 
         // --- Show overlay button ---
-        if api_version >= 5 {
+        if api_version.supports_overlay_visibility() {
             let show_overlay = c"\u{1f4ca} Show Training Overlay";
             if (vt.gui_ui_button)(ui, show_overlay.as_ptr()) {
                 (vt.gui_overlay_set_visible)(OVERLAY_ID.as_ptr(), true);
@@ -97,7 +96,7 @@ fn draw_menu_section_inner(ui: *mut c_void) {
         }
 
         // --- Overlay font size ---
-        if api_version >= 7 {
+        if api_version.supports_font_size() {
             let label = c"Overlay font size (px):";
             (vt.gui_ui_small)(ui, label.as_ptr());
 
@@ -315,8 +314,8 @@ fn draw_overlay_memory(ui: *mut c_void) {
         (vt.gui_ui_small)(ui, extra.as_ptr());
 
         // Collapsible panels (requires API v6)
-        let api_version = API_VERSION.load(Ordering::Relaxed);
-        if api_version >= 6 {
+        let api_version = Sdk::get().version();
+        if api_version.supports_collapsing() {
             (vt.gui_ui_collapsing)(
                 ui,
                 c"\u{1f4d6} Skills".as_ptr(),

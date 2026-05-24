@@ -14,7 +14,7 @@ use std::ffi::c_void;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::OnceLock;
 
-use crate::vtable::vt;
+use hachimi_plugin_abi::vt;
 
 // ---------------------------------------------------------------------------
 // Public types

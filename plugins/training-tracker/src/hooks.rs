@@ -42,7 +42,7 @@ use std::ffi::{c_void, CStr};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::tracker::{Facility, TRACKER};
-use crate::vtable::vt;
+use hachimi_plugin_abi::vt;
 
 static HOOKS_INSTALLED: AtomicBool = AtomicBool::new(false);
 

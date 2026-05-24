@@ -1,11 +1,21 @@
-//! FFI bindings to the Hachimi plugin vtable.
+//! Stable C ABI for Hachimi plugins: `Vtable`, opaque FFI types, init helpers, and logging macros.
 //!
-//! This mirrors the `#[repr(C)] Vtable` from `src/core/plugin_api.rs` exactly.
-//! Field order must match — do not reorder.
+//! Field order in `Vtable` is part of the wire ABI — append new slots only at the end and bump
+//! [`API_VERSION`](version::API_VERSION).
+
+#![allow(clippy::too_many_lines)] // Vtable is intentionally one struct
+
+mod init;
+mod log;
+mod version;
 
 use std::ffi::{c_char, c_void};
 
-// Opaque host types — we only ever hold pointers to these.
+pub use init::{set_vtable, try_vt, vt};
+pub use log::log_level;
+pub use version::{API_VERSION, VTABLE_SLOT_COUNT};
+
+// Opaque host types — plugins only hold pointers.
 pub type Hachimi = c_void;
 pub type Interceptor = c_void;
 pub type Il2CppImage = c_void;
@@ -22,6 +32,23 @@ pub type GuiMenuCallback = extern "C" fn(userdata: *mut c_void);
 pub type GuiMenuSectionCallback = extern "C" fn(ui: *mut c_void, userdata: *mut c_void);
 pub type GuiUiCallback = extern "C" fn(ui: *mut c_void, userdata: *mut c_void);
 
+#[repr(i32)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+pub enum InitResult {
+    Error = 0,
+    Ok = 1,
+}
+
+impl InitResult {
+    #[must_use]
+    pub const fn is_ok(self) -> bool {
+        matches!(self, Self::Ok)
+    }
+}
+
+pub type HachimiInitFn = extern "C" fn(vtable: *const Vtable, version: i32) -> InitResult;
+
+/// Flat function-pointer table passed from host to plugin at init.
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Vtable {
@@ -140,23 +167,18 @@ pub struct Vtable {
     pub android_dex_call_static_string:
         unsafe extern "C" fn(handle: u64, method: *const c_char, sig: *const c_char, arg: *const c_char) -> bool,
 
-    // Overlay API (v3+)
     pub gui_register_overlay: unsafe extern "C" fn(
         id: *const c_char,
         callback: Option<GuiMenuSectionCallback>,
         userdata: *mut c_void,
     ) -> bool,
 
-    // Layout helpers (v4+)
     pub gui_ui_set_min_width: unsafe extern "C" fn(ui: *mut c_void, width: f32) -> bool,
 
-    // Overlay visibility control (v5+)
     pub gui_overlay_set_visible: unsafe extern "C" fn(id: *const c_char, visible: bool) -> bool,
 
-    // Font size override (v7+)
     pub gui_ui_set_font_size: unsafe extern "C" fn(ui: *mut c_void, size: f32) -> bool,
 
-    // Collapsing header (v6+)
     pub gui_ui_collapsing: unsafe extern "C" fn(
         ui: *mut c_void,
         heading: *const c_char,
@@ -164,70 +186,4 @@ pub struct Vtable {
         callback: Option<GuiUiCallback>,
         userdata: *mut c_void,
     ) -> bool,
-}
-
-// ---------- convenience wrappers ----------
-
-static mut VTABLE: *const Vtable = std::ptr::null();
-
-/// Must be called once from `hachimi_init` before anything else.
-pub unsafe fn set_vtable(vt: *const Vtable) {
-    // SAFETY: Called once from hachimi_init before any concurrent access
-    unsafe {
-        VTABLE = vt;
-    }
-}
-
-#[inline(always)]
-pub fn vt() -> &'static Vtable {
-    // SAFETY: Plugin FFI interop with Hachimi vtable
-    unsafe {
-        debug_assert!(!VTABLE.is_null());
-        &*VTABLE
-    }
-}
-
-// ---- Logging helpers ----
-
-#[allow(dead_code)]
-pub mod log_level {
-    pub const ERROR: i32 = 1;
-    pub const WARN: i32 = 2;
-    pub const INFO: i32 = 3;
-    pub const DEBUG: i32 = 4;
-    pub const TRACE: i32 = 5;
-}
-
-macro_rules! hlog {
-    ($level:expr, $($arg:tt)*) => {{
-        let msg = format!($($arg)*);
-        let msg_c = std::ffi::CString::new(msg).unwrap_or_default();
-        let target = c"training-tracker";
-        // Safety: vt() returns a valid vtable set during init.
-        #[allow(unused_unsafe)]
-        // SAFETY: Plugin FFI interop with Hachimi vtable
-        unsafe { ($crate::vtable::vt().log)($level, target.as_ptr(), msg_c.as_ptr()); }
-    }};
-}
-
-macro_rules! hlog_info {
-    ($($arg:tt)*) => { hlog!($crate::vtable::log_level::INFO, $($arg)*) };
-}
-
-macro_rules! hlog_error {
-    ($($arg:tt)*) => { hlog!($crate::vtable::log_level::ERROR, $($arg)*) };
-}
-
-macro_rules! hlog_warn {
-    ($($arg:tt)*) => { hlog!($crate::vtable::log_level::WARN, $($arg)*) };
-}
-
-#[allow(unused_macros)]
-macro_rules! hlog_debug {
-    ($($arg:tt)*) => { hlog!($crate::vtable::log_level::DEBUG, $($arg)*) };
-}
-
-#[allow(unused_macros)]
-macro_rules! hlog_trace {
-    ($($arg:tt)*) => { hlog!($crate::vtable::log_level::TRACE, $($arg)*) };
 }

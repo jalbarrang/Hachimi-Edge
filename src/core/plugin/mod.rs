@@ -9,5 +9,6 @@ pub mod notification;
 pub mod overlay;
 pub mod types;
 
-pub use api::Vtable;
+pub use hachimi_plugin_abi::Vtable;
+pub use hachimi_plugin_abi::API_VERSION;
 pub use types::{GuiMenuCallback, GuiMenuSectionCallback, GuiUiCallback, HachimiInitFn, InitResult, Plugin};

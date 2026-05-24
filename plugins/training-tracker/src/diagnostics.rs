@@ -3,7 +3,7 @@
 
 use std::ffi::{c_void, CStr};
 
-use crate::vtable::vt;
+use hachimi_plugin_abi::vt;
 
 /// Minimal FieldInfo layout for reading field names and types.
 #[repr(C)]

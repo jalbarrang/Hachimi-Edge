@@ -1,0 +1,21 @@
+[package]
+name = "hachimi-plugin-sdk"
+version = "0.1.0"
+edition = "2021"
+description = "Ergonomic SDK for Hachimi plugins (Sdk, ApiVersion, safe wrappers)"
+
+[lib]
+crate-type = ["lib"]
+
+[dependencies]
+hachimi-plugin-abi = { path = "../hachimi-plugin-abi" }
+
+[lints.rust]
+improper_ctypes = "warn"
+improper_ctypes_definitions = "warn"
+
+[lints.clippy]
+undocumented_unsafe_blocks = "warn"
+not_unsafe_ptr_arg_deref = "allow"
+as_underscore = "allow"
+ptr_as_ptr = "allow"

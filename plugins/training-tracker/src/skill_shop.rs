@@ -19,7 +19,7 @@ use std::ffi::c_void;
 use std::sync::{Mutex, OnceLock};
 
 use crate::memory_reader;
-use crate::vtable::vt;
+use hachimi_plugin_abi::vt;
 
 // ---------------------------------------------------------------------------
 // Public types

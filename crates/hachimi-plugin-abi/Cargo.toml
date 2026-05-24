@@ -1,0 +1,15 @@
+[package]
+name = "hachimi-plugin-abi"
+version = "0.1.0"
+edition = "2021"
+description = "Stable C ABI types for Hachimi plugins (Vtable, init, logging macros)"
+
+[lib]
+crate-type = ["lib"]
+
+[lints.rust]
+improper_ctypes = "warn"
+improper_ctypes_definitions = "warn"
+
+[lints.clippy]
+not_unsafe_ptr_arg_deref = "allow"

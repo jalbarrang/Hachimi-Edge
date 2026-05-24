@@ -65,6 +65,10 @@ missing_errors_doc = "allow"
 missing_panics_doc = "allow"
 doc_markdown = "allow"
 
+[dependencies]
+hachimi-plugin-abi = { path = "../../crates/hachimi-plugin-abi" }
+hachimi-plugin-sdk = { path = "../../crates/hachimi-plugin-sdk" }
+
 [profile.release]
 opt-level = 3
 strip = true

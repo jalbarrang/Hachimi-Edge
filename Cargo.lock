@@ -716,6 +716,7 @@ dependencies = [
  "egui_glow",
  "fnv",
  "glow",
+ "hachimi-plugin-abi",
  "http",
  "image",
  "jni",
@@ -744,6 +745,25 @@ dependencies = [
  "windebug_logger",
  "windows 0.62.2",
  "zip",
+]
+
+[[package]]
+name = "hachimi-plugin-abi"
+version = "0.1.0"
+
+[[package]]
+name = "hachimi-plugin-sdk"
+version = "0.1.0"
+dependencies = [
+ "hachimi-plugin-abi",
+]
+
+[[package]]
+name = "hachimi-training-tracker"
+version = "0.1.0"
+dependencies = [
+ "hachimi-plugin-abi",
+ "hachimi-plugin-sdk",
 ]
 
 [[package]]
