@@ -406,6 +406,26 @@ const SKILL_CLASSES: &[(&[u8], &[u8], &[u8])] = &[
     (b"umamusume.dll\0", b"Gallop\0", b"WorkSingleModeSkillData\0"),
     (b"umamusume.dll\0", b"Gallop\0", b"MasterSkillData\0"),
     (b"umamusume.dll\0", b"Gallop\0", b"SkillDataManager\0"),
+    (b"umamusume.dll\0", b"Gallop\0", b"WorkSkillData\0"),
+    // Friendship / bond / evaluation classes
+    (b"umamusume.dll\0", b"Gallop\0", b"EvaluationInfo\0"),
+    (b"umamusume.dll\0", b"Gallop\0", b"WorkSingleModeEvaluationInfo\0"),
+    (b"umamusume.dll\0", b"Gallop\0", b"SingleModeEvaluationInfo\0"),
+    (b"umamusume.dll\0", b"Gallop\0", b"WorkSupportCardData\0"),
+    (b"umamusume.dll\0", b"Gallop\0", b"SingleModeSupportCard\0"),
+    (b"umamusume.dll\0", b"Gallop\0", b"WorkSingleModeSupportCard\0"),
+    (b"umamusume.dll\0", b"Gallop\0", b"SingleModeEvaluation\0"),
+    (b"umamusume.dll\0", b"Gallop\0", b"MasterSingleModeEvaluation\0"),
+    (b"umamusume.dll\0", b"Gallop\0", b"TrainingPartnerInfo\0"),
+    // Skill cost / master data utilities
+    (b"umamusume.dll\0", b"Gallop\0", b"MasterDataUtil\0"),
+    (b"umamusume.dll\0", b"Gallop\0", b"MasterSingleModeSkillNeedPoint\0"),
+    // Master data instance holders
+    (b"umamusume.dll\0", b"Gallop\0", b"MasterDataManager\0"),
+    (b"umamusume.dll\0", b"Gallop\0", b"MasterHolder\0"),
+    (b"umamusume.dll\0", b"Gallop\0", b"MasterBanker\0"),
+    (b"umamusume.dll\0", b"Gallop\0", b"MasterSingleModeDatabase\0"),
+    (b"umamusume.dll\0", b"Gallop\0", b"MasterCardDatabase\0"),
 ];
 
 pub fn dump_skill_classes() {
@@ -439,7 +459,78 @@ pub fn dump_skill_classes() {
         }
     }
 
-    // Phase 2: Probe for nested classes that weren't found as top-level
+    // Phase 2: Introspect the actual AcquiredSkill class from a live list element
+    hlog_info!("\n=== LIVE ACQUIRED SKILL INTROSPECTION ===");
+    if let Some((list_ptr, count)) = crate::memory_reader::read_acquired_skill_list() {
+        hlog_info!("_acquiredSkillList: {} items (list={:?})", count, list_ptr);
+
+        if count > 0 {
+            unsafe {
+                // Get the list's inflated class and call get_Item(0)
+                let list_klass = *(list_ptr as *const *mut c_void);
+                let m_get_item =
+                    (vt.il2cpp_get_method)(list_klass.cast(), b"get_Item\0".as_ptr().cast(), 1);
+                if !m_get_item.is_null() {
+                    // call_obj_with_i32 equivalent inline
+                    let mi = m_get_item as *const c_void;
+                    let fp: extern "C" fn(*mut c_void, i32, *const c_void) -> *mut c_void =
+                        std::mem::transmute(*(mi as *const usize));
+                    let first_item = fp(list_ptr, 0, mi);
+
+                    if !first_item.is_null() {
+                        let item_klass = *(first_item as *const *mut c_void);
+                        hlog_info!("First AcquiredSkill element: obj={:?} klass={:?}", first_item, item_klass);
+
+                        if let Some(ref intro) = introspect {
+                            let class_name_ptr = (intro.class_get_name)(item_klass);
+                            let class_name = if !class_name_ptr.is_null() {
+                                CStr::from_ptr(class_name_ptr).to_str().unwrap_or("?")
+                            } else {
+                                "?"
+                            };
+                            hlog_info!("AcquiredSkill runtime class name: {}", class_name);
+                            deep_dive_class(class_name, item_klass, intro);
+
+                            // Walk parent class chain to find inherited fields
+                            let il2cpp_class_get_parent = (vt.il2cpp_resolve_symbol)(
+                                b"il2cpp_class_get_parent\0".as_ptr().cast(),
+                            );
+                            if !il2cpp_class_get_parent.is_null() {
+                                let get_parent: extern "C" fn(*mut c_void) -> *mut c_void =
+                                    std::mem::transmute(il2cpp_class_get_parent);
+                                let mut klass = item_klass;
+                                for depth in 0..5 {
+                                    let parent = get_parent(klass);
+                                    if parent.is_null() || parent == klass {
+                                        break;
+                                    }
+                                    let pname_ptr = (intro.class_get_name)(parent);
+                                    let pname = if !pname_ptr.is_null() {
+                                        CStr::from_ptr(pname_ptr).to_str().unwrap_or("?")
+                                    } else {
+                                        "?"
+                                    };
+                                    hlog_info!("  Parent[{}]: {} (klass={:?})", depth, pname, parent);
+                                    deep_dive_class(&format!("parent::{}", pname), parent, intro);
+                                    klass = parent;
+                                }
+                            }
+                        } else {
+                            dump_methods("AcquiredSkill(runtime)", item_klass, None);
+                        }
+                    } else {
+                        hlog_info!("get_Item(0) returned null");
+                    }
+                } else {
+                    hlog_warn!("get_Item not found on list class");
+                }
+            }
+        }
+    } else {
+        hlog_info!("No acquired skill list available (not in a career or tracking not started)");
+    }
+
+    // Phase 3: Probe for nested classes that weren't found as top-level
     hlog_info!("\n=== NESTED CLASS PROBE ===");
     let image = unsafe { (vt.il2cpp_get_assembly_image)(b"umamusume.dll\0".as_ptr().cast()) };
     if !image.is_null() {
@@ -450,12 +541,22 @@ pub fn dump_skill_classes() {
             (b"WorkSingleModeData\0", "WorkSingleModeData"),
             (b"SingleModeHomeInfo\0", "SingleModeHomeInfo"),
             (b"MasterSkillData\0", "MasterSkillData"),
+            (b"WorkSkillData\0", "WorkSkillData"),
+            (b"WorkSingleModeHomeInfo\0", "WorkSingleModeHomeInfo"),
+            (b"WorkSupportCardData\0", "WorkSupportCardData"),
+            (b"MasterSingleModeSkillNeedPoint\0", "MasterSingleModeSkillNeedPoint"),
         ];
         let nested_names: &[(&[u8], &str)] = &[
             (b"AcquiredSkill\0", "AcquiredSkill"),
             (b"SkillTips\0", "SkillTips"),
             (b"SkillData\0", "SkillData"),
             (b"Skill\0", "Skill"),
+            // Friendship / evaluation nested classes
+            (b"EvaluationInfo\0", "EvaluationInfo"),
+            (b"Evaluation\0", "Evaluation"),
+            (b"SupportCard\0", "SupportCard"),
+            (b"TrainingPartner\0", "TrainingPartner"),
+            (b"SingleModeSkillNeedPoint\0", "SingleModeSkillNeedPoint"),
         ];
 
         for &(parent_bytes, parent_label) in parent_candidates {

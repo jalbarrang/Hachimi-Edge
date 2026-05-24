@@ -315,19 +315,274 @@ Master database table for skill definitions (from `master.mdb`). Contains a nest
 | `Unload` | 0 | void | Release cached data |
 | `_ForcePreloadAllEntries` | 0 | void | Force-load all entries |
 
-> **Note on `MasterSkillData.SkillData`**: This is a **nested class** — use `il2cpp_find_nested_class(MasterSkillData_klass, "SkillData")` to resolve it. It likely has fields like `id`, `group_id`, `rarity`, `skill_category`, `disp_order`, etc. matching the `master.mdb` schema. Needs further introspection.
+> **Note on `MasterSkillData.SkillData`**: This is a **nested class** — use `il2cpp_find_nested_class(MasterSkillData_klass, "SkillData")` to resolve it. See the full field/method listing below. All fields are plain `Int32`/`String`/`Int64` (no ObscuredInt — master data is not anti-cheat encrypted).
 
-### Class resolution failures (2026-05-24)
+### `WorkSingleModeCharaData.SkillTips` (nested class)
 
-The following class names were **not found** in the `Gallop` namespace:
-- `AcquiredSkill` — likely a nested class (e.g. inside `WorkSingleModeCharaData` or `SingleModeChara`) or may use a different name. The field `_acquiredSkillList` on `WorkSingleModeCharaData` is typed as `List<AcquiredSkill>` in metadata.
-- `SkillTips` — similar situation, may be nested
-- `SkillData` — exists as `MasterSkillData.SkillData` (nested class), not top-level
+Skill hints/tips available during training. Nested inside `WorkSingleModeCharaData`.
+Found via `il2cpp_find_nested_class(WorkSingleModeCharaData, "SkillTips")`.
+
+**Fields (runtime-verified 2026-05-24):**
+| Field | Type | Purpose |
+|-------|------|---------|
+| `<GroupId>k__BackingField` | `ObscuredInt` | Skill group ID (links to MasterSkillData) |
+| `<Rarity>k__BackingField` | `ObscuredInt` | Skill rarity |
+| `<Level>k__BackingField` | `ObscuredInt` | Skill tip level |
+| `LEVEL_MAX` | `Int32` | Static constant — max level |
+| `SKILL_TIPS_RATE` | `Int32[]` | Static constant — rate table |
+
+**Methods (runtime-verified 2026-05-24):**
+| Method | Args | Return | Notes |
+|--------|------|--------|-------|
+| `get_GroupId` | 0 | `ObscuredInt` | ⚠️ Returns ObscuredInt, not plain int |
+| `set_GroupId` | 1 | void | |
+| `get_Rarity` | 0 | `ObscuredInt` | ⚠️ Returns ObscuredInt |
+| `set_Rarity` | 1 | void | |
+| `get_Level` | 0 | `ObscuredInt` | ⚠️ Returns ObscuredInt |
+| `set_Level` | 1 | void | |
+| `get_Rate` | 0 | `Int32` | ✅ Returns plain int |
+| `GetRate` | 1 | `Int32` | ✅ Returns plain int |
+
+### `MasterSkillData.SkillData` (nested class)
+
+Master database row for a single skill definition. Nested inside `MasterSkillData`.
+Found via `il2cpp_find_nested_class(MasterSkillData, "SkillData")`.
+
+**Fields (runtime-verified 2026-05-24, 73 total):**
+| Field | Type | Purpose |
+|-------|------|---------|
+| `Id` | `Int32` | Primary key — skill ID |
+| `Rarity` | `Int32` | Skill rarity tier |
+| `GroupId` | `Int32` | Group ID (shared across skill variants) |
+| `GroupRate` | `Int32` | Rate within group |
+| `FilterSwitch` | `Int32` | UI filter flag |
+| `GradeValue` | `Int32` | Grade value |
+| `SkillCategory` | `Int32` | Category enum |
+| `TagId` | `String` | Tag identifier |
+| `UniqueSkillId1` | `Int32` | Linked unique skill |
+| `UniqueSkillId2` | `Int32` | Linked unique skill |
+| `ExpType` | `Int32` | Experience type |
+| `DispOrder` | `Int32` | Display sort order |
+| `IconId` | `Int32` | Icon resource ID |
+| `PlateType` | `Int32` | UI plate type |
+| `IsGeneralSkill` | `Int32` | General/unique flag |
+| `Precondition1/2` | `String` | Activation preconditions |
+| `Condition1/2` | `String` | Activation conditions |
+| `AbilityType11..23` | `Int32` | Ability effect types (2 details × 3 abilities each) |
+| `FloatAbilityValue11..23` | `Int32` | Ability values (encoded as int) |
+| `TargetType11..23` | `Int32` | Ability target types |
+| `PopularityAddParam1/2` | `Int32` | Popularity bonus params |
+| `PopularityAddValue1/2` | `Int32` | Popularity bonus values |
+| `StartDate` / `EndDate` | `Int64` | Availability window |
+
+**Methods (runtime-verified 2026-05-24):**
+| Method | Args | Return | Purpose |
+|--------|------|--------|--------|
+| `get_Name` | 0 | `String` | ✅ Localized skill name |
+| `get_Remarks` | 0 | `String` | ✅ Skill description |
+| `get_Condition` | 0 | `String` | Formatted condition text |
+| `get_IsLevelUp` | 0 | `Boolean` | Whether skill is a level-up variant |
+| `GetEnumTagList` | 0 | `List<SkillTag>` | Parsed tag list |
+| `GetTagIds` | 0 | `List<Int32>` | Tag ID list |
+| `ProcessDetail1/2` | 1 | void | Process ability details |
+
+### `WorkSkillData`
+
+Container class for skill-related nested types. Has no fields of its own — serves as a namespace for `AcquiredSkill` and `SkillDataBase`.
+
+**Fields:** none (0 total)
+
+**Methods (runtime-verified 2026-05-24):**
+| Method | Args | Return |
+|--------|------|--------|
+| `.ctor` | 0 | void |
+
+### `WorkSkillData.SkillDataBase` (nested class)
+
+Base class for acquired skill data. Parent of `AcquiredSkill`. Holds the master ID, level, and master data reference.
+
+**Inheritance:** `SkillDataBase → System.Object`
+
+> **IMPORTANT: ObscuredInt fields.** Fields use `CodeStage.AntiCheat.ObscuredTypes.ObscuredInt` (encrypted in memory). The property getters decrypt and return plain `System.Int32`. Always use getters — never read fields directly.
+
+**Fields (runtime-verified 2026-05-24):**
+| Field | Type | Purpose |
+|-------|------|---------|
+| `_masterId` | `ObscuredInt` | Encrypted skill master ID |
+| `_level` | `ObscuredInt` | Encrypted skill level |
+| `_master` | `MasterSkillData.SkillData` | Cached master data reference |
+
+**Methods (runtime-verified 2026-05-24):**
+| Method | Args | Return | Purpose |
+|--------|------|--------|--------|
+| `get_MasterId` | 0 | `Int32` | ✅ Decrypted skill master ID |
+| `get_Level` | 0 | `Int32` | ✅ Decrypted skill level |
+| `get_MasterData` | 0 | `MasterSkillData.SkillData` | ✅ Master data lookup |
+| `.ctor` | 2 | void | Constructor (overload 1) |
+| `.ctor` | 1 | void | Constructor (overload 2) |
+| `.ctor` | 2 | void | Constructor (overload 3) |
+| `Validate` | 0 | void | Validation |
+
+### `WorkSkillData.AcquiredSkill` (nested class)
+
+Represents a skill acquired during career mode. Nested inside `WorkSkillData`.
+
+**Inheritance:** `AcquiredSkill → SkillDataBase → System.Object`
+
+> **Resolution note (2026-05-24):** `AcquiredSkill` cannot be found by name via `il2cpp_find_class("Gallop", "AcquiredSkill")`. It was discovered via **live introspection** — reading the klass pointer from an element of `WorkSingleModeCharaData._acquiredSkillList`, which revealed its runtime type as `Gallop.WorkSkillData.AcquiredSkill`. It can also be resolved via `il2cpp_find_nested_class(WorkSkillData_klass, "AcquiredSkill")`.
+
+**Fields:** none (0 declared — all useful fields are inherited from `SkillDataBase`)
+
+**Inherited fields (from SkillDataBase):**
+| Field | Type | Getter |
+|-------|------|--------|
+| `_masterId` | `ObscuredInt` | `get_MasterId() → Int32` |
+| `_level` | `ObscuredInt` | `get_Level() → Int32` |
+| `_master` | `MasterSkillData.SkillData` | `get_MasterData() → SkillData` |
+
+**Methods (runtime-verified 2026-05-24):**
+| Method | Args | Return | Purpose |
+|--------|------|--------|--------|
+| `.ctor` | 1 | void | Constructor (overload 1) |
+| `.ctor` | 2 | void | Constructor (overload 2) |
+| `Convert` | 1 | `AcquiredSkill[]` | Static: convert array |
+| `Convert` | 1 | `AcquiredSkill` | Static: convert single |
+
+**Access pattern:**
+```
+WorkSingleModeCharaData._acquiredSkillList : List<AcquiredSkill>
+  → element[i] : WorkSkillData.AcquiredSkill
+    → get_MasterId() → int  (inherited from SkillDataBase)
+    → get_Level() → int     (inherited from SkillDataBase)
+    → get_MasterData() → MasterSkillData.SkillData  (inherited from SkillDataBase)
+```
+
+## Friendship / Bond System Classes
+
+> Source: Runtime diagnostics (2026-05-24). These classes track support card friendship ("evaluation") values during career mode.
+
+### `WorkSingleModeCharaData.Evaluation` (nested class)
+
+Per-support-card friendship/bond tracking during career mode. Nested inside `WorkSingleModeCharaData`.
+Found via `il2cpp_find_nested_class(WorkSingleModeCharaData, "Evaluation")`.
+
+> **Cross-reference:** The server response field `evaluation_info_array` (see [network-protocol.md](network-protocol.md)) populates these objects. The `_value` field corresponds to the friendship gauge (0–100+). The `_targetId` identifies the support card.
+
+**Fields (runtime-verified 2026-05-24, 13 total):**
+| Field | Type | Purpose |
+|-------|------|---------|
+| `INTEREST_LOST_ALERT_TURN` | `Int32` | Static constant — turn threshold for interest loss alert |
+| `SOUL_EVENT_ACTIVE_VALUE` | `Int32` | Static constant — friendship value to activate soul event |
+| `IS_RACE_PLACEMENT_VALUE` | `Int32` | Static constant — race placement threshold |
+| `_targetId` | `ObscuredInt` | Support card ID (links to support card data) |
+| `_value` | `ObscuredInt` | Friendship/bond gauge value |
+| `_isOuting` | `ObscuredBool` | Whether an outing has occurred |
+| `_storyStep` | `ObscuredInt` | Support card story progress step |
+| `_isAppear` | `ObscuredBool` | Whether support card character has appeared |
+| `GroupOutingInfoList` | `List<Evaluation.GroupOutingInfo>` | Group outing tracking (has sub-nested class) |
+| `_guestCharaId` | `ObscuredInt` | Guest character ID (for guest support) |
+| `_interestState` | `ObscuredInt` | Interest state (maps to `SingleModeScenarioTeamRaceDefine.InterestState`) |
+| `_soulEventState` | `ObscuredInt` | Soul event state |
+| `_soulThresholdId` | `ObscuredInt` | Soul threshold ID |
+
+**Methods (runtime-verified 2026-05-24):**
+| Method | Args | Return | Purpose |
+|--------|------|--------|--------|
+| `get_TargetId` | 0 | `Int32` | ✅ Support card ID (decrypted) |
+| `get_Value` | 0 | `Int32` | ✅ Friendship value (decrypted) |
+| `get_IsOuting` | 0 | `Boolean` | ✅ Outing flag |
+| `get_StoryStep` | 0 | `Int32` | ✅ Story progress |
+| `get_IsAppear` | 0 | `Boolean` | ✅ Appearance flag |
+| `get_GuestCharaId` | 0 | `Int32` | ✅ Guest character ID |
+| `get_InterestState` | 0 | `InterestState` | ✅ Interest state enum |
+| `get_SoulEventState` | 0 | `Boolean` | ✅ Soul event active |
+| `get_SoulThresholdId` | 0 | `Int32` | ✅ Soul threshold |
+| `.ctor` | 1 | void | Constructor |
+| `SetTeamEvaluationInfo` | 1 | void | Apply team evaluation data |
+| `CanScout` | 0 | `Boolean` | Whether scouting is available |
+
+### `MasterSingleModeEvaluation`
+
+Master database table for friendship/evaluation thresholds. Queried by character ID to determine bond event triggers.
+
+**Fields (runtime-verified 2026-05-24):**
+| Field | Type | Purpose |
+|-------|------|---------|
+| `TABLE_NAME` | `String` | SQLite table name (static) |
+| `_db` | `MasterSingleModeDatabase` | Database reference |
+| `_preloaded` | `Boolean` | Whether all entries are preloaded |
+| `_notFounds` | `HashSet<Int32>` | Cache of missing IDs |
+| `_lazyPrimaryKeyDictionary` | `Dictionary<Int32, SingleModeEvaluation>` | Primary key cache |
+| `_dictionaryWithCharaId` | `Dictionary<Int32, List<SingleModeEvaluation>>` | Character ID → evaluation list |
+
+**Methods (runtime-verified 2026-05-24):**
+| Method | Args | Return | Purpose |
+|--------|------|--------|--------|
+| `Get` | 1 | `SingleModeEvaluation` | Look up by ID |
+| `get_dictionary` | 0 | `Dictionary<Int32, SingleModeEvaluation>` | Full cached dictionary |
+| `GetWithCharaIdOrderByIdAsc` | 1 | `SingleModeEvaluation` | Look up by character ID |
+| `GetListWithCharaIdOrderByIdAsc` | 1 | `List<SingleModeEvaluation>` | List by character ID |
+| `Unload` | 0 | void | Release cached data |
+| `_ForcePreloadAllEntries` | 0 | void | Force-load all entries |
+
+> **Note:** `MasterSingleModeEvaluation.SingleModeEvaluation` is a nested class (not yet introspected). It likely contains threshold values and event triggers matching the `master_single_mode_evaluation` table schema.
+
+### `WorkSupportCardData`
+
+Manages working copies of all support cards the player owns. Accessed via `WorkDataManager.get_SupportCardData()`.
+
+**Fields (runtime-verified 2026-05-24):**
+| Field | Type | Purpose |
+|-------|------|---------|
+| `_dataDic` | `Dictionary<Int32, SupportCardData>` | Support card ID → data map |
+| `<BackableStateStack>k__BackingField` | `BackableStateStack` | UI state stack for back navigation |
+
+**Methods (runtime-verified 2026-05-24):**
+| Method | Args | Return | Purpose |
+|--------|------|--------|--------|
+| `UpdateAll` | 1 | void | Bulk update from server |
+| `AddSupportCardList` | 1 | void | Add multiple cards |
+| `AddSupportCardData` | 1 | `SupportCardData` | Add single card |
+| `UpdateSupportCardData` | 1 | `SupportCardData` | Update single card |
+| `GetSupportCardData` | 1 | `SupportCardData` | Get card by ID |
+| `GetSupportCardList` | 0 | `List<SupportCardData>` | Get all cards |
+| `GetCharaIdList` | 0 | `List<Int32>` | Get all character IDs |
+| `HasSupportCard` | 1 | `Boolean` | Check card ownership |
+| `GetSupportCardListByCharaId` | 1 | `List<SupportCardData>` | Cards for a character |
+| `GetSupportCardListByCharaIdInGroup` | 1 | `List<SupportCardData>` | Cards for character in group |
+| `HasSupportCardByCharaId` | 1 | `Boolean` | Check card by character |
+| `HasLimitBreakEnableSupportCard` | 0 | `Boolean` | Any card can limit break |
+| `HasLevelUpEnableSupportCard` | 0 | `Boolean` | Any card can level up |
+
+> **Note:** `WorkSupportCardData.SupportCardData` is a nested class (not yet introspected). It likely contains per-card level, limit break count, and other ownership data.
+
+### Class resolution failures and successes (2026-05-24)
+
+**✅ RESOLVED via live introspection:**
+- `AcquiredSkill` — found as **`Gallop.WorkSkillData.AcquiredSkill`** (nested class). Cannot be found by `il2cpp_find_class("Gallop", "AcquiredSkill")`. Discovered by reading the klass pointer from a live `_acquiredSkillList` element. Also resolvable via `il2cpp_find_nested_class(WorkSkillData, "AcquiredSkill")`.
+- `Evaluation` (friendship/bond) — found as **`Gallop.WorkSingleModeCharaData.Evaluation`** (nested class). Cannot be found as `Gallop::EvaluationInfo`, `Gallop::SingleModeEvaluation`, or `WorkSingleModeCharaData::EvaluationInfo`. The correct nested name is just `"Evaluation"`.
+
+**❌ Still NOT FOUND (2026-05-24):**
+- `SingleModeChara` — not found in `Gallop` namespace (may be in a sub-namespace or different assembly)
+- `SingleModeHomeInfo` — not found
 - `SingleModeAcquiredSkill` — not found
 - `WorkSingleModeSkillData` — not found
 - `SkillDataManager` — not found
+- `SingleModeSupportCard` / `WorkSingleModeSupportCard` — not found
+- `SingleModeEvaluation` (top-level) — not found (exists only as `MasterSingleModeEvaluation.SingleModeEvaluation` nested class)
+- `TrainingPartnerInfo` — not found
+- `SingleModeChara` — not found
+- `SingleModeHomeInfo` — not found
 
-> **Next step**: Use `il2cpp_find_nested_class` on `WorkSingleModeCharaData` and `SingleModeChara` to find `AcquiredSkill` and `SkillTips`. Also introspect `MasterSkillData.SkillData` nested class for skill name/ID fields.
+**Nested class search exhausted (all NOT FOUND):**
+- `WorkSingleModeCharaData::AcquiredSkill`, `::SkillData`, `::Skill`, `::EvaluationInfo`, `::SupportCard`, `::TrainingPartner`
+- `WorkSingleModeData::AcquiredSkill`, `::SkillTips`, `::SkillData`, `::Skill`, `::EvaluationInfo`, `::Evaluation`, `::SupportCard`, `::TrainingPartner`
+- `WorkSkillData::SkillTips`, `::SkillData`, `::Skill`, `::EvaluationInfo`, `::Evaluation`, `::SupportCard`, `::TrainingPartner`
+- `WorkSingleModeHomeInfo::*` (all probed names)
+- `WorkSupportCardData::*` (all probed names)
+- `MasterSkillData::AcquiredSkill`, `::SkillTips`, `::Skill`, `::EvaluationInfo`, `::Evaluation`, `::SupportCard`, `::TrainingPartner`
+
+> **Approach for reading acquired skills**: Use `il2cpp_find_nested_class(WorkSkillData, "AcquiredSkill")` to get the klass pointer, or read the klass from a live list element. Inherited fields/methods from `SkillDataBase` are accessible on the `AcquiredSkill` instance directly via IL2CPP method invoke.
 
 ### `StandaloneSimulator.SkillDetail`
 

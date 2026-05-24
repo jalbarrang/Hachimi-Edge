@@ -28,6 +28,7 @@ mod vtable;
 mod diagnostics;
 mod hooks;
 mod memory_reader;
+mod skill_shop;
 mod tracker;
 mod ui;
 

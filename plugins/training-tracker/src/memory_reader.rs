@@ -41,6 +41,7 @@ pub struct CareerSnapshot {
     pub fan_count: i32,
     // NOTE: get_SkillPoint returns ObscuredInt (struct), not i32.
     // Needs special decryption handling — skipped for now.
+    #[allow(dead_code)]
     pub skill_point: i32,
 
     pub total_races: i32,
@@ -125,7 +126,8 @@ struct ResolvedChain {
     m_get_motivation: *const c_void,
     m_get_fan_count: *const c_void,
     m_get_training_level: *const c_void, // GetTrainingLevel(1 arg: commandId)
-    m_get_scenario_id: *const c_void,    // get_ScenarioId(0 args)
+    #[allow(dead_code)]
+    m_get_scenario_id: *const c_void,    // get_ScenarioId(0 args), reserved for scenario detection
 }
 
 // SAFETY: IL2CPP class/method pointers are stable for process lifetime.
@@ -245,10 +247,7 @@ pub fn stop_tracking() {
     hlog_info!("Memory-read tracking STOPPED");
 }
 
-/// Whether the method chain has been resolved (methods ready to call).
-pub fn is_resolved() -> bool {
-    CHAIN.get().is_some()
-}
+
 
 
 /// Read a snapshot of the current career state from game memory.
@@ -361,8 +360,7 @@ fn read_snapshot_inner() -> Option<CareerSnapshot> {
     })
 }
 
-// Log once when the memory reader first succeeds in a career.
-static CAREER_LOGGED: AtomicBool = AtomicBool::new(false);
+
 
 // ---------------------------------------------------------------------------
 // Training level detection
@@ -438,6 +436,297 @@ fn read_training_levels(chara: *mut c_void, chain: &ResolvedChain) -> [i32; 5] {
 
     hlog_trace!("training_levels: no matching command ID set found");
     [0; 5]
+}
+
+// ---------------------------------------------------------------------------
+// IL2CPP string reading
+// ---------------------------------------------------------------------------
+
+/// Read an IL2CPP `System.String` object and convert to a Rust `String`.
+/// IL2CppString layout (64-bit):
+///   offset 0x00: Il2CppObject header (klass + monitor = 16 bytes)
+///   offset 0x10: int32 length (in UTF-16 code units)
+///   offset 0x14: char16_t[] chars (UTF-16 data)
+unsafe fn read_il2cpp_string(str_obj: *mut c_void) -> Option<String> {
+    unsafe {
+        if str_obj.is_null() { return None; }
+        let len = *(str_obj.byte_add(0x10) as *const i32);
+        if len <= 0 || len > 4096 { return None; }
+        let chars = str_obj.byte_add(0x14) as *const u16;
+        let slice = std::slice::from_raw_parts(chars, len as usize);
+        String::from_utf16(slice).ok()
+    }
+}
+
+/// Call an instance method that takes one `i32` arg and returns `*mut c_void`.
+#[inline]
+unsafe fn call_obj_with_i32(this: *mut c_void, mi: *const c_void, arg: i32) -> *mut c_void {
+    let fp: extern "C" fn(*mut c_void, i32, *const c_void) -> *mut c_void =
+        unsafe { std::mem::transmute(method_ptr(mi)) };
+    fp(this, arg, mi)
+}
+
+// ---------------------------------------------------------------------------
+// Generic IL2CPP List helpers
+// ---------------------------------------------------------------------------
+
+/// Read an IL2CPP `List<T>` field from an object.
+/// Returns (list_ptr, count, get_Item method) or None.
+pub unsafe fn read_list_field(
+    obj: *mut c_void,
+    field_name: &[u8],
+) -> Option<(*mut c_void, i32, *const c_void)> {
+    let vt = vt();
+    let obj_klass = unsafe { *(obj as *const *mut c_void) };
+    let field = unsafe { (vt.il2cpp_get_field_from_name)(obj_klass, field_name.as_ptr().cast()) };
+    if field.is_null() { return None; }
+
+    let mut list_ptr: *mut c_void = std::ptr::null_mut();
+    unsafe {
+        (vt.il2cpp_get_field_value)(
+            obj.cast(), field.cast(),
+            &mut list_ptr as *mut _ as *mut c_void,
+        );
+    }
+    if list_ptr.is_null() { return None; }
+
+    let list_klass = unsafe { *(list_ptr as *const *mut c_void) };
+    let m_count = unsafe { (vt.il2cpp_get_method)(list_klass, b"get_Count\0".as_ptr().cast(), 0) };
+    let m_item = unsafe { (vt.il2cpp_get_method)(list_klass, b"get_Item\0".as_ptr().cast(), 1) };
+    if m_count.is_null() || m_item.is_null() { return None; }
+
+    let count = unsafe { call_i32(list_ptr, m_count as *const c_void) };
+    Some((list_ptr, count, m_item as *const c_void))
+}
+
+// ---------------------------------------------------------------------------
+// Skill list reading
+// ---------------------------------------------------------------------------
+
+/// A single acquired skill read from game memory.
+#[derive(Debug, Clone)]
+pub struct AcquiredSkillInfo {
+    pub master_id: i32,
+    pub level: i32,
+    pub name: String,
+}
+
+/// Read the acquired skill list from the chara object.
+/// Returns (list_ptr, count) for diagnostics, or None.
+pub fn read_acquired_skill_list() -> Option<(*mut c_void, i32)> {
+    let chara = get_chara_ptr()?;
+    unsafe {
+        let (list_ptr, count, _) = read_list_field(chara, b"_acquiredSkillList\0")?;
+        Some((list_ptr, count))
+    }
+}
+
+/// Read all acquired skills with names.
+pub fn read_acquired_skills() -> Vec<AcquiredSkillInfo> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        unsafe { read_acquired_skills_inner() }
+    })) {
+        Ok(v) => v,
+        Err(_) => {
+            hlog_error!("read_acquired_skills PANICKED");
+            Vec::new()
+        }
+    }
+}
+
+unsafe fn read_acquired_skills_inner() -> Vec<AcquiredSkillInfo> {
+    let chara = match get_chara_ptr() {
+        Some(c) => c,
+        None => return Vec::new(),
+    };
+
+    let (list_ptr, count, m_get_item) = match unsafe { read_list_field(chara, b"_acquiredSkillList\0") } {
+        Some(v) => v,
+        None => return Vec::new(),
+    };
+
+    if count <= 0 || count > 200 {
+        return Vec::new();
+    }
+
+    let vt = vt();
+    let mut skills = Vec::with_capacity(count as usize);
+    let mut m_master_id: *const c_void = std::ptr::null();
+    let mut m_level: *const c_void = std::ptr::null();
+    let mut m_master_data: *const c_void = std::ptr::null();
+    let mut m_name: *const c_void = std::ptr::null();
+    let mut methods_resolved = false;
+
+    for i in 0..count {
+        let item = unsafe { call_obj_with_i32(list_ptr, m_get_item, i) };
+        if item.is_null() { continue; }
+
+        // Resolve methods on first element (inherited from SkillDataBase)
+        if !methods_resolved {
+            methods_resolved = true;
+            let klass = unsafe { *(item as *const *mut c_void) };
+
+            m_master_id = unsafe { (vt.il2cpp_get_method)(klass, b"get_MasterId\0".as_ptr().cast(), 0) } as _;
+            m_level = unsafe { (vt.il2cpp_get_method)(klass, b"get_Level\0".as_ptr().cast(), 0) } as _;
+            m_master_data = unsafe { (vt.il2cpp_get_method)(klass, b"get_MasterData\0".as_ptr().cast(), 0) } as _;
+
+            if m_master_id.is_null() || m_level.is_null() {
+                hlog_warn!("SkillDataBase methods not found (get_MasterId/get_Level)");
+                return Vec::new();
+            }
+
+            static LOGGED: AtomicBool = AtomicBool::new(false);
+            if !LOGGED.swap(true, Ordering::Relaxed) {
+                hlog_info!("AcquiredSkill: resolved get_MasterId={} get_Level={} get_MasterData={}",
+                    !m_master_id.is_null(), !m_level.is_null(), !m_master_data.is_null());
+            }
+        }
+
+        let master_id = unsafe { call_i32(item, m_master_id) };
+        let level = unsafe { call_i32(item, m_level) };
+
+        // Try to get the name via get_MasterData() -> get_Name()
+        let name = if !m_master_data.is_null() {
+            let master_obj = unsafe { call_obj(item, m_master_data) };
+            if !master_obj.is_null() {
+                if m_name.is_null() {
+                    let master_klass = unsafe { *(master_obj as *const *mut c_void) };
+                    m_name = unsafe { (vt.il2cpp_get_method)(master_klass, b"get_Name\0".as_ptr().cast(), 0) } as _;
+                }
+                if !m_name.is_null() {
+                    let str_obj = unsafe { call_obj(master_obj, m_name) };
+                    unsafe { read_il2cpp_string(str_obj) }.unwrap_or_default()
+                } else {
+                    String::new()
+                }
+            } else {
+                String::new()
+            }
+        } else {
+            String::new()
+        };
+
+        skills.push(AcquiredSkillInfo { master_id, level, name });
+    }
+
+    skills
+}
+
+// ---------------------------------------------------------------------------
+// Friendship / Evaluation reading
+// ---------------------------------------------------------------------------
+
+/// A single support card's friendship/bond value.
+#[derive(Debug, Clone)]
+pub struct EvaluationInfo {
+    pub target_id: i32, // support card chara ID
+    pub value: i32,     // friendship/bond value (0-100+)
+}
+
+/// Read the evaluation (friendship) list from the chara object.
+pub fn read_evaluations() -> Vec<EvaluationInfo> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        unsafe { read_evaluations_inner() }
+    })) {
+        Ok(v) => v,
+        Err(_) => {
+            hlog_error!("read_evaluations PANICKED");
+            Vec::new()
+        }
+    }
+}
+
+unsafe fn read_evaluations_inner() -> Vec<EvaluationInfo> {
+    let chara = match get_chara_ptr() {
+        Some(c) => c,
+        None => return Vec::new(),
+    };
+
+    // Try known field names for the evaluation list
+    let field_names = [
+        b"_evaluationList\0".as_slice(),
+        b"_evaluationInfoList\0",
+        b"_evaluations\0",
+    ];
+
+    let mut list_data = None;
+    for name in &field_names {
+        if let Some(data) = unsafe { read_list_field(chara, name) } {
+            list_data = Some(data);
+            break;
+        }
+    }
+
+    let (list_ptr, count, m_get_item) = match list_data {
+        Some(v) => v,
+        None => return Vec::new(),
+    };
+
+    if count <= 0 || count > 50 {
+        return Vec::new();
+    }
+
+    let vt = vt();
+    let mut evals = Vec::with_capacity(count as usize);
+    let mut m_target_id: *const c_void = std::ptr::null();
+    let mut m_value: *const c_void = std::ptr::null();
+    let mut methods_resolved = false;
+
+    for i in 0..count {
+        let item = unsafe { call_obj_with_i32(list_ptr, m_get_item, i) };
+        if item.is_null() { continue; }
+
+        if !methods_resolved {
+            methods_resolved = true;
+            let klass = unsafe { *(item as *const *mut c_void) };
+
+            m_target_id = unsafe { (vt.il2cpp_get_method)(klass, b"get_TargetId\0".as_ptr().cast(), 0) } as _;
+            m_value = unsafe { (vt.il2cpp_get_method)(klass, b"get_Value\0".as_ptr().cast(), 0) } as _;
+
+            if m_target_id.is_null() || m_value.is_null() {
+                hlog_warn!("Evaluation methods not found (get_TargetId/get_Value)");
+                return Vec::new();
+            }
+
+            static LOGGED: AtomicBool = AtomicBool::new(false);
+            if !LOGGED.swap(true, Ordering::Relaxed) {
+                hlog_info!("Evaluation: resolved get_TargetId + get_Value");
+            }
+        }
+
+        let target_id = unsafe { call_i32(item, m_target_id) };
+        let value = unsafe { call_i32(item, m_value) };
+        evals.push(EvaluationInfo { target_id, value });
+    }
+
+    evals
+}
+
+// ---------------------------------------------------------------------------
+// Shared helpers
+// ---------------------------------------------------------------------------
+
+/// Get the chara object pointer (WorkSingleModeCharaData) if available.
+pub fn get_chara_ptr() -> Option<*mut c_void> {
+    let chain = CHAIN.get()?;
+    let vt = vt();
+
+    let singleton = unsafe {
+        (vt.il2cpp_get_singleton_like_instance)(chain.wdm_klass.cast())
+    };
+    if singleton.is_null() { return None; }
+    let singleton = singleton as *mut c_void;
+
+    let wsmd = unsafe { call_obj(singleton, chain.m_get_single_mode) };
+    if wsmd.is_null() { return None; }
+
+    let is_playing = unsafe { call_bool(wsmd, chain.m_get_is_playing) };
+    if !is_playing { return None; }
+
+    let chara = unsafe { call_obj(wsmd, chain.m_get_character) };
+    if chara.is_null() { return None; }
+
+    Some(chara)
 }
 
 /// Map motivation enum value to display string.

@@ -9,6 +9,7 @@ use std::panic::{self, AssertUnwindSafe};
 use std::sync::atomic::{AtomicI32, Ordering};
 
 use crate::memory_reader;
+use crate::skill_shop;
 use crate::tracker::{Facility, TRACKER};
 use crate::vtable::vt;
 
@@ -23,7 +24,11 @@ const DEFAULT_FONT_SIZE: f32 = 11.0;
 
 fn get_font_size() -> f32 {
     let bits = OVERLAY_FONT_SIZE.load(Ordering::Relaxed);
-    if bits == 0 { DEFAULT_FONT_SIZE } else { f32::from_bits(bits) }
+    if bits == 0 {
+        DEFAULT_FONT_SIZE
+    } else {
+        f32::from_bits(bits)
+    }
 }
 
 fn set_font_size(size: f32) {
@@ -59,7 +64,9 @@ extern "C" fn draw_menu_section(ui: *mut c_void, _userdata: *mut c_void) {
     if let Err(_) = panic::catch_unwind(AssertUnwindSafe(|| draw_menu_section_inner(ui))) {
         hlog_error!("draw_menu_section PANICKED");
         let vt = vt();
-        unsafe { (vt.gui_ui_colored_label)(ui, 255, 70, 70, 255, c"[Training Tracker: menu render error]".as_ptr()); }
+        unsafe {
+            (vt.gui_ui_colored_label)(ui, 255, 70, 70, 255, c"[Training Tracker: menu render error]".as_ptr());
+        }
     }
 }
 
@@ -100,11 +107,7 @@ fn draw_menu_section_inner(ui: *mut c_void) {
                 FONT_BUF[..len].copy_from_slice(&bytes[..len]);
                 FONT_BUF[len] = 0;
             }
-            if (vt.gui_ui_text_edit_singleline)(
-                ui,
-                FONT_BUF.as_mut_ptr() as *mut std::ffi::c_char,
-                FONT_BUF.len(),
-            ) {
+            if (vt.gui_ui_text_edit_singleline)(ui, FONT_BUF.as_mut_ptr() as *mut std::ffi::c_char, FONT_BUF.len()) {
                 let end = FONT_BUF.iter().position(|b| *b == 0).unwrap_or(FONT_BUF.len());
                 if let Ok(s) = std::str::from_utf8(&FONT_BUF[..end]) {
                     if let Ok(v) = s.trim().parse::<f32>() {
@@ -165,12 +168,11 @@ fn draw_tracking_controls(ui: *mut c_void) {
 
     // Brief status — detailed stats are in the overlay
     let status = match memory_reader::read_snapshot() {
-        Some(snap) if snap.is_playing => {
-            CString::new(format!(
-                "\u{2705} Tracking • Turn {} • Total {}",
-                snap.current_turn, snap.total_stats
-            )).unwrap_or_default()
-        }
+        Some(snap) if snap.is_playing => CString::new(format!(
+            "\u{2705} Tracking • Turn {} • Total {}",
+            snap.current_turn, snap.total_stats
+        ))
+        .unwrap_or_default(),
         Some(_) => c"\u{23f8} No active career".to_owned(),
         None => c"\u{26a0} Singleton unavailable".to_owned(),
     };
@@ -214,20 +216,23 @@ extern "C" fn draw_overlay(ui: *mut c_void, _userdata: *mut c_void) {
     if let Err(_) = panic::catch_unwind(AssertUnwindSafe(|| draw_overlay_inner(ui))) {
         hlog_error!("draw_overlay PANICKED");
         let vt = vt();
-        unsafe { (vt.gui_ui_colored_label)(ui, 255, 70, 70, 255, c"[overlay render error]".as_ptr()); }
+        unsafe {
+            (vt.gui_ui_colored_label)(ui, 255, 70, 70, 255, c"[overlay render error]".as_ptr());
+        }
     }
 }
 
 fn draw_overlay_inner(ui: *mut c_void) {
     let vt = vt();
-    let tracking = memory_reader::TRACKING.load(Ordering::Relaxed);
-    let api_version = API_VERSION.load(Ordering::Relaxed);
 
-    if api_version >= 7 {
-        unsafe { (vt.gui_ui_set_font_size)(ui, get_font_size()); }
+    let tracking = memory_reader::TRACKING.load(Ordering::Relaxed);
+
+    unsafe {
+        (vt.gui_ui_set_font_size)(ui, get_font_size());
     }
-    if api_version >= 4 {
-        unsafe { (vt.gui_ui_set_min_width)(ui, 280.0); }
+
+    unsafe {
+        (vt.gui_ui_set_min_width)(ui, 300.0);
     }
 
     if tracking {
@@ -255,8 +260,10 @@ fn draw_overlay_memory(ui: *mut c_void) {
     unsafe {
         // Header with turn
         let header = CString::new(format!(
-            "\u{1f3cb} Turn {} \u{2022} Month {}", snap.current_turn, snap.month
-        )).unwrap_or_default();
+            "\u{1f3cb} Turn {} \u{2022} Month {}",
+            snap.current_turn, snap.month
+        ))
+        .unwrap_or_default();
         (vt.gui_ui_small)(ui, header.as_ptr());
 
         // Stats: compact rows with levels
@@ -264,32 +271,40 @@ fn draw_overlay_memory(ui: *mut c_void) {
         let row1 = CString::new(format!(
             "Speed {:>4}(L{})  Stamina {:>4}(L{})  Power {:>4}(L{})",
             snap.speed, lv[0], snap.stamina, lv[1], snap.power, lv[2]
-        )).unwrap_or_default();
+        ))
+        .unwrap_or_default();
         (vt.gui_ui_small)(ui, row1.as_ptr());
+
 
         let row2 = CString::new(format!(
             "Guts {:>4}(L{})  Wit {:>4}(L{})  Total {:>4}",
             snap.guts, lv[3], snap.wiz, lv[4], snap.total_stats
-        )).unwrap_or_default();
+        ))
+        .unwrap_or_default();
         (vt.gui_ui_small)(ui, row2.as_ptr());
 
         // Energy + Mood
         let (mr, mg, mb) = memory_reader::motivation_color(snap.motivation);
         let energy_mood = CString::new(format!(
             "Energy {}/{}  Mood: {}",
-            snap.hp, snap.max_hp,
+            snap.hp,
+            snap.max_hp,
             memory_reader::mood_label(snap.motivation)
-        )).unwrap_or_default();
+        ))
+        .unwrap_or_default();
         (vt.gui_ui_colored_label)(ui, mr, mg, mb, 255, energy_mood.as_ptr());
 
         // Fans + Races (SP omitted until ObscuredInt decryption is implemented)
         let extra = CString::new(format!(
             "Fans {}  Races {}/{}W",
-            format_number(snap.fan_count), snap.total_races, snap.win_count
-        )).unwrap_or_default();
+            format_number(snap.fan_count),
+            snap.total_races,
+            snap.win_count
+        ))
+        .unwrap_or_default();
         (vt.gui_ui_small)(ui, extra.as_ptr());
 
-        // Collapsible skills panel (requires API v6)
+        // Collapsible panels (requires API v6)
         let api_version = API_VERSION.load(Ordering::Relaxed);
         if api_version >= 6 {
             (vt.gui_ui_collapsing)(
@@ -297,6 +312,20 @@ fn draw_overlay_memory(ui: *mut c_void) {
                 c"\u{1f4d6} Skills".as_ptr(),
                 false,
                 Some(draw_skills_panel),
+                std::ptr::null_mut(),
+            );
+            (vt.gui_ui_collapsing)(
+                ui,
+                c"\u{1f91d} Bonds".as_ptr(),
+                false,
+                Some(draw_bonds_panel),
+                std::ptr::null_mut(),
+            );
+            (vt.gui_ui_collapsing)(
+                ui,
+                c"\u{1f6d2} Skill Shop".as_ptr(),
+                false,
+                Some(draw_skill_shop_panel),
                 std::ptr::null_mut(),
             );
         }
@@ -312,10 +341,127 @@ extern "C" fn draw_skills_panel(ui: *mut c_void, _userdata: *mut c_void) {
 
 fn draw_skills_panel_inner(ui: *mut c_void) {
     let vt = vt();
-    // TODO: Read _acquiredSkillList from game memory once AcquiredSkill class is introspected.
-    // For now, show a placeholder with skill point count.
-    let msg = c"Skill list not yet available — run 'Dump Skill Classes' from the menu to introspect AcquiredSkill";
-    unsafe { (vt.gui_ui_small)(ui, msg.as_ptr()) };
+    let skills = memory_reader::read_acquired_skills();
+
+    if skills.is_empty() {
+        unsafe { (vt.gui_ui_small)(ui, c"No skills acquired yet".as_ptr()) };
+        return;
+    }
+
+    for skill in &skills {
+        let label = if skill.name.is_empty() {
+            CString::new(format!("Lv.{} \u{2022} Skill #{}", skill.level, skill.master_id)).unwrap_or_default()
+        } else {
+            CString::new(format!("Lv.{} \u{2022} {}", skill.level, skill.name)).unwrap_or_default()
+        };
+        unsafe { (vt.gui_ui_small)(ui, label.as_ptr()) };
+    }
+
+    let count = CString::new(format!("{} skills", skills.len())).unwrap_or_default();
+    unsafe { (vt.gui_ui_colored_label)(ui, 150, 150, 150, 255, count.as_ptr()) };
+}
+
+/// Draw the bonds/friendship panel inside a collapsing header.
+extern "C" fn draw_bonds_panel(ui: *mut c_void, _userdata: *mut c_void) {
+    if let Err(_) = panic::catch_unwind(AssertUnwindSafe(|| draw_bonds_panel_inner(ui))) {
+        hlog_error!("draw_bonds_panel PANICKED");
+    }
+}
+
+fn draw_bonds_panel_inner(ui: *mut c_void) {
+    let vt = vt();
+    let evals = memory_reader::read_evaluations();
+
+    if evals.is_empty() {
+        unsafe { (vt.gui_ui_small)(ui, c"No bond data available".as_ptr()) };
+        return;
+    }
+
+    for eval in &evals {
+        let (r, g, b) = bond_color(eval.value);
+        let bar_len = (eval.value.min(100).max(0) as f32 / 100.0 * 10.0) as usize;
+        let bar: String = "\u{2588}".repeat(bar_len) + &"\u{2591}".repeat(10 - bar_len);
+        let label = CString::new(format!(
+            "#{:<4} {} {:>3}",
+            eval.target_id, bar, eval.value
+        )).unwrap_or_default();
+        unsafe { (vt.gui_ui_colored_label)(ui, r, g, b, 255, label.as_ptr()) };
+    }
+}
+
+/// Draw refresh button + SP display in a horizontal row.
+extern "C" fn draw_skill_shop_header(ui: *mut c_void, _userdata: *mut c_void) {
+    let vt = vt();
+    if unsafe { (vt.gui_ui_small_button)(ui, c"\u{1f504} Refresh".as_ptr()) } {
+        skill_shop::refresh();
+    }
+    if let Some(sp) = skill_shop::read_skill_points() {
+        let label = CString::new(format!("SP: {}", sp)).unwrap_or_default();
+        unsafe { (vt.gui_ui_small)(ui, label.as_ptr()) };
+    }
+}
+
+/// Draw the skill shop panel inside a collapsing header.
+extern "C" fn draw_skill_shop_panel(ui: *mut c_void, _userdata: *mut c_void) {
+    if let Err(_) = panic::catch_unwind(AssertUnwindSafe(|| draw_skill_shop_panel_inner(ui))) {
+        hlog_error!("draw_skill_shop_panel PANICKED");
+    }
+}
+
+fn draw_skill_shop_panel_inner(ui: *mut c_void) {
+    let vt = vt();
+
+    // Refresh button + current SP
+    unsafe {
+        (vt.gui_ui_horizontal)(ui, Some(draw_skill_shop_header), std::ptr::null_mut());
+    }
+
+    let entries = skill_shop::get_cached();
+
+    if entries.is_empty() {
+        return;
+    }
+
+    for entry in &entries {
+        if entry.is_learned { continue; }
+
+        let icon = skill_shop::rarity_label(entry.rarity);
+        let discount = skill_shop::discount_pct(entry.hint_level, false);
+        let (r, g, b) = if entry.rarity >= 2 { (255, 200, 50) } else { (220, 220, 220) };
+
+        let name = if entry.name.is_empty() {
+            format!("#{}", entry.group_id)
+        } else {
+            entry.name.clone()
+        };
+
+        let cost_str = if entry.base_cost > 0 {
+            let discounted = entry.base_cost * (100 - discount) / 100;
+            format!(" {}pt", discounted)
+        } else {
+            String::new()
+        };
+
+        let label = if discount > 0 {
+            CString::new(format!("{} {} (-{}%{})", icon, name, discount, cost_str)).unwrap_or_default()
+        } else {
+            CString::new(format!("{} {}{}", icon, name, if cost_str.is_empty() { String::new() } else { format!(" ({})", cost_str.trim()) })).unwrap_or_default()
+        };
+        unsafe { (vt.gui_ui_colored_label)(ui, r, g, b, 255, label.as_ptr()) };
+    }
+}
+
+/// Color for bond/friendship value.
+fn bond_color(value: i32) -> (u8, u8, u8) {
+    if value >= 80 {
+        (255, 200, 50)  // Gold - friendship event threshold
+    } else if value >= 60 {
+        (100, 220, 100) // Green
+    } else if value >= 30 {
+        (200, 200, 200) // Gray
+    } else {
+        (100, 150, 255) // Blue - low
+    }
 }
 
 /// Overlay: hook-based training counts (fallback when not memory-tracking).

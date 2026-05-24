@@ -198,6 +198,53 @@ WorkDataManager (LIVE singleton, confirmed at 0x217cea33a80)
 
 > **Classes that DON'T exist:** `SingleModeManager`, `SingleModeWorkDataManager`, `SingleModeContext`, `SingleModeDataManager` — all NOT FOUND at runtime.
 
+### Acquired Skills Access Chain (Confirmed 2026-05-24)
+
+```
+WorkSingleModeCharaData._acquiredSkillList : List<WorkSkillData.AcquiredSkill>
+  │
+  ├── element[i] : WorkSkillData.AcquiredSkill
+  │     │  (0 own fields — all inherited from SkillDataBase)
+  │     │
+  │     ├── get_MasterId() → int       (skill_id, from SkillDataBase._masterId)
+  │     ├── get_Level() → int          (skill level, from SkillDataBase._level)
+  │     └── get_MasterData() → MasterSkillData.SkillData
+  │           ├── .Id, .Rarity, .GroupId, .SkillCategory, ...
+  │           ├── get_Name() → string (localized)
+  │           └── get_Remarks() → string (description)
+  │
+  Inheritance: AcquiredSkill → SkillDataBase → System.Object
+```
+
+> **Resolution note:** `AcquiredSkill` cannot be found via `il2cpp_find_class("Gallop", "AcquiredSkill")`. It is `Gallop.WorkSkillData.AcquiredSkill` (nested). Use `il2cpp_find_nested_class(WorkSkillData, "AcquiredSkill")` or read the klass pointer from a live list element.
+
+### Friendship / Bond Access Chain (Confirmed 2026-05-24)
+
+```
+WorkSingleModeCharaData  (73 fields, 131 methods)
+  │
+  ├── _evaluationList : List<WorkSingleModeCharaData.Evaluation>  (assumed field name)
+  │     │
+  │     ├── element[i] : WorkSingleModeCharaData.Evaluation
+  │     │     ├── get_TargetId() → int       (support card ID)
+  │     │     ├── get_Value() → int          (friendship gauge, 0–100+)
+  │     │     ├── get_IsOuting() → bool      (outing occurred)
+  │     │     ├── get_StoryStep() → int      (support story progress)
+  │     │     ├── get_IsAppear() → bool      (character appeared this run)
+  │     │     ├── get_GuestCharaId() → int   (guest character, if any)
+  │     │     ├── get_InterestState() → InterestState  (team race interest)
+  │     │     ├── get_SoulEventState() → bool (soul event active)
+  │     │     └── get_SoulThresholdId() → int (soul threshold)
+  │     │
+  │     └── Server source: evaluation_info_array in SingleModeCheckEventResponse
+  │
+  └── MasterSingleModeEvaluation (master DB)
+        ├── Get(id) → SingleModeEvaluation
+        └── GetListWithCharaIdOrderByIdAsc(charaId) → List<SingleModeEvaluation>
+```
+
+> **Resolution note:** The friendship class is `WorkSingleModeCharaData.Evaluation` (nested). It cannot be found as `EvaluationInfo`, `SingleModeEvaluation`, or `WorkSingleModeEvaluationInfo`. Use `il2cpp_find_nested_class(WorkSingleModeCharaData, "Evaluation")`.
+
 ## Data Flow (Server Responses)
 
 ```
@@ -208,7 +255,12 @@ SingleModeCheckEventResponse.CommonResponse
     ├── chara_info: SingleModeChara
     │       ├── speed, stamina, power, wiz (Wisdom), guts, vital
     │       ├── training_level_info_array: TrainingLevelInfo[]
-    │       ├── skill_array, skill_tips_array
+    │       ├── skill_array → WorkSkillData.AcquiredSkill (via Convert)
+    │       │     └── each: { skill_id, level } → SkillDataBase._masterId, ._level
+    │       ├── skill_tips_array → WorkSingleModeCharaData.SkillTips
+    │       │     └── each: { group_id, rarity, level }
+    │       ├── evaluation_info_array → WorkSingleModeCharaData.Evaluation
+    │       │     └── each: { target_id, value, is_outing, story_step, ... }
     │       └── support_card_array
     ├── home_info: SingleModeHomeInfo
     │       ├── command_info_array: SingleModeCommandInfo[]
