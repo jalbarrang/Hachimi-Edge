@@ -11,6 +11,25 @@ The repo is a Cargo workspace (root + `crates/*` + `plugins/training-tracker`). 
 
 ## Deploy
 
+### Windows (script)
+
+From the repo root (builds optionally with `-Build`):
+
+```powershell
+.\scripts\deploy-windows.ps1 -Build
+```
+
+Override the game folder:
+
+```powershell
+$env:HACHIMI_GAME_DIR = "D:\path\to\UmamusumePrettyDerby"
+.\scripts\deploy-windows.ps1 -Build
+```
+
+The script copies `hachimi.dll` → `cri_mana_vpx.dll` and `hachimi_training_tracker.dll` into the game directory. It never modifies `cri_mana_vpx.dll.backup`.
+
+### Manual
+
 - **Deploy core**: Copy `target/release/hachimi.dll` as `C:/Program Files (x86)/Steam/steamapps/common/UmamusumePrettyDerby/cri_mana_vpx.dll`
-- **Deploy plugin**: Copy plugin DLL to the game directory root
-- **Config**: `hachimi/config.json` in the game directory. `menu_open_key: 68` (D key). Plugins listed in `load_libraries`.
+- **Deploy plugin**: Copy `target/release/hachimi_training_tracker.dll` to the game directory root
+- **Config**: `config.json` in the game data directory. `menu_open_key: 68` (D key). Plugins listed in `windows.load_libraries`.
