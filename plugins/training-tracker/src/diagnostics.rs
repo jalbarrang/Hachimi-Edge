@@ -1,5 +1,8 @@
 //! Runtime IL2CPP class/field diagnostics.
 //! Dumps field and method info for career-related classes to the log.
+//!
+//! Dev-only tooling: call [`run_diagnostics`] / [`dump_skill_classes`] from a menu hook when needed.
+#![allow(dead_code)]
 
 use std::ffi::{c_void, CStr};
 
