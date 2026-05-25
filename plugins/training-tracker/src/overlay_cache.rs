@@ -1,4 +1,7 @@
-//! Cache for overlay career data — all IL2CPP reads run on the Unity main thread.
+//! Unified cache for overlay career data.
+//!
+//! All IL2CPP reads run on the Unity main thread on a ~2s cadence (or immediately
+//! when tracking starts). The render thread only clones from [`CACHE`].
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering as AtomicOrdering};
 use std::sync::Mutex;
@@ -10,7 +13,7 @@ use crate::memory_reader::{self, AcquiredSkillInfo, CareerSnapshot, EvaluationIn
 use crate::skill_shop::{self, SkillShopEntry};
 
 /// Auto-refresh interval while memory tracking is on (milliseconds).
-pub const AUTO_REFRESH_INTERVAL_MS: u64 = 2500;
+pub const AUTO_REFRESH_INTERVAL_MS: u64 = 2000;
 
 #[derive(Default)]
 struct OverlayCache {
@@ -29,7 +32,6 @@ static CACHE: Mutex<OverlayCache> = Mutex::new(OverlayCache {
     skill_points: None,
 });
 static PENDING: AtomicBool = AtomicBool::new(false);
-static SKILL_SHOP_DIRTY: AtomicBool = AtomicBool::new(false);
 static LAST_REFRESH_MS: AtomicU64 = AtomicU64::new(0);
 
 fn now_ms() -> u64 {
@@ -61,17 +63,11 @@ fn schedule_refresh() {
 }
 
 extern "C" fn refresh_cache_cb() {
-    let shop_dirty = SKILL_SHOP_DIRTY.swap(false, AtomicOrdering::AcqRel);
-
     let snapshot = memory_reader::read_snapshot();
     let skills = memory_reader::read_acquired_skills();
     let evaluations = memory_reader::read_evaluations();
     let skill_points = skill_shop::read_skill_points();
-    let skill_shop = if shop_dirty {
-        skill_shop::read_skill_shop()
-    } else {
-        CACHE.lock().ok().map(|c| c.skill_shop.clone()).unwrap_or_default()
-    };
+    let skill_shop = skill_shop::read_skill_shop();
 
     if let Ok(mut guard) = CACHE.lock() {
         guard.snapshot = snapshot;
@@ -83,11 +79,6 @@ extern "C" fn refresh_cache_cb() {
 
     LAST_REFRESH_MS.store(now_ms(), AtomicOrdering::Relaxed);
     PENDING.store(false, AtomicOrdering::Release);
-
-    // Refresh clicked while a job was in flight — run again for skill shop.
-    if SKILL_SHOP_DIRTY.load(AtomicOrdering::Relaxed) {
-        schedule_refresh();
-    }
 }
 
 /// Throttled auto-refresh (call from render thread each overlay frame).
@@ -101,17 +92,12 @@ pub fn maybe_request_refresh() {
     schedule_refresh();
 }
 
-/// Immediate refresh (start tracking, Refresh button) — bypasses interval, still coalesced.
+/// Immediate refresh when tracking starts — bypasses interval, still coalesced.
 pub fn request_refresh_immediate() {
     if !memory_reader::TRACKING.load(AtomicOrdering::Relaxed) {
         return;
     }
     schedule_refresh();
-}
-
-/// Skill shop list is only rebuilt when this is set before `request_refresh_immediate`.
-pub fn mark_skill_shop_dirty() {
-    SKILL_SHOP_DIRTY.store(true, AtomicOrdering::Release);
 }
 
 pub fn snapshot() -> Option<CareerSnapshot> {
@@ -140,9 +126,9 @@ mod tests {
 
     #[test]
     fn should_auto_refresh_respects_interval() {
-        assert!(!should_auto_refresh(0, 2500));
-        assert!(!should_auto_refresh(2499, 2500));
-        assert!(should_auto_refresh(2500, 2500));
-        assert!(should_auto_refresh(3000, 2500));
+        assert!(!should_auto_refresh(0, AUTO_REFRESH_INTERVAL_MS));
+        assert!(!should_auto_refresh(1999, AUTO_REFRESH_INTERVAL_MS));
+        assert!(should_auto_refresh(2000, AUTO_REFRESH_INTERVAL_MS));
+        assert!(should_auto_refresh(3000, AUTO_REFRESH_INTERVAL_MS));
     }
 }

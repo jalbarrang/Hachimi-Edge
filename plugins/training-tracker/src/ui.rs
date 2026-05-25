@@ -288,18 +288,6 @@ fn draw_bonds_panel_inner(ui: *mut c_void) {
     }
 }
 
-/// Draw refresh button + SP display in a horizontal row.
-extern "C" fn draw_skill_shop_header(ui: *mut c_void, _userdata: *mut c_void) {
-    let sdk = Sdk::get();
-    if sdk.gui_small_button(ui, "\u{1f504} Refresh") {
-        overlay_cache::mark_skill_shop_dirty();
-        overlay_cache::request_refresh_immediate();
-    }
-    if let Some(sp) = overlay_cache::skill_points() {
-        sdk.gui_small(ui, &format!("SP: {}", sp));
-    }
-}
-
 /// Draw the skill shop panel inside a collapsing header.
 extern "C" fn draw_skill_shop_panel(ui: *mut c_void, _userdata: *mut c_void) {
     if panic::catch_unwind(AssertUnwindSafe(|| draw_skill_shop_panel_inner(ui))).is_err() {
@@ -309,11 +297,19 @@ extern "C" fn draw_skill_shop_panel(ui: *mut c_void, _userdata: *mut c_void) {
 
 fn draw_skill_shop_panel_inner(ui: *mut c_void) {
     let sdk = Sdk::get();
-    sdk.gui_horizontal(ui, draw_skill_shop_header, std::ptr::null_mut());
+
+    if overlay_cache::snapshot().is_none() {
+        sdk.gui_small(ui, "Loading shop data\u{2026}");
+        return;
+    }
+
+    if let Some(sp) = overlay_cache::skill_points() {
+        sdk.gui_small(ui, &format!("SP: {}", sp));
+    }
 
     let entries = overlay_cache::skill_shop();
     if entries.is_empty() {
-        sdk.gui_small(ui, "Press Refresh to load shop skills");
+        sdk.gui_small(ui, "No shop skills available");
         return;
     }
 
