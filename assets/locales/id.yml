@@ -3,9 +3,6 @@ hachimi: "Hachimi Edge"
 windows:
   menu_open_key: "Panah Kanan"
 
-android:
-  menu_open_key: "Vol Atas + Bawah\n\uf25a atau Ketuk tiga kali kiri atas"
-
 splash_sub: "\uf015 Tekan %{open_key_str} untuk buka menu."
 loading_label: "Memuat..."
 search_filter: "Ketik untuk cari..."
@@ -27,8 +24,6 @@ info: "Info"
 warning: "Peringatan"
 confirm_dialog_title: "Konfirmasi"
 soft_restart_confirm_content: "Apa kamu yakin ingin memulai ulang ringan game?"
-in_game_browser_confirm_content: "Apa kamu yakin ingin buka browser dalam game?"
-browser_dialog_title: "Browser"
 
 menu:
   check_for_updates: "\uf0aa Cek pembaruan"
@@ -53,7 +48,6 @@ menu:
   danger_zone_heading: "\uf071 Zona Rawan"
   danger_zone_warning: "Hati-hati! Menggunakan opsi di bawah akan membuat game tidak stabil."
   soft_restart: "\uf021 Restart ringan"
-  open_in_game_browser: "\uf0ac Buka browser in-game"
   toggle_game_ui: "\uf06e Atur UI game"
   discord_rpc: "RPC Discord"
 
@@ -168,8 +162,7 @@ config_editor:
   hide_ingame_ui_hotkey: "Sembunyikan hotkey UI dalam game"
   hide_ingame_ui_hotkey_info: >-
     Opsi ini memungkinkan tombol pintas untuk mengaktifkan/menonaktifkan UI di dalam game.
-    Untuk Android, Anda perlu mengetuk dua kali tombol Volume Atas, atau mengetuk tiga kali di bagian kanan atas layar.
-    Untuk PC/Android dengan keyboard, tombolnya adalah Insert dan dapat dikonfigurasi di GUI atau config.
+    Secara default tombolnya adalah Insert dan dapat dikonfigurasi di GUI atau config.
   discord_rpc: "RPC Discord"
   menu_open_key: "Buka menu hotkey"
   menu_open_key_set: "Atur"
@@ -199,11 +192,6 @@ tl_update_dialog:
 update_prompt_dialog:
   title: "Pembaruan tersedia!"
   content: "Versi terbaru Hachimi telah tersedia (%{version}). Apa kamu ingin memasangnya? Game akan dimulai ulang saat proses penerapan pembaruan."
-  android_content: |
-    Update Hachimi Edge baru tersedia (%{version}). Apakah Anda ingin menginstalnya?
-
-    Ketuk "Ya" untuk membuka UmaPatcher Edge dan re-patch game Anda.
-    (Tidak perlu download ulang full game atau APK, Anda hanya perlu patch lagi seperti biasanya karena UmaPatcher Edge selalu mendownload versi Hachimi Edge terbaru.)
 
 updating_dialog:
   title: "Memperbarui"

@@ -3,9 +3,6 @@ hachimi: "Hachimi Edge"
 windows:
   menu_open_key: "右方向键"
 
-android:
-  menu_open_key: "「音量+」键 + 「音量-」键\n\uf25a 或 三击左上角"
-
 splash_sub: "\uf015 按 %{open_key_str} 打开菜单"
 loading_label: "加载中..."
 search_filter: "输入以搜索..."
@@ -27,8 +24,6 @@ info: "信息"
 warning: "警告"
 confirm_dialog_title: "确认"
 soft_restart_confirm_content: "确定要软重启游戏吗？"
-in_game_browser_confirm_content: "确定要打开游戏内浏览器吗？"
-browser_dialog_title: "浏览器"
 
 menu:
   check_for_updates: "\uf0aa 检查更新"
@@ -53,7 +48,6 @@ menu:
   danger_zone_heading: "\uf071 危险操作"
   danger_zone_warning: "这些选项可能会对游戏产生异常影响，请谨慎使用！"
   soft_restart: "\uf021 软重启"
-  open_in_game_browser: "\uf0ac 打开游戏内浏览器"
   toggle_game_ui: "\uf06e 切换游戏界面显示"
 
 notification:
@@ -168,8 +162,7 @@ config_editor:
   hide_ingame_ui_hotkey: "隐藏游戏内 UI 的快捷键"
   hide_ingame_ui_hotkey_info: >-
     此选项允许使用快捷键切换游戏内 UI 界面的显示。
-    Android 端，您需要双击“音量上键”，或连续三次点击屏幕右上角。
-    对于配备键盘的 PC/Android 设备，默认按键为 Insert，并可在 GUI 或配置文件中进行更改。
+    默认按键为 Insert，并可在 GUI 或配置文件中进行更改。
   menu_open_key: "打开菜单按键"
   menu_open_key_set: "按下以设置"
   render_scale: "渲染比例"
@@ -199,11 +192,6 @@ update_prompt_dialog:
   content: |
     发现新的 Hachimi 更新 (%{version})，是否立即安装？
     安装完成后游戏将自动重启。
-  android_content: |
-    检测到 Hachimi Edge 的新版本 (%{version})。是否更新？
-
-    点击“是”将跳转至 UmaPatcher Edge，在其中重新为当前游戏补丁以更新 Hachimi。
-    (无需重新下载完整游戏文件或 APK，重新为当前游戏版本的 APK 补丁并安装即可，UmaPatcher Edge 将自动下载最新版本的 Hachimi Edge。)
 
 updating_dialog:
   title: "更新中"

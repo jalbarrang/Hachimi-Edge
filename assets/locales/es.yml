@@ -3,9 +3,6 @@ hachimi: "Hachimi Edge"
 windows:
   menu_open_key: "Flecha Derecha"
 
-android:
-  menu_open_key: "Volumen + y Volumen -\n\uf25a o Triple toque arriba a la izquierda"
-
 splash_sub: "\uf015 Pulsa %{open_key_str} para abrir el menú."
 loading_label: "Cargando..."
 search_filter: "Buscar..."
@@ -27,8 +24,6 @@ info: "Info"
 warning: "Advertencia"
 confirm_dialog_title: "Confirmar"
 soft_restart_confirm_content: "¿Seguro que quieres realizar un reinicio suave del juego?"
-in_game_browser_confirm_content: "¿Seguro que quieres abrir el navegador del juego?"
-browser_dialog_title: "Navegador"
 
 menu:
   check_for_updates: "\uf0aa Buscar actualizaciones"
@@ -53,7 +48,6 @@ menu:
   danger_zone_heading: "\uf071 Zona Peligrosa"
   danger_zone_warning: "Las siguientes opciones podrían tener efectos adversos en el juego. ¡Úsalas con precaución!"
   soft_restart: "\uf021 Reinicio suave"
-  open_in_game_browser: "\uf0ac Abrir navegador en juego"
   toggle_game_ui: "\uf06e Alternar el UI del juego"
   discord_rpc: "Discord RPC"
 
@@ -172,8 +166,7 @@ config_editor:
   hide_ingame_ui_hotkey: "Atajo para ocultar UI del juego"
   hide_ingame_ui_hotkey_info: >-
     Esta opción te permite asignar una tecla para alternar el UI del juego.
-    En Android, tendrás que pulsar dos veces el botón de Volumen +, ó tocando tres veces la parte superior derecha de la pantalla.
-    En PC/Android con teclado será la tecla Insertar y podrá ser cambiada desde el GUI o en la configuración.
+    Por defecto es la tecla Insertar y podrá ser cambiada desde el GUI o en la configuración.
   discord_rpc: "Discord RPC"
   menu_open_key: "Tecla para abrir menú"
   menu_open_key_set: "Establecer"
@@ -205,11 +198,6 @@ update_prompt_dialog:
     Una nueva actualización de Hachimi está disponible (%{version}).
     ¿Quieres instalarla ahora? El juego será reiniciado para así poder
     aplicar la actualización.
-  android_content: |
-    Se ha encontrado una nueva actualización de Hachimi Edge (%{version}).\n¿Quieres instalarla ahora?
-
-    Pulsa "Sí" para abrir UmaPatcher Edge para volver a parchear el juego.
-    (No es necesario volver a descargar el juego o los APK, solo parchea el juego nuevamente como normalmente lo harías. UmaPatcher Edge siempre descargará la nueva versión de Hachimi Edge.)
 
 updating_dialog:
   title: "Actualizando"

@@ -1,6 +1,6 @@
 # Key Patterns
 
-- **Render hook gating**: `gui.is_empty()` in `src/windows/gui_impl/render_hook.rs` (and Android equivalent) controls whether the entire egui pass runs. Anything that should render must make `is_empty()` return `false`.
+- **Render hook gating**: `gui.is_empty()` in `src/windows/gui_impl/render_hook.rs` controls whether the entire egui pass runs. Anything that should render must make `is_empty()` return `false`.
 - **IL2CPP hooks**: Use `usize` for all pointer-typed arguments in hook signatures (not `i32`). IL2CPP object pointers are 64-bit on Windows.
 - **Unsafe code**: This codebase is heavily `unsafe` (IL2CPP FFI, raw pointers, transmute). Be precise with pointer types and ABI.
 - **egui overlays**: Use `egui::Area` with `interactable(false)` so overlays don't capture game input.

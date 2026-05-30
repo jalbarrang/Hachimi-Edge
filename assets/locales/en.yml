@@ -3,9 +3,6 @@ hachimi: "Hachimi Edge"
 windows:
   menu_open_key: "Right arrow"
 
-android:
-  menu_open_key: "Vol Up + Vol Down\n\uf25a or Triple-tap top left"
-
 splash_sub: "\uf015 Press %{open_key_str} to open menu."
 loading_label: "Loading..."
 search_filter: "Type to search..."
@@ -27,8 +24,6 @@ info: "Info"
 warning: "Warning"
 confirm_dialog_title: "Confirm"
 soft_restart_confirm_content: "Are you sure you want to soft restart the game?"
-in_game_browser_confirm_content: "Are you sure you want to open the in-game browser?"
-browser_dialog_title: "Browser"
 
 menu:
   check_for_updates: "\uf0aa Check for updates"
@@ -53,7 +48,6 @@ menu:
   danger_zone_heading: "\uf071 Danger Zone"
   danger_zone_warning: "These options might have unintended effects on the game. Use with caution!"
   soft_restart: "\uf021 Soft restart"
-  open_in_game_browser: "\uf0ac Open in-game browser"
   toggle_game_ui: "\uf06e Toggle game UI"
   discord_rpc: "Discord RPC"
 
@@ -178,8 +172,7 @@ config_editor:
   hide_ingame_ui_hotkey: "Hide ingame UI hotkey"
   hide_ingame_ui_hotkey_info: >-
     This option allows a shortcut key to toggle the ingame UI.
-    For Android, you need to double tap the Volume Up key, or triple tap the top right of the screen.
-    For PC/Android with keyboard, it's the Insert key and can be configured in the gui or config.
+    By default it's the Insert key and can be configured in the gui or config.
   discord_rpc: "Discord RPC"
   menu_open_key: "Open menu hotkey"
   menu_open_key_set: "Press to set"
@@ -211,11 +204,6 @@ update_prompt_dialog:
   content: |
     A new Hachimi update is available (%{version}). Do you want to install it?
     The game will be restarted in order to apply the update.
-  android_content: |
-    A new Hachimi Edge update is available (%{version}). Do you want to install it?
-
-    Tap "Yes" to open UmaPatcher Edge and re-patch your current game.
-    (No full game or APK re-download required, you only need to patch again like you normally would as UmaPatcher Edge always downloads the latest Hachimi Edge version.)
 
 updating_dialog:
   title: "Updating"

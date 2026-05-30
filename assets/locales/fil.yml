@@ -3,9 +3,6 @@ hachimi: "Hachimi Edge"
 windows:
   menu_open_key: "Kanang arrow"
 
-android:
-  menu_open_key: "Vol Up + Vol Down\n\uf25a o i-tap nang tatlong beses ang top-left ng screen"
-
 splash_sub: "\uf015 Pindutin ang %{open_key_str} para buksan ang menu."
 loading_label: "Naglo-load..."
 search_filter: "I-type para hanapin..."
@@ -23,7 +20,6 @@ info: "Impormasyon"
 warning: "Babala"
 confirm_dialog_title: "Kumpirmahin"
 soft_restart_confirm_content: "Gusto mo ba talaga i-soft restart ang laro?"
-in_game_browser_confirm_content: "Gusto mo bang buksan ang in-game na browser?"
 
 menu:
   check_for_updates: "\uf0aa Tignan kung may update"
@@ -42,7 +38,6 @@ menu:
   danger_zone_heading: "\uf071 Danger Zone"
   danger_zone_warning: "Maaaring magkaroon ng hindi inaasahang epekto sa laro ang mga opsyong ito. Gamitin nang may pag-iingat!"
   soft_restart: "\uf021 I-soft restart"
-  open_in_game_browser: "\uf0ac Buksan ang in-game na browser"
   toggle_game_ui: "\uf06e I-toggle ang game UI"
   discord_rpc: "Discord RPC"
 
@@ -149,8 +144,7 @@ config_editor:
   hide_ingame_ui_hotkey: "I-enable ang hotkey ng pagtago ng game UI"
   hide_ingame_ui_hotkey_info: >-
     Pinapayagan ng opsyong ito ang isang shortcut key sa pag-toggle ng game UI.
-    Para sa Android, kailangan mong i-double tap ang Volume Up key, o i-triple tap ang top-right ng screen.
-    Para sa PC/Android na may keyboard, ito ang Insert key at maaaring i-configure sa GUI o config.
+    Bilang default ito ang Insert key at maaaring i-configure sa GUI o config.
   discord_rpc: "Discord RPC"
   menu_open_key: "Hotkey ng pagbukas ng menu"
   menu_open_key_set: "Itakda"
@@ -178,11 +172,6 @@ update_prompt_dialog:
   content: |
     May bagong update na available para sa Hachimi (%{version}). Gusto mo ba ito i-install?
     Ire-restart ang laro para ma-apply ang update.
-  android_content: |
-    May bagong update na available para sa Hachimi (%{version}). Gusto mo ba ito i-install?
-
-    Pindutin ang "Oo" para buksan ang UmaPatcher Edge at i-patch muli ang laro.
-    (Hindi kailangang i-download muli ang laro o APK, kailangan mo lang mag-patch muli tulad ng dati mong ginamit na method dahil palaging dina-download ng UmaPatcher Edge ang pinakabagong version ng Hachimi Edge.)
 
 updating_dialog:
   title: "Ina-update..."

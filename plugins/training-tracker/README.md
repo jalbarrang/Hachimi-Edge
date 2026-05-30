@@ -19,14 +19,10 @@ cd plugins/training-tracker
 
 # Windows (produces hachimi_training_tracker.dll)
 cargo build --release
-
-# Android (requires NDK, produces libhachimi_training_tracker.so)
-cargo ndk -t arm64-v8a build --release
 ```
 
 ## Installation
 
-### Windows
 1. Build the plugin (see above)
 2. Copy `target/release/hachimi_training_tracker.dll` next to the game executable
 3. Add to Hachimi config (`hachimi.json`):
@@ -34,18 +30,6 @@ cargo ndk -t arm64-v8a build --release
    {
      "windows": {
        "load_libraries": ["hachimi_training_tracker.dll"]
-     }
-   }
-   ```
-
-### Android
-1. Build the plugin (see above)
-2. Place `libhachimi_training_tracker.so` beside `libmain.so`, or name it `libhachimi_training_tracker.so` for auto-discovery
-3. Alternatively, add to config:
-   ```json
-   {
-     "android": {
-       "load_libraries": ["libhachimi_training_tracker.so"]
      }
    }
    ```
@@ -66,7 +50,7 @@ cargo ndk -t arm64-v8a build --release
 
 The hook candidates in `src/hooks.rs` are educated guesses based on community research (particularly [UmamusumeResponseAnalyzer](https://github.com/UmamusumeResponseAnalyzer/UmamusumeResponseAnalyzer)). If none resolve:
 
-1. Run [Il2CppDumper](https://github.com/Perfare/Il2CppDumper) on your game's `GameAssembly.dll` or `libil2cpp.so`
+1. Run [Il2CppDumper](https://github.com/Perfare/Il2CppDumper) on your game's `GameAssembly.dll`
 2. Search the `dump.cs` output for training-related classes in the `Gallop` namespace
 3. Look for methods that take a `command_id` or `command_type` parameter
 4. Update the `candidates` array in `src/hooks.rs`

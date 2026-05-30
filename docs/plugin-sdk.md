@@ -1,6 +1,6 @@
 # Plugin SDK Guide
 
-Hachimi plugins are native shared libraries (`.dll` on Windows, `.so` on Android) loaded at runtime. They interact with the host through a C ABI vtable — a struct of function pointers passed during initialization. Any language that can produce a `cdylib` and call C functions can be a plugin.
+Hachimi plugins are native shared libraries (`.dll`) loaded at runtime. They interact with the host through a C ABI vtable — a struct of function pointers passed during initialization. Any language that can produce a `cdylib` and call C functions can be a plugin.
 
 ## Quick Start
 
@@ -36,7 +36,7 @@ pub extern "C" fn hachimi_init(vtable_ptr: *const c_void, version: i32) -> i32 {
 
 **Parameters:**
 - `vtable_ptr` — Pointer to the host's `Vtable` struct. Valid for the entire process lifetime.
-- `version` — Host API version (currently `3`). Use this to gate access to newer vtable fields.
+- `version` — Host API version (currently `8`). Use this to gate access to newer vtable fields.
 
 **Return value:** `0` = error, `1` = ok.
 
@@ -51,8 +51,6 @@ Add your DLL name to the game's `hachimi/config.json`:
   }
 }
 ```
-
-On Android, use the `android.load_libraries` array, or name your `.so` with the `libhachimi_` prefix for auto-discovery.
 
 ### 4. Deploy
 
@@ -78,7 +76,6 @@ The 53 function pointers are logically grouped:
 | Logging | `log` | Log messages through the host logger |
 | GUI — Registration | `gui_register_menu_item`, `gui_register_menu_section`, `gui_show_notification`, `gui_register_menu_item_icon`, `gui_register_menu_section_with_icon` | Register menu entries and send notifications |
 | GUI — Widgets | `gui_ui_heading`, `gui_ui_label`, `gui_ui_small`, `gui_ui_separator`, `gui_ui_button`, `gui_ui_small_button`, `gui_ui_checkbox`, `gui_ui_text_edit_singleline`, `gui_ui_horizontal`, `gui_ui_grid`, `gui_ui_end_row`, `gui_ui_colored_label` | Draw UI inside callbacks |
-| Android DEX | `android_dex_load`, `android_dex_unload`, `android_dex_call_static_noargs`, `android_dex_call_static_string` | Load/call Java code (v2+, no-op on Windows) |
 | Overlay | `gui_register_overlay` | Register always-visible overlays (v3+) |
 
 ### Version gating

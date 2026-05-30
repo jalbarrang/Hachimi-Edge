@@ -3,9 +3,6 @@ hachimi: "Hachimi Edge"
 windows:
   menu_open_key: "Seta direita"
 
-android:
-  menu_open_key: "Vol. Cima + Vol. Baixo\n\uf25a ou dê três toques no canto superior esquerdo da tela"
-
 splash_sub: "\uf015 Pressione %{open_key_str}\npara abrir o menu."
 loading_label: "Carregando..."
 search_filter: "Digite para pesquisar..."
@@ -27,8 +24,6 @@ info: "Info."
 warning: "Aviso"
 confirm_dialog_title: "Confirmar"
 soft_restart_confirm_content: "Você tem certeza que deseja realizar um soft-restart do jogo?"
-in_game_browser_confirm_content: "Você tem certeza que deseja abrir o navegador do jogo?"
-browser_dialog_title: "Navegador"
 
 menu:
   check_for_updates: "\uf0aa Buscar atualizações"
@@ -53,7 +48,6 @@ menu:
   danger_zone_heading: "\uf071 Área Perigosa"
   danger_zone_warning: "Estas opções podem acabar tendo efeitos indesejados no seu jogo. Use com cuidado!"
   soft_restart: "\uf021 Soft-Restart"
-  open_in_game_browser: "\uf0ac Abrir navegador do jogo"
   toggle_game_ui: "\uf06e Alternar UI do jogo"
   discord_rpc: "Discord RPC"
 
@@ -171,8 +165,7 @@ config_editor:
   hide_ingame_ui_hotkey: "Atalho para esconder a UI do jogo"
   hide_ingame_ui_hotkey_info: >-
     Esta opção permite que um atalho seja utilizado para alternar a visualização da UI do jogo.
-    No Android, você pode pressionar rapidamente duas vezes o botão de volume para cima, ou tocar três vezes rapidamente no canto superior direito da tela.
-    No PC/Android com um teclado conectado, você pode pressionar a tecla Insert ou definir outra tecla nas configurações.
+    Por padrão você pode pressionar a tecla Insert ou definir outra tecla nas configurações.
   discord_rpc: "Discord RPC"
   menu_open_key: "Atalho para abrir o menu"
   menu_open_key_set: "Pressione para definir"
@@ -204,11 +197,6 @@ update_prompt_dialog:
   content: |
     Uma nova atualização do Hachimi está disponível (%{version}). Deseja instalá-la?
     O jogo será reiniciado para aplicar a atualização.
-  android_content: |
-    Uma nova atualização do Hachimi Edge está disponível (%{version}). Deseja instalá-la?
-
-    Toque em "Sim" para abrir o UmaPatcher Edge e reaplicar o patch no jogo.
-    (Não será necessário baixar os APKs do jogo novamente. Basta apenas aplicar o patch mais uma vez para que o UmaPatcher Edge instale a última versão do Hachimi Edge.)
 
 updating_dialog:
   title: "Atualizando"

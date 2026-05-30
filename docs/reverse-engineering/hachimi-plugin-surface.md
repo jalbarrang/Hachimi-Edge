@@ -2,16 +2,15 @@
 
 ## Overview
 
-Hachimi Edge exposes a native C ABI plugin system. Plugins are dynamic libraries (`.dll` on Windows, `.so` on Android) that export a single entry point. The host passes a vtable of function pointers that give the plugin access to hooking, IL2CPP introspection, GUI rendering, and logging.
+Hachimi Edge exposes a native C ABI plugin system. Plugins are dynamic libraries (`.dll`) that export a single entry point. The host passes a vtable of function pointers that give the plugin access to hooking, IL2CPP introspection, GUI rendering, and logging.
 
 ## Plugin Lifecycle
 
 ```
-1. Host discovers plugin DLL/SO
-   ├── Windows: config.windows.load_libraries or manual copy
-   └── Android: config.android.load_libraries or auto-scan libhachimi_*.so
+1. Host discovers plugin DLL
+   └── config.windows.load_libraries or manual copy
 
-2. Host calls LoadLibrary / dlopen
+2. Host calls LoadLibrary
 
 3. Host resolves export: "hachimi_init"
 
@@ -34,7 +33,7 @@ Hachimi Edge exposes a native C ABI plugin system. Plugins are dynamic libraries
 // Must be exported with C linkage
 extern "C" int hachimi_init(const Vtable* vtable, int version);
 // Returns 1 for success, 0 for error
-// Current API version: 7 (see hachimi_plugin_abi::API_VERSION)
+// Current API version: 8 (see hachimi_plugin_abi::API_VERSION)
 ```
 
 Rust plugins should use workspace crates:
@@ -44,7 +43,7 @@ Rust plugins should use workspace crates:
 
 ## Vtable Capabilities
 
-The vtable contains **57 function pointer slots** total, organized into the following groups.
+The vtable contains **53 function pointer slots** total, organized into the following groups.
 
 ### Host Access (2 functions)
 | Function | Signature | Purpose |
@@ -60,7 +59,7 @@ The vtable contains **57 function pointer slots** total, organized into the foll
 | `interceptor_get_trampoline_addr` | `(interceptor, hook_addr) → trampoline` | Get original function pointer |
 | `interceptor_unhook` | `(interceptor, hook_addr) → orig_addr` | Remove a hook |
 
-**Backend**: MinHook on Windows, Dobby on Android.
+**Backend**: MinHook on Windows.
 
 ### IL2CPP Introspection (19 functions)
 | Function | Purpose |
@@ -132,17 +131,7 @@ The vtable contains **57 function pointer slots** total, organized into the foll
 | `gui_ui_end_row` | End a grid row |
 | `gui_ui_colored_label` | Draw colored text (RGBA) |
 
-The GUI is built on **egui** (rendered via egui_glow on Android, egui-directx11 on Windows).
-
-### Android DEX Helpers (4 functions, v2+)
-| Function | Purpose |
-|----------|---------|
-| `android_dex_load` | Load a DEX blob and get a class handle |
-| `android_dex_unload` | Unload a DEX class |
-| `android_dex_call_static_noargs` | Call a static method with no arguments |
-| `android_dex_call_static_string` | Call a static method with a string argument |
-
-No-ops on Windows.
+The GUI is built on **egui** (rendered via egui-directx11 on Windows).
 
 ### Overlay & layout (v3–v7, appended slots)
 
