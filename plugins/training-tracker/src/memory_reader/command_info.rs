@@ -14,8 +14,9 @@
 //! All methods are resolved from each object's runtime klass to avoid resolving
 //! nested IL2CPP classes up front. Reads run on the Unity main thread only.
 
+use std::collections::HashMap;
 use std::ffi::c_void;
-use std::sync::atomic::{AtomicU8, Ordering};
+use std::sync::Mutex;
 
 use hachimi_plugin_sdk::Sdk;
 
@@ -96,7 +97,7 @@ unsafe fn read_turn_info(ti: *mut c_void) -> CommandInfo {
         let bonus2 = read_param_dict(ti, "BonusParamIncDecInfoDic");
         let per_stat: [i32; 5] = std::array::from_fn(|s| main[s].0 + main[s].1);
         let stat_gain = per_stat.iter().sum();
-        log_breakdown_once(command_id, &main, &bonus2);
+        log_breakdown_on_change(command_id, &main, &bonus2);
         CommandInfo {
             command_id,
             failure_rate,
@@ -153,17 +154,26 @@ unsafe fn read_param_values(info: *mut c_void) -> (i32, i32) {
     (read("Value"), read("BonusValue"))
 }
 
-/// One-shot (per facility, capped) diagnostic so the gain breakdown lands in
-/// hachimi.log for verifying the bonus formula against the in-game tooltip (23x).
-fn log_breakdown_once(command_id: i32, main: &[(i32, i32); 5], bonus2: &[(i32, i32); 5]) {
-    static LOGGED: AtomicU8 = AtomicU8::new(0);
-    if LOGGED.load(Ordering::Relaxed) >= 5 {
-        return;
-    }
-    LOGGED.fetch_add(1, Ordering::Relaxed);
+/// Diagnostic (23x): log a facility's gain breakdown whenever it CHANGES, so the
+/// amplifier-active turn is captured without spamming the ~2s refresh. Deduped per
+/// command id. Temporary — remove once the bonus source is settled.
+fn log_breakdown_on_change(command_id: i32, main: &[(i32, i32); 5], bonus2: &[(i32, i32); 5]) {
+    static LAST: Mutex<Option<HashMap<i32, [i32; 15]>>> = Mutex::new(None);
     let base: [i32; 5] = std::array::from_fn(|s| main[s].0);
     let bonus: [i32; 5] = std::array::from_fn(|s| main[s].1);
     let b2: [i32; 5] = std::array::from_fn(|s| bonus2[s].0 + bonus2[s].1);
+    let mut sig = [0i32; 15];
+    sig[..5].copy_from_slice(&base);
+    sig[5..10].copy_from_slice(&bonus);
+    sig[10..].copy_from_slice(&b2);
+
+    if let Ok(mut guard) = LAST.lock() {
+        let map = guard.get_or_insert_with(HashMap::new);
+        if map.get(&command_id) == Some(&sig) {
+            return; // unchanged since last refresh
+        }
+        map.insert(command_id, sig);
+    }
     hlog_info!(
         "Gain breakdown cmd={}: base={:?} bonus={:?} bonusDic={:?} (shown=base+bonus)",
         command_id,
