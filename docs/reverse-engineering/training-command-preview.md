@@ -98,7 +98,8 @@ Training tab, under the stat-value row:
 
 ## Status
 
-Gate-green (build + clippy `-D warnings` + fmt + 48 tests). **In-game
-verification pending** — needs a live career turn to confirm the dictionary path
-returns the expected per-facility values. Ask the user to deploy + play one turn
-and check `hachimi.log`.
+**Verified in-game** (Classic Year, turn 3, URA set). Training tab showed correct
+per-facility values: gains Speed `+18` / Stamina `+14` / Power `+10` / Guts `+14`
+/ Wit `+9`, failure `0%` across all L1 facilities (86 energy) — aligned to the
+right columns, color-scaled as designed. Gate-green (build + clippy `-D warnings`
++ fmt + 48 tests). Issues `6cy` + `dsz` closed.
