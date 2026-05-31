@@ -14,6 +14,7 @@ use hachimi_plugin_sdk::{egui, ui_from_ptr, Sdk};
 use crate::class_dump;
 use crate::memory_reader;
 use crate::overlay_cache;
+use crate::rank_table;
 use crate::skill_shop;
 use crate::skill_shop_prefs::{cycle_sort_mode, prefs, set_prefs, sort_mode_label, DistanceFilter, StyleFilter};
 use crate::tracker::{Facility, TRACKER};
@@ -297,8 +298,7 @@ fn draw_training_tab(ui: &mut egui::Ui) {
     ui.horizontal(|ui| {
         ui.strong(format!("Total {}", snap.total_stats));
         ui.separator();
-        // Rank is filled by Hachimi-Edge-2we (live get_EvaluationValue + master table).
-        ui.label("Rank: \u{2014}");
+        ui.label(rank_text(&snap));
     });
     ui.small(format!(
         "Fans {}  Races {}/{}W",
@@ -306,6 +306,21 @@ fn draw_training_tab(ui: &mut egui::Ui) {
         snap.total_races,
         snap.win_count
     ));
+}
+
+/// Format the Rank cell from the self-computed evaluation: "A • 12,345" when known,
+/// otherwise the em-dash placeholder (skill-grade resource missing). The value is
+/// exact for skills present in the resource — validated to the point against real
+/// careers (see docs/reverse-engineering/career-evaluation.md).
+fn rank_text(snap: &memory_reader::CareerSnapshot) -> String {
+    match snap.evaluation_value {
+        Some(value) => format!(
+            "Rank: {} \u{2022} {}",
+            rank_table::rank_label(value),
+            format_number(value)
+        ),
+        None => "Rank: \u{2014}".to_owned(),
+    }
 }
 
 /// Skills tab: acquired-skills list (scrollable).

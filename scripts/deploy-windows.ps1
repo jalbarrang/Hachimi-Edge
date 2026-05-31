@@ -99,6 +99,15 @@ Write-Host "  hachimi.dll  ->  $ProxyName"
 Copy-Item -LiteralPath $PluginDll -Destination $PluginDest -Force
 Write-Host "  hachimi_training_tracker.dll  ->  hachimi_training_tracker.dll"
 
+# Skill-evaluation resource (read at runtime by the training-tracker eval engine).
+$SkillGradesSrc = Join-Path $PSScriptRoot "..\plugins\training-tracker\assets\skill_grades.json"
+if (Test-Path -LiteralPath $SkillGradesSrc) {
+  Copy-Item -LiteralPath $SkillGradesSrc -Destination (Join-Path $GameDir "skill_grades.json") -Force
+  Write-Host "  skill_grades.json  ->  skill_grades.json"
+} else {
+  Write-Host "  (skill_grades.json missing; run scripts/gen-skill-grades.mjs)" -ForegroundColor Yellow
+}
+
 Write-Host ""
 Write-Host "Done. Ensure config.json lists the plugin under windows.load_libraries:" -ForegroundColor Cyan
 Write-Host '  "load_libraries": ["hachimi_training_tracker.dll"]'

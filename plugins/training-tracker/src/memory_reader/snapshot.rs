@@ -7,6 +7,7 @@ use hachimi_plugin_sdk::Sdk;
 
 use super::chain::{ResolvedChain, CHAIN};
 use super::il2cpp::{call_bool, call_i32, call_i32_with_i32, call_obj};
+use crate::evaluation::Aptitudes;
 
 /// Snapshot of career state read from game memory.
 #[derive(Debug, Clone, Default)]
@@ -38,6 +39,15 @@ pub struct CareerSnapshot {
     /// Training facility levels [Speed, Stamina, Power, Guts, Wisdom].
     /// Read via `GetTrainingLevel(commandId)`. 0 means not available.
     pub training_levels: [i32; 5],
+
+    /// Race aptitude grades (ProperGrade ints) — for the evaluation estimate.
+    pub aptitudes: Aptitudes,
+    /// Card rarity / star (1–5); drives the unique-skill bonus multiplier.
+    pub star: i32,
+
+    /// Self-computed overall evaluation estimate (評価点). Filled by overlay_cache.
+    /// Mapped to a rank-badge label via `crate::rank_table::rank_label`.
+    pub evaluation_value: Option<i32>,
 }
 
 /// Read a snapshot of the current career state from game memory.
@@ -136,6 +146,11 @@ fn read_snapshot_inner() -> Option<CareerSnapshot> {
     hlog_trace!("snapshot: step 7 — training levels");
     let training_levels = read_training_levels(chara, chain);
 
+    // Step 8: Aptitudes + star (for the evaluation estimate)
+    hlog_trace!("snapshot: step 8 — aptitudes/star");
+    let aptitudes = read_aptitudes(chara, chain);
+    let star = read_star(chara, chain);
+
     hlog_trace!("snapshot: complete (turn={}, total={})", current_turn, total_stats);
     Some(CareerSnapshot {
         is_playing: true,
@@ -155,7 +170,51 @@ fn read_snapshot_inner() -> Option<CareerSnapshot> {
         total_races,
         win_count,
         training_levels,
+        aptitudes,
+        star,
+        // Filled by overlay_cache (self-computed via crate::evaluation).
+        evaluation_value: None,
     })
+}
+
+/// Read all 10 aptitude grades from the chara object.
+fn read_aptitudes(chara: *mut c_void, chain: &ResolvedChain) -> Aptitudes {
+    // SAFETY: Reading getters on a non-null IL2CPP chara object.
+    unsafe {
+        Aptitudes {
+            dist_short: call_i32(chara, chain.m_apt_dist_short),
+            dist_mile: call_i32(chara, chain.m_apt_dist_mile),
+            dist_middle: call_i32(chara, chain.m_apt_dist_middle),
+            dist_long: call_i32(chara, chain.m_apt_dist_long),
+            style_nige: call_i32(chara, chain.m_apt_style_nige),
+            style_senko: call_i32(chara, chain.m_apt_style_senko),
+            style_sashi: call_i32(chara, chain.m_apt_style_sashi),
+            style_oikomi: call_i32(chara, chain.m_apt_style_oikomi),
+            ground_turf: call_i32(chara, chain.m_apt_ground_turf),
+            ground_dirt: call_i32(chara, chain.m_apt_ground_dirt),
+        }
+    }
+}
+
+/// Read the trainee star/rarity via `get_CardRarityData().Rarity`. 0 on failure.
+fn read_star(chara: *mut c_void, chain: &ResolvedChain) -> i32 {
+    // SAFETY: get_CardRarityData returns a MasterCardRarityData.CardRarityData object.
+    let rarity_obj = unsafe { call_obj(chara, chain.m_get_card_rarity_data) };
+    if rarity_obj.is_null() {
+        return 0;
+    }
+    let sdk = Sdk::get();
+    // SAFETY: IL2CPP object header — klass pointer at offset 0.
+    let klass = unsafe { *(rarity_obj as *const *mut c_void) };
+    let Some(field) = sdk.get_field_from_name(klass.cast(), "Rarity") else {
+        return 0;
+    };
+    let mut rarity: i32 = 0;
+    // SAFETY: Reading an Int32 field from a valid IL2CPP object.
+    unsafe {
+        sdk.get_field_value(rarity_obj.cast(), field, &mut rarity as *mut _ as *mut c_void);
+    }
+    rarity
 }
 
 // ---------------------------------------------------------------------------

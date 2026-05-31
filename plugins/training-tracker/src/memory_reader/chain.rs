@@ -41,6 +41,20 @@ pub(super) struct ResolvedChain {
     pub(super) m_get_training_level: *const c_void, // GetTrainingLevel(1 arg: commandId)
     #[allow(dead_code)]
     pub(super) m_get_scenario_id: *const c_void, // get_ScenarioId(0 args), reserved for scenario detection
+
+    // Aptitudes (RaceDefine.ProperGrade getters, 0 args) — for evaluation estimate.
+    pub(super) m_apt_dist_short: *const c_void,
+    pub(super) m_apt_dist_mile: *const c_void,
+    pub(super) m_apt_dist_middle: *const c_void,
+    pub(super) m_apt_dist_long: *const c_void,
+    pub(super) m_apt_style_nige: *const c_void,
+    pub(super) m_apt_style_senko: *const c_void,
+    pub(super) m_apt_style_sashi: *const c_void,
+    pub(super) m_apt_style_oikomi: *const c_void,
+    pub(super) m_apt_ground_turf: *const c_void,
+    pub(super) m_apt_ground_dirt: *const c_void,
+    /// get_CardRarityData() -> MasterCardRarityData.CardRarityData (read `Rarity` field).
+    pub(super) m_get_card_rarity_data: *const c_void,
 }
 
 // SAFETY: IL2CPP class/method pointers are stable for process lifetime.
@@ -126,9 +140,21 @@ fn try_resolve() -> Result<ResolvedChain, &'static str> {
         m_get_fan_count: resolve_method(wsmcd, c"get_FanCount", 0)?,
         m_get_training_level: resolve_method(wsmcd, c"GetTrainingLevel", 1)?,
         m_get_scenario_id: resolve_method(wsmcd, c"get_ScenarioId", 0)?,
+
+        m_apt_dist_short: resolve_method(wsmcd, c"get_ProperDistanceShort", 0)?,
+        m_apt_dist_mile: resolve_method(wsmcd, c"get_ProperDistanceMile", 0)?,
+        m_apt_dist_middle: resolve_method(wsmcd, c"get_ProperDistanceMiddle", 0)?,
+        m_apt_dist_long: resolve_method(wsmcd, c"get_ProperDistanceLong", 0)?,
+        m_apt_style_nige: resolve_method(wsmcd, c"get_ProperRunningStyleNige", 0)?,
+        m_apt_style_senko: resolve_method(wsmcd, c"get_ProperRunningStyleSenko", 0)?,
+        m_apt_style_sashi: resolve_method(wsmcd, c"get_ProperRunningStyleSashi", 0)?,
+        m_apt_style_oikomi: resolve_method(wsmcd, c"get_ProperRunningStyleOikomi", 0)?,
+        m_apt_ground_turf: resolve_method(wsmcd, c"get_ProperGroundTurf", 0)?,
+        m_apt_ground_dirt: resolve_method(wsmcd, c"get_ProperGroundDirt", 0)?,
+        m_get_card_rarity_data: resolve_method(wsmcd, c"get_CardRarityData", 0)?,
     };
 
-    hlog_info!("All 21 methods resolved for memory-read chain");
+    hlog_info!("All 32 methods resolved for memory-read chain");
     Ok(chain)
 }
 

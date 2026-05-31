@@ -64,7 +64,7 @@ fn schedule_refresh() {
 }
 
 extern "C" fn refresh_cache_cb() {
-    let snapshot = memory_reader::read_snapshot();
+    let mut snapshot = memory_reader::read_snapshot();
     let skills = memory_reader::read_acquired_skills();
     let evaluations = memory_reader::read_evaluations();
     let skill_points = skill_shop::read_skill_points();
@@ -75,6 +75,11 @@ extern "C" fn refresh_cache_cb() {
     if is_playing {
         if let Some(chara) = memory_reader::get_chara_ptr() {
             deck_bonuses::try_capture(chara);
+        }
+        // Self-computed evaluation estimate from stats + skills + aptitudes.
+        if let Some(s) = snapshot.as_mut() {
+            let stats = [s.speed, s.stamina, s.power, s.guts, s.wiz];
+            s.evaluation_value = crate::evaluation::compute(stats, &s.aptitudes, s.star, &skills);
         }
     } else {
         deck_bonuses::clear();

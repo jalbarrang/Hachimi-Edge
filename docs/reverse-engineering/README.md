@@ -8,6 +8,7 @@ Documentation of internal game structures, IL2CPP class hierarchies, and modding
 |----------|-------------|
 | [single-mode-architecture.md](single-mode-architecture.md) | Career/Single Mode internal classes, lifecycle, and data flow |
 | [training-system.md](training-system.md) | Training facilities, command IDs, stat gains, and facility levels |
+| [career-evaluation.md](career-evaluation.md) | Live 評価点 (evaluation score) + Final Training Rank: formula, IL2CPP sources, skill-grade resource, validation |
 | [network-protocol.md](network-protocol.md) | MessagePack request/response structures for career mode |
 | [il2cpp-class-map.md](il2cpp-class-map.md) | Confirmed IL2CPP classes, methods, and fields from metadata analysis |
 | [il2cpp-signatures.md](il2cpp-signatures.md) | How to verify hook signatures (return type + arg count) against the trimmed `umamusume.dll` method dump in [il2cpp/](il2cpp/umamusume-methods.txt); the return-type/coroutine pitfall |
