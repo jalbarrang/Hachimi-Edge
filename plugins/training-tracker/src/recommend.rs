@@ -25,17 +25,16 @@ const RISK_THRESHOLD_PCT: i32 = 25;
 /// suggest resting (or racing on race-encouraged scenarios) instead.
 const ALL_RISKY_PCT: i32 = 30;
 
-/// Scenario ids where racing (rather than resting) is the better fallback when all
-/// trainings are too risky — e.g. Track Blazer-style scenarios that reward racing.
-/// Populated from confirmed `get_ScenarioId` values; empty ⇒ always suggest Rest.
-/// TODO(23x/feedback): add the Track Blazer scenario id once captured from the log.
-const RACE_ENCOURAGED_SCENARIOS: &[i32] = &[];
+/// Scenario training-set bases (Speed-slot command id) where racing is the better
+/// fallback when all trainings are too risky. Trackblazer (Make a New Track, base
+/// 1101) rewards racing; URA (101) and Unity Cup (601) do not.
+const RACE_ENCOURAGED_BASES: &[i32] = &[1101];
 
-/// Whether the given scenario rewards racing enough to prefer it over resting when
-/// every facility is too risky.
+/// Whether the active scenario (identified by its Speed-slot command base) rewards
+/// racing enough to prefer it over resting when every facility is too risky.
 #[must_use]
-pub fn scenario_encourages_racing(scenario_id: i32) -> bool {
-    RACE_ENCOURAGED_SCENARIOS.contains(&scenario_id)
+pub fn scenario_encourages_racing(scenario_command_base: i32) -> bool {
+    RACE_ENCOURAGED_BASES.contains(&scenario_command_base)
 }
 
 /// The overall suggestion for the turn.

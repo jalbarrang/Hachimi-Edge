@@ -67,11 +67,13 @@ training is a bad turn. `turn_suggestion` then returns:
 - **Race** on scenarios that reward racing (`scenario_encourages_racing`, keyed on
   `get_ScenarioId` via `RACE_ENCOURAGED_SCENARIOS`).
 
-`RACE_ENCOURAGED_SCENARIOS` is populated from confirmed scenario ids. The Track
-Blazer id is still **TODO** — needs one in-game turn on that scenario so the
-`Command info: scenario_id=N …` log line reveals its id (and its training
-command-id set, which may need adding to `COMMAND_ID_SETS`). Until then the
-fallback is always Rest, which is correct for non-race scenarios.
+The scenario is identified by its **Speed-slot training command id**
+(`scenario_command_base`): 101 = URA Finale, 601 = Unity Cup (JP Aoharu), 1101 =
+Trackblazer (Make a New Track). `RACE_ENCOURAGED_BASES = [1101]` — Trackblazer
+rewards racing, so it suggests Race; URA and Unity Cup suggest Rest. Keying on the
+directly-observed command set (rather than `get_ScenarioId`, whose values we have
+not mapped) means no extra measurement was needed. `get_ScenarioId` is still read
+and logged (`Command info: scenario_id=N …`) for cross-reference.
 
 ## Display
 

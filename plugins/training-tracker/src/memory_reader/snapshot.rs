@@ -66,9 +66,10 @@ pub struct CareerSnapshot {
     /// Power, Guts, Wisdom] delta. Drives the projected-評価点 recommendation.
     pub per_stat_gains: [[i32; 5]; 5],
 
-    /// Active scenario id (`get_ScenarioId`). Drives the rest-vs-race suggestion
-    /// when every facility is too risky. `0` means unknown.
-    pub scenario_id: i32,
+    /// Speed-slot training command id of the active scenario (e.g. 101 URA, 601
+    /// Unity Cup, 1101 Trackblazer). Identifies the scenario for the rest-vs-race
+    /// suggestion. `0` means unknown.
+    pub scenario_command_base: i32,
 }
 
 /// Read a snapshot of the current career state from game memory.
@@ -178,9 +179,10 @@ fn read_snapshot_inner() -> Option<CareerSnapshot> {
 
     // Step 10: Per-facility failure rate + stat-gain preview (live command info)
     hlog_trace!("snapshot: step 10 — command info");
-    let (failure_rates, stat_gains, per_stat_gains) = align_command_infos(&read_command_infos(wsmd));
+    let (failure_rates, stat_gains, per_stat_gains, scenario_command_base) =
+        align_command_infos(&read_command_infos(wsmd));
 
-    // Step 11: Active scenario id (rest-vs-race suggestion)
+    // Step 11: Active scenario id (logged) + command base (rest-vs-race suggestion)
     // SAFETY: Reading a getter on a non-null IL2CPP chara object.
     let scenario_id = unsafe { call_i32(chara, chain.m_get_scenario_id) };
     {
@@ -224,26 +226,33 @@ fn read_snapshot_inner() -> Option<CareerSnapshot> {
         failure_rates,
         stat_gains,
         per_stat_gains,
-        scenario_id,
+        scenario_command_base,
     })
 }
 
 /// Map live command infos onto facility slots [Speed, Stamina, Power, Guts, Wisdom]
 /// by matching each `command_id` against the known command sets. Failure rates
 /// default to `-1` (unknown); stat gains default to `0`.
+/// Returns `(failure_rates, stat_gains, per_stat_gains, scenario_command_base)`.
+/// `scenario_command_base` is the Speed-slot command id (set base), identifying the
+/// active scenario; `0` if no Speed facility was found.
 #[allow(clippy::type_complexity)]
-fn align_command_infos(infos: &[CommandInfo]) -> ([i32; 5], [i32; 5], [[i32; 5]; 5]) {
+fn align_command_infos(infos: &[CommandInfo]) -> ([i32; 5], [i32; 5], [[i32; 5]; 5], i32) {
     let mut failure = [-1i32; 5];
     let mut gain = [0i32; 5];
     let mut per_stat = [[0i32; 5]; 5];
+    let mut base = 0;
     for info in infos {
         if let Some(idx) = facility_index_of(info.command_id) {
             failure[idx] = info.failure_rate;
             gain[idx] = info.stat_gain;
             per_stat[idx] = info.per_stat;
+            if idx == 0 {
+                base = info.command_id; // Speed-slot command id = scenario set base
+            }
         }
     }
-    (failure, gain, per_stat)
+    (failure, gain, per_stat, base)
 }
 
 /// Facility slot index (0..5) for a training `command_id`, searching all known sets.
@@ -413,12 +422,13 @@ mod tests {
                 per_stat: [0, 0, 3, 6, 0],
             },
         ];
-        let (failure, gain, per_stat) = align_command_infos(&infos);
+        let (failure, gain, per_stat, base) = align_command_infos(&infos);
         assert_eq!(failure, [3, -1, -1, 28, -1]);
         assert_eq!(gain, [12, 0, 0, 9, 0]);
         assert_eq!(per_stat[0], [10, 0, 2, 0, 0]);
         assert_eq!(per_stat[3], [0, 0, 3, 6, 0]);
         assert_eq!(per_stat[1], [0; 5]);
+        assert_eq!(base, 101); // Speed-slot command id
     }
 
     #[test]
@@ -429,9 +439,10 @@ mod tests {
             stat_gain: 20,
             per_stat: [4, 4, 4, 4, 4],
         }];
-        let (failure, gain, per_stat) = align_command_infos(&infos);
+        let (failure, gain, per_stat, base) = align_command_infos(&infos);
         assert_eq!(failure, [-1; 5]);
         assert_eq!(gain, [0; 5]);
         assert_eq!(per_stat, [[0; 5]; 5]);
+        assert_eq!(base, 0); // no known facility → unknown base
     }
 }
