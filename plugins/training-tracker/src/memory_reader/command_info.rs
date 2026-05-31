@@ -15,6 +15,7 @@
 //! nested IL2CPP classes up front. Reads run on the Unity main thread only.
 
 use std::ffi::c_void;
+use std::sync::atomic::{AtomicU8, Ordering};
 
 use hachimi_plugin_sdk::Sdk;
 
@@ -88,8 +89,14 @@ unsafe fn read_turn_info(ti: *mut c_void) -> CommandInfo {
         let failure_rate = resolve_obj_method(ti, "get_TrainingFailureRate", 0)
             .map(|m| call_i32(ti, m))
             .unwrap_or(0);
-        let per_stat = read_per_stat_gains(ti);
+        // Displayed preview = base Value + client-computed BonusValue (support cards,
+        // scenario amplifiers). `BonusParamIncDecInfoDic` is logged separately to
+        // confirm it is not an additional (double-counted) term — see issue 23x.
+        let main = read_param_dict(ti, "ParamIncDecInfoDic");
+        let bonus2 = read_param_dict(ti, "BonusParamIncDecInfoDic");
+        let per_stat: [i32; 5] = std::array::from_fn(|s| main[s].0 + main[s].1);
         let stat_gain = per_stat.iter().sum();
+        log_breakdown_once(command_id, &main, &bonus2);
         CommandInfo {
             command_id,
             failure_rate,
@@ -99,14 +106,15 @@ unsafe fn read_turn_info(ti: *mut c_void) -> CommandInfo {
     }
 }
 
-/// Read the per-stat base `Value` for the 5 main stats from `ParamIncDecInfoDic`.
-/// Returns [Speed, Stamina, Power, Guts, Wisdom]; `0` for any stat not present.
-unsafe fn read_per_stat_gains(ti: *mut c_void) -> [i32; 5] {
+/// Read per-stat `(Value, BonusValue)` for the 5 main stats from a `TurnInfo` dict
+/// field (`ParamIncDecInfoDic` or `BonusParamIncDecInfoDic`). Missing stat → (0, 0).
+unsafe fn read_param_dict(ti: *mut c_void, field_name: &str) -> [(i32, i32); 5] {
+    let mut out = [(0i32, 0i32); 5];
     let sdk = Sdk::get();
     // SAFETY: IL2CPP object header — klass pointer at offset 0.
     let klass = unsafe { *(ti as *const *mut c_void) };
-    let Some(field) = sdk.get_field_from_name(klass.cast(), "ParamIncDecInfoDic") else {
-        return [0; 5];
+    let Some(field) = sdk.get_field_from_name(klass.cast(), field_name) else {
+        return out;
     };
     let mut dict: *mut c_void = std::ptr::null_mut();
     // SAFETY: IL2CPP object and field from resolved metadata.
@@ -114,32 +122,53 @@ unsafe fn read_per_stat_gains(ti: *mut c_void) -> [i32; 5] {
         sdk.get_field_value(ti.cast(), field, &mut dict as *mut _ as *mut c_void);
     }
     if dict.is_null() {
-        return [0; 5];
+        return out;
     }
     // SAFETY: `dict` is a non-null IL2CPP Dictionary object.
     let Some(m_try) = (unsafe { resolve_obj_method(dict, "TryGetValue", 2) }) else {
-        return [0; 5];
+        return out;
     };
-    let mut gains = [0i32; 5];
     for (i, &pt) in STAT_PARAM_TYPES.iter().enumerate() {
         // SAFETY: TryGetValue with a value-type key; null when the stat is absent.
         let info = unsafe { dict_try_get_obj(dict, m_try, pt) };
         if !info.is_null() {
             // SAFETY: `info` is a non-null ParamsIncDecInfo object.
-            gains[i] = unsafe { read_param_value(info) };
+            out[i] = unsafe { read_param_values(info) };
         }
     }
-    gains
+    out
 }
 
-/// Read `ParamsIncDecInfo.Value` (an ObscuredInt) and decrypt it.
-unsafe fn read_param_value(info: *mut c_void) -> i32 {
+/// Read `(Value, BonusValue)` (both ObscuredInt) from a ParamsIncDecInfo object.
+unsafe fn read_param_values(info: *mut c_void) -> (i32, i32) {
     let sdk = Sdk::get();
     // SAFETY: IL2CPP object header — klass pointer at offset 0.
     let klass = unsafe { *(info as *const *mut c_void) };
-    let Some(field) = sdk.get_field_from_name(klass.cast(), "Value") else {
-        return 0;
+    let read = |name: &str| {
+        sdk.get_field_from_name(klass.cast(), name)
+            // SAFETY: ObscuredInt field on a valid ParamsIncDecInfo object.
+            .map(|f| unsafe { read_obscured_int_field(info, f.cast()) })
+            .unwrap_or(0)
     };
-    // SAFETY: ObscuredInt field on a valid ParamsIncDecInfo object.
-    unsafe { read_obscured_int_field(info, field.cast()) }
+    (read("Value"), read("BonusValue"))
+}
+
+/// One-shot (per facility, capped) diagnostic so the gain breakdown lands in
+/// hachimi.log for verifying the bonus formula against the in-game tooltip (23x).
+fn log_breakdown_once(command_id: i32, main: &[(i32, i32); 5], bonus2: &[(i32, i32); 5]) {
+    static LOGGED: AtomicU8 = AtomicU8::new(0);
+    if LOGGED.load(Ordering::Relaxed) >= 5 {
+        return;
+    }
+    LOGGED.fetch_add(1, Ordering::Relaxed);
+    let base: [i32; 5] = std::array::from_fn(|s| main[s].0);
+    let bonus: [i32; 5] = std::array::from_fn(|s| main[s].1);
+    let b2: [i32; 5] = std::array::from_fn(|s| bonus2[s].0 + bonus2[s].1);
+    hlog_info!(
+        "Gain breakdown cmd={}: base={:?} bonus={:?} bonusDic={:?} (shown=base+bonus)",
+        command_id,
+        base,
+        bonus,
+        b2
+    );
 }

@@ -71,9 +71,18 @@ WorkSingleModeData
 - **`failure_rate` is a plain `Int32`** (the `<TrainingFailureRate>k__BackingField`
   is not obscured) — read directly, no XOR. The per-stat `Value` *is* an
   `ObscuredInt` and is decrypted via `read_obscured_int_field`.
-- **Total stat gain** = sum of `Value` over the 5 main stats (Speed..Wiz). Skill
-  points / motivation / Hp deltas are intentionally excluded from the headline
-  number (they are not "stats"); they can be surfaced separately later.
+- **Per-stat gain** = `Value + BonusValue` from `ParamIncDecInfoDic[stat]`. The
+  server proto `SingleModeParamsIncDecInfo` sends only a single `value` (base), so
+  `BonusValue` (and the separate `BonusParamIncDecInfoDic`) are **computed
+  client-side during `Apply`** — they hold the preview bonus from support cards and
+  **scenario amplifiers** (e.g. Make a New Track / Track Blazer tools). Reading
+  `Value + BonusValue` is therefore **scenario-agnostic** — no scenario detection
+  needed (`get_ScenarioId` remains a fallback). `BonusParamIncDecInfoDic` is read
+  and logged separately (`log_breakdown_once`) to confirm it is not an additional,
+  double-counted term. See issue `Hachimi-Edge-23x`.
+- **Total stat gain** = sum of per-stat gains over the 5 main stats (Speed..Wiz).
+  Skill points / motivation / Hp deltas are intentionally excluded from the
+  headline number (they are not "stats"); they can be surfaced separately later.
 
 ---
 
