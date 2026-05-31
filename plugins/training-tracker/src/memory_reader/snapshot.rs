@@ -61,6 +61,10 @@ pub struct CareerSnapshot {
     /// Per-facility total stat gain [Speed, Stamina, Power, Guts, Wisdom].
     /// Sum of the 5 main-stat deltas for that facility. `0` means unknown/none.
     pub stat_gains: [i32; 5],
+
+    /// Per-facility, per-stat gain: outer = facility slot, inner = [Speed, Stamina,
+    /// Power, Guts, Wisdom] delta. Drives the projected-評価点 recommendation.
+    pub per_stat_gains: [[i32; 5]; 5],
 }
 
 /// Read a snapshot of the current career state from game memory.
@@ -170,15 +174,16 @@ fn read_snapshot_inner() -> Option<CareerSnapshot> {
 
     // Step 10: Per-facility failure rate + stat-gain preview (live command info)
     hlog_trace!("snapshot: step 10 — command info");
-    let (failure_rates, stat_gains) = align_command_infos(&read_command_infos(wsmd));
+    let (failure_rates, stat_gains, per_stat_gains) = align_command_infos(&read_command_infos(wsmd));
     {
         // One-shot diagnostic so the live values land in hachimi.log for verification.
         static CMD_LOGGED: AtomicBool = AtomicBool::new(false);
         if !CMD_LOGGED.swap(true, Ordering::Relaxed) {
             hlog_info!(
-                "Command info: failure_rates={:?} stat_gains={:?}",
+                "Command info: failure_rates={:?} stat_gains={:?} per_stat_gains={:?}",
                 failure_rates,
-                stat_gains
+                stat_gains,
+                per_stat_gains
             );
         }
     }
@@ -209,22 +214,26 @@ fn read_snapshot_inner() -> Option<CareerSnapshot> {
         evaluation_value: None,
         failure_rates,
         stat_gains,
+        per_stat_gains,
     })
 }
 
 /// Map live command infos onto facility slots [Speed, Stamina, Power, Guts, Wisdom]
 /// by matching each `command_id` against the known command sets. Failure rates
 /// default to `-1` (unknown); stat gains default to `0`.
-fn align_command_infos(infos: &[CommandInfo]) -> ([i32; 5], [i32; 5]) {
+#[allow(clippy::type_complexity)]
+fn align_command_infos(infos: &[CommandInfo]) -> ([i32; 5], [i32; 5], [[i32; 5]; 5]) {
     let mut failure = [-1i32; 5];
     let mut gain = [0i32; 5];
+    let mut per_stat = [[0i32; 5]; 5];
     for info in infos {
         if let Some(idx) = facility_index_of(info.command_id) {
             failure[idx] = info.failure_rate;
             gain[idx] = info.stat_gain;
+            per_stat[idx] = info.per_stat;
         }
     }
-    (failure, gain)
+    (failure, gain, per_stat)
 }
 
 /// Facility slot index (0..5) for a training `command_id`, searching all known sets.
@@ -385,16 +394,21 @@ mod tests {
                 command_id: 101, // Speed
                 failure_rate: 3,
                 stat_gain: 12,
+                per_stat: [10, 0, 2, 0, 0],
             },
             CommandInfo {
                 command_id: 103, // Guts
                 failure_rate: 28,
                 stat_gain: 9,
+                per_stat: [0, 0, 3, 6, 0],
             },
         ];
-        let (failure, gain) = align_command_infos(&infos);
+        let (failure, gain, per_stat) = align_command_infos(&infos);
         assert_eq!(failure, [3, -1, -1, 28, -1]);
         assert_eq!(gain, [12, 0, 0, 9, 0]);
+        assert_eq!(per_stat[0], [10, 0, 2, 0, 0]);
+        assert_eq!(per_stat[3], [0, 0, 3, 6, 0]);
+        assert_eq!(per_stat[1], [0; 5]);
     }
 
     #[test]
@@ -403,9 +417,11 @@ mod tests {
             command_id: 9999,
             failure_rate: 50,
             stat_gain: 20,
+            per_stat: [4, 4, 4, 4, 4],
         }];
-        let (failure, gain) = align_command_infos(&infos);
+        let (failure, gain, per_stat) = align_command_infos(&infos);
         assert_eq!(failure, [-1; 5]);
         assert_eq!(gain, [0; 5]);
+        assert_eq!(per_stat, [[0; 5]; 5]);
     }
 }

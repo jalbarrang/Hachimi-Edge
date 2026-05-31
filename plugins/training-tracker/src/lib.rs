@@ -18,6 +18,7 @@ mod hooks;
 mod memory_reader;
 mod overlay_cache;
 mod rank_table;
+mod recommend;
 mod shop_hooks;
 mod skill_shop;
 mod skill_shop_prefs;

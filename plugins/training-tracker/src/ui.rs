@@ -15,6 +15,7 @@ use crate::class_dump;
 use crate::memory_reader;
 use crate::overlay_cache;
 use crate::rank_table;
+use crate::recommend;
 use crate::skill_shop;
 use crate::skill_shop_prefs::{cycle_sort_mode, prefs, set_prefs, sort_mode_label, DistanceFilter, StyleFilter};
 use crate::stat_targets;
@@ -321,6 +322,14 @@ fn draw_training_tab(ui: &mut egui::Ui) {
         ("Guts", snap.guts, lv[3], thr(3, caps[3])),
         ("Wit", snap.wiz, lv[4], thr(4, caps[4])),
     ];
+    // Smart recommendation: projected 評価点 gain per facility (pure, render-safe).
+    let rec = recommend::score_facilities(&recommend::Inputs {
+        current: [snap.speed, snap.stamina, snap.power, snap.guts, snap.wiz],
+        per_stat_gains: &snap.per_stat_gains,
+        caps: *caps,
+        targets: tgt,
+        failure_rates: snap.failure_rates,
+    });
     let mut any_capped = false;
     egui::Grid::new("tt_stats")
         .num_columns(stats.len())
@@ -368,9 +377,29 @@ fn draw_training_tab(ui: &mut egui::Ui) {
                 }
             }
             ui.end_row();
+
+            // Smart recommendation (9ge): projected 評価点 score per facility, ★ best.
+            for fs in &rec {
+                if fs.known {
+                    if fs.is_best {
+                        ui.colored_label(egui::Color32::from_rgb(120, 220, 120), format!("\u{2605}{}", fs.score));
+                    } else {
+                        ui.weak(fs.score.to_string());
+                    }
+                } else {
+                    ui.weak("—");
+                }
+            }
+            ui.end_row();
         });
     if any_capped {
         ui.small("\u{26a0} target/cap reached — further training wasted");
+    }
+    if let Some(best) = rec.iter().position(|f| f.is_best) {
+        ui.small(format!(
+            "\u{2605} best: {} — projected score {} (評価点 gain, risk-adjusted)",
+            stats[best].0, rec[best].score
+        ));
     }
 
     ui.add_space(4.0);
