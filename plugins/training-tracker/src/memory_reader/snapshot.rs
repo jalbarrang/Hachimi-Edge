@@ -171,6 +171,17 @@ fn read_snapshot_inner() -> Option<CareerSnapshot> {
     // Step 10: Per-facility failure rate + stat-gain preview (live command info)
     hlog_trace!("snapshot: step 10 — command info");
     let (failure_rates, stat_gains) = align_command_infos(&read_command_infos(wsmd));
+    {
+        // One-shot diagnostic so the live values land in hachimi.log for verification.
+        static CMD_LOGGED: AtomicBool = AtomicBool::new(false);
+        if !CMD_LOGGED.swap(true, Ordering::Relaxed) {
+            hlog_info!(
+                "Command info: failure_rates={:?} stat_gains={:?}",
+                failure_rates,
+                stat_gains
+            );
+        }
+    }
 
     hlog_trace!("snapshot: complete (turn={}, total={})", current_turn, total_stats);
     Some(CareerSnapshot {
