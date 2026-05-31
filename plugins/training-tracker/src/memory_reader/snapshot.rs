@@ -6,6 +6,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use hachimi_plugin_sdk::Sdk;
 
 use super::chain::{ResolvedChain, CHAIN};
+use super::command_info::{read_command_infos, CommandInfo};
 use super::il2cpp::{call_bool, call_i32, call_i32_with_i32, call_obj, read_obscured_int_field};
 use crate::evaluation::Aptitudes;
 
@@ -52,6 +53,14 @@ pub struct CareerSnapshot {
     /// Self-computed overall evaluation estimate (評価点). Filled by overlay_cache.
     /// Mapped to a rank-badge label via `crate::rank_table::rank_label`.
     pub evaluation_value: Option<i32>,
+
+    /// Per-facility training failure % [Speed, Stamina, Power, Guts, Wisdom].
+    /// `-1` means unknown (no live command info this turn).
+    pub failure_rates: [i32; 5],
+
+    /// Per-facility total stat gain [Speed, Stamina, Power, Guts, Wisdom].
+    /// Sum of the 5 main-stat deltas for that facility. `0` means unknown/none.
+    pub stat_gains: [i32; 5],
 }
 
 /// Read a snapshot of the current career state from game memory.
@@ -159,6 +168,10 @@ fn read_snapshot_inner() -> Option<CareerSnapshot> {
     hlog_trace!("snapshot: step 9 — stat caps");
     let stat_caps = read_stat_caps(chara);
 
+    // Step 10: Per-facility failure rate + stat-gain preview (live command info)
+    hlog_trace!("snapshot: step 10 — command info");
+    let (failure_rates, stat_gains) = align_command_infos(&read_command_infos(wsmd));
+
     hlog_trace!("snapshot: complete (turn={}, total={})", current_turn, total_stats);
     Some(CareerSnapshot {
         is_playing: true,
@@ -183,7 +196,31 @@ fn read_snapshot_inner() -> Option<CareerSnapshot> {
         star,
         // Filled by overlay_cache (self-computed via crate::evaluation).
         evaluation_value: None,
+        failure_rates,
+        stat_gains,
     })
+}
+
+/// Map live command infos onto facility slots [Speed, Stamina, Power, Guts, Wisdom]
+/// by matching each `command_id` against the known command sets. Failure rates
+/// default to `-1` (unknown); stat gains default to `0`.
+fn align_command_infos(infos: &[CommandInfo]) -> ([i32; 5], [i32; 5]) {
+    let mut failure = [-1i32; 5];
+    let mut gain = [0i32; 5];
+    for info in infos {
+        if let Some(idx) = facility_index_of(info.command_id) {
+            failure[idx] = info.failure_rate;
+            gain[idx] = info.stat_gain;
+        }
+    }
+    (failure, gain)
+}
+
+/// Facility slot index (0..5) for a training `command_id`, searching all known sets.
+fn facility_index_of(command_id: i32) -> Option<usize> {
+    COMMAND_ID_SETS
+        .iter()
+        .find_map(|set| set.iter().position(|&c| c == command_id))
 }
 
 /// Read the 5 per-stat caps (live MaxSpeed/etc.) from ObscuredInt backing fields.
@@ -312,4 +349,52 @@ fn read_training_levels(chara: *mut c_void, chain: &ResolvedChain) -> [i32; 5] {
 
     hlog_trace!("training_levels: no matching command ID set found");
     [0; 5]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn facility_index_maps_known_command_ids() {
+        // URA / base set.
+        assert_eq!(facility_index_of(101), Some(0)); // Speed
+        assert_eq!(facility_index_of(105), Some(1)); // Stamina
+        assert_eq!(facility_index_of(106), Some(4)); // Wisdom
+                                                     // Aoharu set.
+        assert_eq!(facility_index_of(603), Some(2)); // Power
+                                                     // Unknown id.
+        assert_eq!(facility_index_of(9999), None);
+    }
+
+    #[test]
+    fn align_command_infos_places_by_facility() {
+        let infos = [
+            CommandInfo {
+                command_id: 101, // Speed
+                failure_rate: 3,
+                stat_gain: 12,
+            },
+            CommandInfo {
+                command_id: 103, // Guts
+                failure_rate: 28,
+                stat_gain: 9,
+            },
+        ];
+        let (failure, gain) = align_command_infos(&infos);
+        assert_eq!(failure, [3, -1, -1, 28, -1]);
+        assert_eq!(gain, [12, 0, 0, 9, 0]);
+    }
+
+    #[test]
+    fn align_command_infos_ignores_unknown_ids() {
+        let infos = [CommandInfo {
+            command_id: 9999,
+            failure_rate: 50,
+            stat_gain: 20,
+        }];
+        let (failure, gain) = align_command_infos(&infos);
+        assert_eq!(failure, [-1; 5]);
+        assert_eq!(gain, [0; 5]);
+    }
 }

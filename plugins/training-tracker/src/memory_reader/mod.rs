@@ -22,6 +22,7 @@
 use std::sync::atomic::AtomicBool;
 
 mod chain;
+mod command_info;
 mod evaluations;
 mod il2cpp;
 mod presentation;

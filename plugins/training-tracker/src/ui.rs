@@ -345,6 +345,29 @@ fn draw_training_tab(ui: &mut egui::Ui) {
                 };
             }
             ui.end_row();
+
+            // Total stat gain per facility (dsz) — the headline preview number.
+            let gains = &snap.stat_gains;
+            for gain in gains {
+                if *gain > 0 {
+                    ui.colored_label(egui::Color32::from_rgb(120, 200, 255), format!("+{}", gain));
+                } else {
+                    ui.weak("—");
+                }
+            }
+            ui.end_row();
+
+            // Failure rate per facility (6cy) — color-scaled.
+            let fails = &snap.failure_rates;
+            for fail in fails {
+                if *fail >= 0 {
+                    let (r, g, b) = failure_rate_color(*fail);
+                    ui.colored_label(egui::Color32::from_rgb(r, g, b), format!("{}%", fail));
+                } else {
+                    ui.weak("—");
+                }
+            }
+            ui.end_row();
         });
     if any_capped {
         ui.small("\u{26a0} target/cap reached — further training wasted");
@@ -574,6 +597,19 @@ fn cap_level(value: i32, cap: i32) -> CapLevel {
     }
 }
 
+/// Color for a training failure rate %: green (safe) → yellow → orange → red.
+fn failure_rate_color(pct: i32) -> (u8, u8, u8) {
+    if pct >= 60 {
+        (255, 80, 80) // red - dangerous
+    } else if pct >= 40 {
+        (255, 140, 50) // orange
+    } else if pct >= 20 {
+        (255, 200, 50) // yellow - caution
+    } else {
+        (120, 220, 120) // green - safe
+    }
+}
+
 /// Color for bond/friendship value: blue → green → orange → gold (max).
 pub fn bond_color(value: i32) -> (u8, u8, u8) {
     if value >= 100 {
@@ -667,6 +703,18 @@ mod tests {
         // At/over cap.
         assert_eq!(cap_level(1200, 1200), CapLevel::AtCap);
         assert_eq!(cap_level(1300, 1200), CapLevel::AtCap);
+    }
+
+    #[test]
+    fn failure_rate_color_thresholds() {
+        assert_eq!(failure_rate_color(0), (120, 220, 120)); // green
+        assert_eq!(failure_rate_color(19), (120, 220, 120));
+        assert_eq!(failure_rate_color(20), (255, 200, 50)); // yellow
+        assert_eq!(failure_rate_color(39), (255, 200, 50));
+        assert_eq!(failure_rate_color(40), (255, 140, 50)); // orange
+        assert_eq!(failure_rate_color(59), (255, 140, 50));
+        assert_eq!(failure_rate_color(60), (255, 80, 80)); // red
+        assert_eq!(failure_rate_color(100), (255, 80, 80));
     }
 
     #[test]

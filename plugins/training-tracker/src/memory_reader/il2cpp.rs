@@ -89,6 +89,34 @@ pub(super) unsafe fn read_obscured_int_field(obj: *mut c_void, field: *mut c_voi
     hidden ^ key
 }
 
+/// Resolve an instance method by name/arg-count from an object's runtime klass.
+/// Returns the MethodInfo pointer, or `None` if the object or method is missing.
+pub(super) unsafe fn resolve_obj_method(obj: *mut c_void, name: &str, args: i32) -> Option<*const c_void> {
+    if obj.is_null() {
+        return None;
+    }
+    // SAFETY: IL2CPP object header — klass pointer at offset 0.
+    let klass = unsafe { *(obj as *const *mut c_void) };
+    Sdk::get().get_method(klass.cast(), name, args).map(|m| m.cast())
+}
+
+/// Call `Dictionary<K,V>.TryGetValue(K key, out V)` with an i32/enum key.
+/// Returns the value object pointer (reference-type `V`), or null if the key is
+/// absent. The out buffer is over-sized so a small value-type `V` cannot corrupt
+/// the stack; only the first word (the object pointer) is interpreted.
+pub(super) unsafe fn dict_try_get_obj(dict: *mut c_void, mi: *const c_void, key: i32) -> *mut c_void {
+    let mut out = [std::ptr::null_mut::<c_void>(); 4];
+    // SAFETY: Transmuting IL2CPP MethodInfo pointer to callable function pointer.
+    let fp: extern "C" fn(*mut c_void, i32, *mut c_void, *const c_void) -> u8 =
+        unsafe { std::mem::transmute(method_ptr(mi)) };
+    let ok = fp(dict, key, out.as_mut_ptr() as *mut c_void, mi);
+    if ok != 0 {
+        out[0]
+    } else {
+        std::ptr::null_mut()
+    }
+}
+
 /// Read an IL2CPP `List<T>` field from an object.
 /// Returns (list_ptr, count, get_Item method) or None.
 pub unsafe fn read_list_field(
