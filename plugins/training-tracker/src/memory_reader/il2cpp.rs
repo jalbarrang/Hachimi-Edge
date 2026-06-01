@@ -54,6 +54,17 @@ pub(super) unsafe fn call_obj_with_i32(this: *mut c_void, mi: *const c_void, arg
     fp(this, arg, mi)
 }
 
+/// Call an instance method that takes two `i32` args and returns `*mut c_void`.
+/// IL2CPP calling convention: `fn(this, arg1, arg2, method_info) -> *mut c_void`.
+/// Used for `MasterString.GetText(Category, int)` (the enum is Int32-backed).
+#[inline]
+pub(super) unsafe fn call_obj_with_2i32(this: *mut c_void, mi: *const c_void, a: i32, b: i32) -> *mut c_void {
+    let fp: extern "C" fn(*mut c_void, i32, i32, *const c_void) -> *mut c_void =
+        // SAFETY: Transmuting IL2CPP MethodInfo pointer to callable function pointer.
+        unsafe { std::mem::transmute(method_ptr(mi)) };
+    fp(this, a, b, mi)
+}
+
 /// Read an IL2CPP `System.String` object and convert to a Rust `String`.
 /// IL2CppString layout (64-bit):
 ///   offset 0x00: Il2CppObject header (klass + monitor = 16 bytes)

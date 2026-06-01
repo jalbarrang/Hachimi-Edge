@@ -34,7 +34,7 @@ pub use chain::{get_chara_ptr, start_tracking, stop_tracking};
 pub use evaluations::{read_evaluations, EvaluationInfo};
 pub use il2cpp::read_list_field;
 pub use presentation::{mood_label, motivation_color};
-pub use scenario::{ScenarioState, TrackblazerShop, TrackblazerShopItem};
+pub use scenario::{ScenarioState, TrackblazerOwnedItem, TrackblazerShop, TrackblazerShopItem, Worth};
 pub use skills::{read_acquired_skill_list, read_acquired_skills, AcquiredSkillInfo};
 pub use snapshot::{read_snapshot, CareerSnapshot};
 

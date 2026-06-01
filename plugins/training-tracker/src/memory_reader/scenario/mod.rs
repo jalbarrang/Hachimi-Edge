@@ -11,9 +11,12 @@
 
 use std::ffi::c_void;
 
+mod items;
+mod master_shop;
 mod trackblazer;
 
-pub use trackblazer::{TrackblazerShop, TrackblazerShopItem};
+pub use items::Worth;
+pub use trackblazer::{TrackblazerOwnedItem, TrackblazerShop, TrackblazerShopItem};
 
 /// Live scenario-specific state for the active run, if it is a supported scenario.
 #[derive(Debug, Clone)]

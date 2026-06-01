@@ -493,18 +493,79 @@ fn draw_trackblazer_shop(ui: &mut egui::Ui, shop: &memory_reader::TrackblazerSho
         .max_height(LIST_MAX_HEIGHT)
         .auto_shrink([false, true])
         .show(ui, |ui| {
-            for item in &shop.items {
-                draw_shop_item_row(ui, item);
+            egui::Grid::new("trackblazer_shop_grid")
+                .num_columns(5)
+                .striped(true)
+                .spacing([12.0, 4.0])
+                .show(ui, |ui| {
+                    ui.strong("Item");
+                    ui.strong("Effect");
+                    ui.strong("Price");
+                    ui.strong("Avail");
+                    ui.strong("Worth");
+                    ui.end_row();
+                    for item in &shop.items {
+                        draw_shop_item_row(ui, item);
+                    }
+                });
+
+            draw_owned_items(ui, &shop.owned);
+        });
+}
+
+/// Owned-inventory section, shown below the shop lineup.
+fn draw_owned_items(ui: &mut egui::Ui, owned: &[memory_reader::TrackblazerOwnedItem]) {
+    if owned.is_empty() {
+        return;
+    }
+    ui.add_space(8.0);
+    ui.separator();
+    ui.strong("Owned items");
+    egui::Grid::new("trackblazer_owned_grid")
+        .num_columns(3)
+        .striped(true)
+        .spacing([12.0, 4.0])
+        .show(ui, |ui| {
+            for o in owned {
+                if o.name.is_empty() {
+                    ui.small(format!("#{}", o.item_id));
+                } else {
+                    ui.label(&o.name);
+                }
+                if o.effect.is_empty() {
+                    ui.small("—");
+                } else {
+                    ui.small(&o.effect);
+                }
+                ui.label(format!("\u{00d7}{}", o.count));
+                ui.end_row();
             }
         });
 }
 
-/// One shop lineup row: price (with strike-through original when discounted),
-/// item id, and bought/limit. Affordable items are highlighted green.
+/// One shop lineup row in the Item | Effect | Price | Worth grid.
+/// Affordable rows use a brighter price; sold-out rows are dimmed.
 fn draw_shop_item_row(ui: &mut egui::Ui, item: &memory_reader::TrackblazerShopItem) {
+    let dim = egui::Color32::from_rgb(140, 140, 140);
+
+    // Name (fallback to #id when unresolved).
+    if item.name.is_empty() {
+        ui.small(format!("#{}", item.item_id));
+    } else {
+        ui.label(&item.name);
+    }
+
+    // Effect description.
+    if item.effect.is_empty() {
+        ui.small("—");
+    } else {
+        ui.label(&item.effect);
+    }
+
+    // Price (strike-through original when discounted).
     ui.horizontal(|ui| {
         let price_color = if item.sold_out() {
-            egui::Color32::from_rgb(140, 140, 140)
+            dim
         } else if item.discounted() {
             egui::Color32::from_rgb(220, 120, 60)
         } else {
@@ -513,20 +574,38 @@ fn draw_shop_item_row(ui: &mut egui::Ui, item: &memory_reader::TrackblazerShopIt
         ui.colored_label(price_color, format!("{} \u{1fa99}", item.coin_num));
         if item.discounted() {
             ui.colored_label(
-                egui::Color32::from_rgb(140, 140, 140),
+                dim,
                 egui::RichText::new(format!("{}", item.original_coin_num)).strikethrough(),
             );
         }
-        ui.small(format!("#{}", item.item_id));
-        if item.limit > 0 {
-            let txt = format!("{}/{}", item.bought, item.limit);
-            if item.sold_out() {
-                ui.colored_label(egui::Color32::from_rgb(140, 140, 140), txt);
-            } else {
-                ui.small(txt);
-            }
-        }
     });
+
+    // Availability (turns left in the shop).
+    if item.turns_left > 0 {
+        ui.colored_label(
+            egui::Color32::from_rgb(220, 120, 60),
+            format!("{} turn(s)", item.turns_left),
+        );
+    } else {
+        ui.small("—");
+    }
+
+    // Worth tier badge (curated).
+    match item.worth {
+        Some(w) => ui.colored_label(worth_color(w), w.label()),
+        None => ui.small("—"),
+    };
+    ui.end_row();
+}
+
+/// Colour for an editorial buy-priority tier.
+fn worth_color(w: memory_reader::Worth) -> egui::Color32 {
+    match w {
+        memory_reader::Worth::MustBuy => egui::Color32::from_rgb(110, 200, 110),
+        memory_reader::Worth::Situational => egui::Color32::from_rgb(230, 200, 90),
+        memory_reader::Worth::Optional => egui::Color32::from_rgb(120, 170, 220),
+        memory_reader::Worth::Skip => egui::Color32::from_rgb(150, 150, 150),
+    }
 }
 
 /// Draw the skills panel inside a collapsing header.
