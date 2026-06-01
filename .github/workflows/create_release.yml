@@ -153,7 +153,9 @@ jobs:
             PREVIOUS_TAG=$(git rev-list --max-parents=0 HEAD)
           fi
 
-          echo "## What's Changed" > CHANGELOG.md
+          echo "> HachimiRedux — based on Hachimi (upstream base: 0.25.4)." > CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          echo "## What's Changed" >> CHANGELOG.md
           COMMIT_HASHES=$(git rev-list --no-merges ${PREVIOUS_TAG}..${LATEST_TAG})
 
           IFS=$'\n'
