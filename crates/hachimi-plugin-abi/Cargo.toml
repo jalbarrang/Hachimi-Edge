@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 license = "GPL-3.0-or-later"
 description = "Stable C ABI types for Hachimi plugins (Vtable, init, logging macros)"
-repository = "https://github.com/kairusds/Hachimi-Edge"
+repository = "https://github.com/jalbarrang/Hachimi-Edge"
 keywords = ["hachimi", "plugin", "ffi", "abi"]
 categories = ["external-ffi-bindings"]
 # Distributed via git tags (sdk-vX.Y.Z), not a registry. Block accidental publishes.

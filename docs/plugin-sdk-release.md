@@ -52,8 +52,8 @@ event/capability constants:
 
 ```toml
 [dependencies]
-hachimi-plugin-sdk = { git = "https://github.com/kairusds/Hachimi-Edge", tag = "sdk-v0.1.0" }
-hachimi-plugin-abi = { git = "https://github.com/kairusds/Hachimi-Edge", tag = "sdk-v0.1.0" }
+hachimi-plugin-sdk = { git = "https://github.com/jalbarrang/Hachimi-Edge", tag = "sdk-v0.1.0" }
+hachimi-plugin-abi = { git = "https://github.com/jalbarrang/Hachimi-Edge", tag = "sdk-v0.1.0" }
 ```
 
 Cargo resolves the sibling `path` dependencies inside the git checkout automatically, so

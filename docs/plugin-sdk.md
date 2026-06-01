@@ -30,9 +30,9 @@ crate-type = ["cdylib", "lib"]
 
 [dependencies]
 # Distributed via git tags (not crates.io). Pin a SDK release tag.
-hachimi-plugin-sdk = { git = "https://github.com/kairusds/Hachimi-Edge", tag = "sdk-v0.1.0" }
+hachimi-plugin-sdk = { git = "https://github.com/jalbarrang/Hachimi-Edge", tag = "sdk-v0.1.0" }
 # Needed directly only for the hlog_* macros + event/capability constants.
-hachimi-plugin-abi = { git = "https://github.com/kairusds/Hachimi-Edge", tag = "sdk-v0.1.0" }
+hachimi-plugin-abi = { git = "https://github.com/jalbarrang/Hachimi-Edge", tag = "sdk-v0.1.0" }
 ```
 
 > **In-tree plugins** (inside this workspace, like `training-tracker`) use `path =`
