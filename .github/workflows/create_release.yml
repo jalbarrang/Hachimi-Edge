@@ -116,6 +116,10 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: windows
+          # archive: false stores files as-is. With the default (true), v7 wraps
+          # them in an inner zip, so download-artifact restores a nested archive
+          # instead of loose files and the gh-release `files` glob matches nothing.
+          archive: false
           path: |
             build/blake3.json
             build/hachimi.dll
