@@ -62,11 +62,13 @@ jobs:
 
       - name: Build Cellar
         run: |
-          git clone --depth 1 --revision d4c3f79801c8131e26df585766c35e5ce11ec57f https://github.com/Hachimi-Hachimi/Cellar
-          cd Cellar
+          # Clone OUTSIDE the repo so the nested crate isn't seen by our workspace
+          # (workspace `exclude` does not prevent the "believes it's in a workspace"
+          # error when building from inside the dir).
+          git clone --depth 1 --revision d4c3f79801c8131e26df585766c35e5ce11ec57f https://github.com/Hachimi-Hachimi/Cellar ..\Cellar
+          pushd ..\Cellar
           cargo build --target x86_64-pc-windows-msvc --target-dir build --release
-          move build\x86_64-pc-windows-msvc\release\cellar.dll build
-          cd ..
+          popd
 
       - name: Check out FunnyHoney
         run: git clone --depth 1 --revision 418b5348bd9b7376cc7485c591ca69d49aa4d805 https://codeberg.org/LeadRDRK/FunnyHoney.git
@@ -78,7 +80,7 @@ jobs:
           copy build\hachimi.dll apps\installer\
           copy build\hachimi_training_tracker.dll apps\installer\
           copy build\skill_grades.json apps\installer\
-          move Cellar\build\cellar.dll apps\installer\
+          move ..\Cellar\build\x86_64-pc-windows-msvc\release\cellar.dll apps\installer\
           move FunnyHoney\FunnyHoney.exe apps\installer\
           cargo build --target x86_64-pc-windows-msvc --target-dir build --release -p hachimi_installer --features compress_bin,training_tracker
           move build\x86_64-pc-windows-msvc\release\hachimi_installer.exe build
