@@ -75,7 +75,7 @@ jobs:
         run: |
           # Pinned to the fork's Training Tracker commit. Bump when the fork updates.
           # NOTE: this SHA must be pushed to github.com/jalbarrang/Installer.
-          git clone --revision 7323a70537f27490cecd96bd45aad595c01f3ad2 https://github.com/jalbarrang/Installer
+          git clone --revision dfca6d76f7931e25a55ebec279bbfdf3ae3af660 https://github.com/jalbarrang/Installer
           copy build\hachimi.dll Installer
           copy build\hachimi_training_tracker.dll Installer
           copy build\skill_grades.json Installer
