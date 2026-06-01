@@ -7,7 +7,10 @@ The repo is a Cargo workspace (root + `crates/*` + `plugins/training-tracker`). 
 - **Core**: `cargo build --release -p hachimi` → `target/release/hachimi.dll`
 - **Plugin ABI tests**: `cargo test -p hachimi-plugin-abi`
 - **Training tracker plugin**: `cargo build --release -p hachimi-training-tracker` → `target/release/hachimi_training_tracker.dll`
-- **ABI guardrail** (optional): `scripts/check-plugin-api.sh`
+
+The plugin ABI is guarded automatically: the host's `build_host_vtable` is a `Vtable`
+struct literal, so any slot mismatch is a compile error, and `abi_layout.rs`
+(`cargo test -p hachimi-plugin-abi`) pins `API_VERSION`, vtable size, and `Copy`-ness.
 
 ## Deploy
 
