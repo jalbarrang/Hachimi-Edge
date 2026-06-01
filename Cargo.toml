@@ -23,6 +23,13 @@ default-members = [
     "plugins/training-tracker",
 ]
 
+# Shared metadata inherited by members via `<field>.workspace = true`.
+# Versions stay per-crate (they differ); installer overrides license to MIT.
+[workspace.package]
+edition = "2021"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/jalbarrang/hachimi-redux"
+
 [profile.release]
 opt-level = 3
 strip = true

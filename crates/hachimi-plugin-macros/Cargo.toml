@@ -1,10 +1,10 @@
 [package]
 name = "hachimi-plugin-macros"
 version = "0.1.0"
-edition = "2021"
-license = "GPL-3.0-or-later"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
 description = "Proc-macros for authoring Hachimi plugins (#[hachimi_plugin])"
-repository = "https://github.com/jalbarrang/hachimi-redux"
 keywords = ["hachimi", "plugin", "proc-macro"]
 categories = ["development-tools::procedural-macro-helpers"]
 # Distributed via git tags (sdk-vX.Y.Z), not a registry. Block accidental publishes.

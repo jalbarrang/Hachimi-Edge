@@ -24,7 +24,12 @@ unmaintained = "workspace"
 unsound = "all"
 
 # Ignore specific advisories if needed (with justification).
-ignore = []
+ignore = [
+    # `registry` (used only by the vendored installer for DMM DotLocal detection) is
+    # unmaintained. Low risk: tiny, stable Win32 registry wrapper. Tracked for
+    # migration to `windows-registry`.
+    "RUSTSEC-2025-0026",
+]
 
 # =============================================================================
 # [licenses] — License compliance
@@ -50,12 +55,13 @@ allow = [
     "CDLA-Permissive-2.0",
 ]
 
+# Our own workspace crates are GPL-3.0-or-later (or MIT for the vendored installer)
+# and are never published to crates.io (publish = false). Skip license checks for
+# them — `allow`/`exceptions` below govern external dependencies only.
+private = { ignore = true }
+
 # Exceptions for crates with unusual but acceptable licenses.
 exceptions = [
-    # The project itself is GPL-3.0 (this is fine — it's our code).
-    { allow = ["GPL-3.0-or-later"], crate = "hachimi" },
-    { allow = ["GPL-3.0-or-later"], crate = "hachimi-plugin-abi" },
-    { allow = ["GPL-3.0-or-later"], crate = "hachimi-plugin-sdk" },
     # egui fonts ship under OFL-1.1 + Ubuntu font license — standard for font crates.
     { allow = ["OFL-1.1", "Ubuntu-font-1.0"], crate = "epaint_default_fonts" },
 ]
