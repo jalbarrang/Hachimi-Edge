@@ -2,11 +2,19 @@
 
 ## Build
 
-The repo is a Cargo workspace (root + `crates/*` + `plugins/training-tracker`). Build from the repo root:
+The repo is a Cargo workspace (root + `crates/*` + `plugins/training-tracker` + `installer`). Build from the repo root:
 
 - **Core**: `cargo build --release -p hachimi` → `target/release/hachimi.dll`
 - **Plugin ABI tests**: `cargo test -p hachimi-plugin-abi`
 - **Training tracker plugin**: `cargo build --release -p hachimi-training-tracker` → `target/release/hachimi_training_tracker.dll`
+- **Installer** (Windows): vendored MIT fork in `installer/`. It's kept out of
+  `default-members`, so build it explicitly and only after staging the binaries it
+  embeds (`hachimi.dll`, `cellar.dll`, `FunnyHoney.exe`, and — with the
+  `training_tracker` feature — `hachimi_training_tracker.dll` + `skill_grades.json`)
+  into `installer/`:
+  `cargo build --release -p hachimi_installer --features compress_bin,training_tracker`
+  → `target/release/hachimi_installer.exe`. The release workflow does this staging
+  automatically; those embedded files are gitignored.
 
 The plugin ABI is guarded automatically: the host's `build_host_vtable` is a `Vtable`
 struct literal, so any slot mismatch is a compile error, and `abi_layout.rs`

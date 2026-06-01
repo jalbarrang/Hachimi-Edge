@@ -1,0 +1,725 @@
+use crate::i18n::t;
+use crate::utils::{self};
+use bsdiff;
+#[cfg(feature = "net_install")]
+use bytes::Bytes;
+use pelite::resources::version_info::Language;
+use registry::Hive;
+use std::sync::{Arc, Mutex};
+use std::{
+    env,
+    fs::File,
+    io::Write,
+    path::{Path, PathBuf},
+};
+use steamlocate::SteamDir;
+use tinyjson::JsonValue;
+use windows::{
+    core::HSTRING,
+    Win32::{
+        Foundation::HWND,
+        UI::{
+            Shell::{FOLDERID_RoamingAppData, SHGetKnownFolderPath, ShellExecuteW, KF_FLAG_DEFAULT},
+            WindowsAndMessaging::{
+                MessageBoxW, IDOK, MB_ICONERROR, MB_ICONINFORMATION, MB_OK, MB_OKCANCEL, SW_SHOWNORMAL,
+            },
+        },
+    },
+};
+
+#[cfg(feature = "net_install")]
+type DownloadResult = Result<Bytes, reqwest::Error>;
+
+pub const GLOBAL_STEAM_ID: u32 = 3224770;
+pub const JP_STEAM_ID: u32 = 3564400;
+
+pub const TRACKING_TRACKER_DLL: &str = "hachimi_training_tracker.dll";
+pub const SKILL_GRADES_JSON: &str = "skill_grades.json";
+
+const DEVOVERRIDE_KEY: &str = r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options";
+
+// separate out read check cus it doesnt require admin privileges
+pub fn is_dotlocal_enabled() -> bool {
+    match Hive::LocalMachine.open(DEVOVERRIDE_KEY, registry::Security::Read) {
+        Ok(regkey) => regkey
+            .value("DevOverrideEnable")
+            .ok()
+            .map(|v| match v {
+                registry::Data::U32(v) => v != 0,
+                _ => false,
+            })
+            .unwrap_or(false),
+        Err(_) => false,
+    }
+}
+
+// enable dotlocal in registry, run as admin required
+pub fn enable_dotlocal() {
+    match Hive::LocalMachine.open(DEVOVERRIDE_KEY, registry::Security::Read | registry::Security::SetValue) {
+        Ok(regkey) => match regkey.set_value("DevOverrideEnable", &registry::Data::U32(1)) {
+            Ok(_) => unsafe {
+                MessageBoxW(
+                    None,
+                    &HSTRING::from(t!("installer.restart_to_apply")),
+                    &HSTRING::from(t!("installer.dll_redirection_enabled")),
+                    MB_ICONINFORMATION | MB_OK,
+                );
+            },
+            Err(e) => unsafe {
+                MessageBoxW(
+                    None,
+                    &HSTRING::from(t!("installer.failed_enable_dotlocal", error = e)),
+                    &HSTRING::from(t!("installer.warning")),
+                    MB_ICONERROR | MB_OK,
+                );
+            },
+        },
+        Err(e) => unsafe {
+            MessageBoxW(
+                None,
+                &HSTRING::from(t!("installer.failed_open_ifeo", error = e)),
+                &HSTRING::from(t!("installer.warning")),
+                MB_ICONERROR | MB_OK,
+            );
+        },
+    }
+}
+
+fn request_dotlocal_elevation(hwnd: Option<&HWND>) -> bool {
+    let exe_path = env::current_exe().ok();
+    let Some(exe_path) = exe_path else {
+        return false;
+    };
+
+    let result = unsafe {
+        ShellExecuteW(
+            hwnd.map(|h| *h).unwrap_or_default(),
+            &HSTRING::from("runas"),
+            &HSTRING::from(exe_path.to_string_lossy().as_ref()),
+            &HSTRING::from("--enable-dotlocal"),
+            None,
+            SW_SHOWNORMAL,
+        )
+    };
+
+    // ShellExecuteW returns a value > 32 on success
+    result.0 as usize > 32
+}
+
+pub struct Installer {
+    pub install_dir: Option<PathBuf>,
+    pub target: Target,
+    pub custom_target: Option<String>,
+    pub hwnd: Arc<Mutex<Option<HWND>>>,
+    #[cfg(feature = "net_install")]
+    pub hachimi_dll: Arc<Mutex<Option<DownloadResult>>>,
+    #[cfg(feature = "net_install")]
+    pub hachimi_version: Arc<Mutex<Option<String>>>,
+}
+
+pub fn detect_dmm_install_dir() -> Option<PathBuf> {
+    let app_data_dir_wstr = unsafe { SHGetKnownFolderPath(&FOLDERID_RoamingAppData, KF_FLAG_DEFAULT, None).ok()? };
+    let app_data_dir_str = unsafe { app_data_dir_wstr.to_string().ok()? };
+    let app_data_dir = Path::new(&app_data_dir_str);
+    let mut dmm_config_path = app_data_dir.join("dmmgameplayer5");
+    dmm_config_path.push("dmmgame.cnf");
+
+    let config_str = std::fs::read_to_string(dmm_config_path).ok()?;
+    let JsonValue::Object(config) = config_str.parse().ok()? else {
+        return None;
+    };
+    let JsonValue::Array(config_contents) = &config["contents"] else {
+        return None;
+    };
+    for value in config_contents {
+        let JsonValue::Object(game) = value else {
+            return None;
+        };
+
+        let JsonValue::String(product_id) = &game["productId"] else {
+            continue;
+        };
+        if product_id != "umamusume" {
+            continue;
+        }
+
+        let JsonValue::Object(detail) = &game["detail"] else {
+            return None;
+        };
+        let JsonValue::String(path_str) = &detail["path"] else {
+            return None;
+        };
+
+        let path = PathBuf::from(path_str);
+        return if path.is_dir() { Some(path) } else { None };
+    }
+
+    None
+}
+
+pub fn detect_steam_install_dir(app_id: u32) -> Option<PathBuf> {
+    let steam_dir = SteamDir::locate().ok()?;
+    let (uma_musume_steamapp, _lib) = steam_dir.find_app(app_id).ok()??;
+    let game_path = _lib.resolve_app_dir(&uma_musume_steamapp);
+    if game_path.is_dir() {
+        return Some(game_path);
+    };
+    None
+}
+
+pub fn detect_target_from_path(path: &Path) -> Option<Target> {
+    if path.join("umamusume.exe").exists() {
+        return Some(Target::UnityPlayer);
+    }
+
+    if path.join("UmamusumePrettyDerby_Jpn.exe").exists() {
+        return Some(Target::CriManaVpx);
+    }
+
+    if path.join("UmamusumePrettyDerby.exe").exists() {
+        return Some(Target::CriManaVpxGlobal);
+    }
+
+    None
+}
+
+impl Installer {
+    pub fn custom(install_dir: Option<PathBuf>, target: Target, custom_target: Option<String>) -> Installer {
+        Installer {
+            install_dir: install_dir.or_else(|| Self::detect_install_dir(target)),
+            target,
+            custom_target,
+            hwnd: Arc::new(Mutex::new(None)),
+            #[cfg(feature = "net_install")]
+            hachimi_dll: Arc::new(Mutex::new(None)),
+            #[cfg(feature = "net_install")]
+            hachimi_version: Arc::new(Mutex::new(None)),
+        }
+    }
+
+    pub fn detect_install_dir(target: Target) -> Option<PathBuf> {
+        match target {
+            Target::UnityPlayer => detect_dmm_install_dir(),
+            Target::CriManaVpx => detect_steam_install_dir(JP_STEAM_ID),
+            Target::CriManaVpxGlobal => detect_steam_install_dir(GLOBAL_STEAM_ID),
+        }
+    }
+
+    //something exe something something
+    fn get_target_path_internal(&self, target: Target, p: impl AsRef<Path>) -> Option<PathBuf> {
+        Some(match TargetType::from(target) {
+            // DMM has a different executable name, but also doesn't need the exe binary patch
+            TargetType::DotLocal => self.install_dir.as_ref()?.join("umamusume.exe.local").join(p),
+            TargetType::Direct => self.install_dir.as_ref()?.join(p),
+        })
+    }
+
+    pub fn get_target_path(&self, target: Target) -> Option<PathBuf> {
+        self.get_target_path_internal(target, target.dll_name())
+    }
+
+    pub fn get_current_target_path(&self) -> Option<PathBuf> {
+        self.get_target_path_internal(
+            self.target,
+            if let Some(custom_target) = &self.custom_target {
+                custom_target
+            } else {
+                self.target.dll_name()
+            },
+        )
+    }
+
+    const LANG_NEUTRAL_UNICODE: Language = Language {
+        lang_id: 0x0000,
+        charset_id: 0x04b0,
+    };
+    pub fn get_target_version_info(&self, target: Target) -> Option<TargetVersionInfo> {
+        let path = self.get_target_path(target)?;
+        let map = pelite::FileMap::open(&path).ok()?;
+
+        // File exists, so return empty version info if we can't read it
+        let Some(version_info) = utils::read_pe_version_info(map.as_ref()) else {
+            return Some(TargetVersionInfo::default());
+        };
+
+        Some(TargetVersionInfo {
+            name: version_info.value(Self::LANG_NEUTRAL_UNICODE, "ProductName"),
+            version: version_info.value(Self::LANG_NEUTRAL_UNICODE, "ProductVersion"),
+        })
+    }
+
+    pub fn get_target_display_label(&self, target: Target) -> String {
+        let platform = match target {
+            Target::UnityPlayer => "DMM",
+            Target::CriManaVpx => "Steam (JP)",
+            Target::CriManaVpxGlobal => "Steam (Global)",
+        };
+
+        if let Some(version_info) = self.get_target_version_info(target) {
+            if version_info.is_hachimi() {
+                let name = version_info.name.as_deref().unwrap_or("Hachimi");
+                format!("* {} ({}) ({})", platform, name, target.dll_name())
+            } else {
+                format!("{} ({})", platform, target.dll_name())
+            }
+        } else {
+            format!("{} ({})", platform, target.dll_name())
+        }
+    }
+
+    pub fn is_current_target_installed(&self) -> bool {
+        let Some(path) = self.get_current_target_path() else {
+            return false;
+        };
+
+        let Ok(metadata) = std::fs::metadata(&path) else {
+            return false;
+        };
+
+        metadata.is_file()
+    }
+
+    pub fn get_hachimi_installed_target(&self) -> Option<Target> {
+        for target in Target::VALUES {
+            if let Some(version_info) = self.get_target_version_info(*target) {
+                if version_info.is_hachimi() {
+                    return Some(*target);
+                }
+            }
+        }
+        None
+    }
+
+    pub fn pre_install(&self) -> Result<(), Error> {
+        match self.target {
+            Target::CriManaVpx => {
+                //something exe idk
+                let orig_exe = self.get_orig_exe_path().ok_or(Error::NoInstallDir)?;
+                let backup_exe = self.get_backup_exe_path().ok_or(Error::NoInstallDir)?;
+
+                // back up exe if not existing, don't overwrite if it's already there
+                if !backup_exe.exists() {
+                    std::fs::copy(&orig_exe, &backup_exe)?;
+                }
+            }
+            _ => {}
+        };
+
+        Ok(())
+    }
+
+    pub fn install(&self) -> Result<(), Error> {
+        let path = self.get_current_target_path().ok_or(Error::NoInstallDir)?;
+
+        let mod_dll: Vec<u8>;
+
+        #[cfg(feature = "net_install")]
+        {
+            // download started in background, wait for it to complete by lock & check
+            // use `take()` to move the value out of the Option, leaving None in its place
+            // `reqwest::Error` doesn't implement `Clone` lol
+            let guard = self.hachimi_dll.lock().unwrap();
+            match guard.as_ref() {
+                Some(Ok(bytes)) => {
+                    // `Bytes` is cheap to clone (atomic reference count).
+                    mod_dll = bytes.clone().into();
+                }
+                Some(Err(_)) => {
+                    // generic
+                    return Err(Error::DownloadFailed);
+                }
+                None => {
+                    return Err(Error::DownloadNotStarted);
+                }
+            }
+        }
+        #[cfg(feature = "compress_bin")]
+        {
+            mod_dll = include_bytes_zstd!("hachimi.dll", 19);
+        }
+        #[cfg(not(any(feature = "net_install", feature = "compress_bin")))]
+        {
+            mod_dll = include_bytes!("../hachimi.dll").to_vec();
+        }
+
+        std::fs::create_dir_all(path.parent().unwrap())?;
+        let mut file = File::create(&path)?;
+        file.write_all(&mod_dll)?;
+
+        Ok(())
+    }
+
+    // no .local redirection necessary on steam client, so dropped that, wheee
+    // greetz to uma on mac / linux
+    pub fn post_install(&self) -> Result<(), Error> {
+        match self.target {
+            Target::UnityPlayer => {
+                // Install Cellar
+                let path = self
+                    .install_dir
+                    .as_ref()
+                    .ok_or_else(|| Error::NoInstallDir)?
+                    .join("umamusume.exe.local")
+                    .join("apphelp.dll");
+                std::fs::create_dir_all(path.parent().unwrap())?;
+                let mut file = File::create(&path)?;
+
+                #[cfg(feature = "compress_bin")]
+                file.write(&include_bytes_zstd!("cellar.dll", 19))?;
+
+                #[cfg(not(feature = "compress_bin"))]
+                file.write(include_bytes!("../cellar.dll"))?;
+
+                // Check for DLL redirection
+                if !is_dotlocal_enabled() {
+                    let res = unsafe {
+                        MessageBoxW(
+                            self.hwnd.lock().unwrap().as_ref(),
+                            &HSTRING::from(t!("installer.dotlocal_not_enabled")),
+                            &HSTRING::from(t!("installer.install")),
+                            MB_ICONINFORMATION | MB_OKCANCEL,
+                        )
+                    };
+                    if res == IDOK {
+                        // Request elevation to enable DotLocal
+                        request_dotlocal_elevation(self.hwnd.lock().unwrap().as_ref());
+                    }
+                }
+            }
+            Target::CriManaVpx => {
+                // compatibility: delete dotlocal DLL redir if exists
+                if self
+                    .install_dir
+                    .as_ref()
+                    .unwrap()
+                    .join("UmamusumePrettyDerby_Jpn.exe.local")
+                    .exists()
+                {
+                    std::fs::remove_dir_all(
+                        self.install_dir
+                            .as_ref()
+                            .unwrap()
+                            .join("UmamusumePrettyDerby_Jpn.exe.local"),
+                    )?;
+                }
+
+                let exe_path = self.get_orig_exe_path().ok_or(Error::NoInstallDir)?;
+
+                // just use stdlib here cuz binary is so small
+                let exe_bytes = std::fs::read(&exe_path)?;
+                #[cfg(feature = "compress_bin")]
+                let modded_bytes: &[u8] = &include_bytes_zstd!("FunnyHoney.exe", 19);
+                #[cfg(not(feature = "compress_bin"))]
+                let modded_bytes: &[u8] = include_bytes!("../FunnyHoney.exe");
+                let mut patch = Vec::new();
+                {
+                    bsdiff::diff(&exe_bytes, &modded_bytes, &mut patch)?;
+                }
+
+                let mut patched_bytes = Vec::with_capacity(modded_bytes.len());
+                {
+                    bsdiff::patch(&exe_bytes, &mut patch.as_slice(), &mut patched_bytes)?;
+                }
+                debug_assert_eq!(modded_bytes, patched_bytes);
+
+                // Write tmpfile before overwriting shim EXE
+                // atomic replace so game dont break if patch fails
+                let mut patched_exe = File::create(&exe_path.with_extension("exe.tmp"))?;
+                patched_exe.write(&patched_bytes)?;
+                std::fs::rename(&exe_path.with_extension("exe.tmp"), &exe_path)?;
+            }
+            // cri_mana_vpx install on global doesn't require bin patch
+            _ => {}
+        }
+
+        Ok(())
+    }
+
+    pub fn uninstall(&self) -> Result<(), Error> {
+        let path = self.get_current_target_path().ok_or(Error::NoInstallDir)?;
+        std::fs::remove_file(&path)?;
+
+        match self.target {
+            Target::UnityPlayer => {
+                let parent = path.parent().unwrap();
+
+                // Also delete Cellar
+                _ = std::fs::remove_file(parent.join("apphelp.dll"));
+
+                // Only remove if its empty
+                _ = std::fs::remove_dir(parent);
+            }
+            Target::CriManaVpx => {
+                let backup_exe = self.get_backup_exe_path().ok_or(Error::NoInstallDir)?;
+                let orig_exe = self.get_orig_exe_path().ok_or(Error::NoInstallDir)?;
+                if backup_exe.exists() {
+                    std::fs::rename(&backup_exe, &orig_exe)?;
+                } else {
+                    return Err(Error::FailedToRestore);
+                }
+            }
+            _ => {}
+        }
+
+        Ok(())
+    }
+
+    // ── Training Tracker plugin (optional component) ──
+
+    /// Path to `config.json` (`<game_dir>/hachimi/config.json`), matching the host's
+    /// data-dir layout. The plugin DLL + `skill_grades.json` live in the game root.
+    fn get_config_path(&self) -> Option<PathBuf> {
+        Some(self.install_dir.as_ref()?.join("hachimi").join("config.json"))
+    }
+
+    fn get_tracker_dll_path(&self) -> Option<PathBuf> {
+        Some(self.install_dir.as_ref()?.join(TRACKING_TRACKER_DLL))
+    }
+
+    fn get_skill_grades_path(&self) -> Option<PathBuf> {
+        Some(self.install_dir.as_ref()?.join(SKILL_GRADES_JSON))
+    }
+
+    /// Install the Training Tracker plugin: drop the DLL + `skill_grades.json` into the
+    /// game root and add the DLL to `windows.load_libraries` in `config.json`.
+    #[cfg(feature = "training_tracker")]
+    pub fn install_training_tracker(&self) -> Result<(), Error> {
+        let dll_path = self.get_tracker_dll_path().ok_or(Error::NoInstallDir)?;
+        let grades_path = self.get_skill_grades_path().ok_or(Error::NoInstallDir)?;
+
+        #[cfg(feature = "compress_bin")]
+        {
+            std::fs::write(&dll_path, include_bytes_zstd!("hachimi_training_tracker.dll", 19))?;
+            std::fs::write(&grades_path, include_bytes_zstd!("skill_grades.json", 19))?;
+        }
+        #[cfg(not(feature = "compress_bin"))]
+        {
+            std::fs::write(&dll_path, include_bytes!("../hachimi_training_tracker.dll").as_slice())?;
+            std::fs::write(&grades_path, include_bytes!("../skill_grades.json").as_slice())?;
+        }
+
+        self.set_plugin_enabled(TRACKING_TRACKER_DLL, true)
+    }
+
+    /// Remove the Training Tracker plugin: delete its files and strip the
+    /// `load_libraries` entry. Missing files are ignored.
+    pub fn uninstall_training_tracker(&self) -> Result<(), Error> {
+        if let Some(dll_path) = self.get_tracker_dll_path() {
+            _ = std::fs::remove_file(dll_path);
+        }
+        if let Some(grades_path) = self.get_skill_grades_path() {
+            _ = std::fs::remove_file(grades_path);
+        }
+        self.set_plugin_enabled(TRACKING_TRACKER_DLL, false)
+    }
+
+    /// Merge (or remove) a plugin DLL name in `config.json` → `windows.load_libraries`,
+    /// creating the file/keys when enabling and preserving any unrelated config.
+    fn set_plugin_enabled(&self, dll_name: &str, enabled: bool) -> Result<(), Error> {
+        let config_path = self.get_config_path().ok_or(Error::NoInstallDir)?;
+
+        let mut root: JsonValue = match std::fs::read_to_string(&config_path) {
+            Ok(text) => text.parse().unwrap_or_else(|_| JsonValue::Object(Default::default())),
+            // Nothing to remove if the file doesn't exist.
+            Err(_) if !enabled => return Ok(()),
+            Err(_) => JsonValue::Object(Default::default()),
+        };
+
+        // Normalize unexpected top-level shapes (array/string/etc.) to an object.
+        if !matches!(root, JsonValue::Object(_)) {
+            root = JsonValue::Object(Default::default());
+        }
+        let JsonValue::Object(obj) = &mut root else {
+            unreachable!()
+        };
+
+        let windows = obj
+            .entry("windows".to_string())
+            .or_insert_with(|| JsonValue::Object(Default::default()));
+        if !matches!(windows, JsonValue::Object(_)) {
+            *windows = JsonValue::Object(Default::default());
+        }
+        let JsonValue::Object(windows_obj) = windows else {
+            unreachable!()
+        };
+
+        let libs = windows_obj
+            .entry("load_libraries".to_string())
+            .or_insert_with(|| JsonValue::Array(Vec::new()));
+        if !matches!(libs, JsonValue::Array(_)) {
+            *libs = JsonValue::Array(Vec::new());
+        }
+        let JsonValue::Array(libs_arr) = libs else {
+            unreachable!()
+        };
+
+        let present = libs_arr
+            .iter()
+            .any(|v| matches!(v, JsonValue::String(s) if s == dll_name));
+
+        if enabled && !present {
+            libs_arr.push(JsonValue::String(dll_name.to_string()));
+        } else if !enabled {
+            libs_arr.retain(|v| !matches!(v, JsonValue::String(s) if s == dll_name));
+        } else {
+            return Ok(()); // already present, nothing to do
+        }
+
+        self.write_config(&config_path, root)
+    }
+
+    fn write_config(&self, config_path: &Path, root: JsonValue) -> Result<(), Error> {
+        if let Some(parent) = config_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let serialized = root.format().map_err(|_| Error::ConfigWriteFailed)?;
+        std::fs::write(config_path, serialized)?;
+        Ok(())
+    }
+
+    pub fn get_backup_exe_path(&self) -> Option<PathBuf> {
+        Some(self.install_dir.as_ref()?.join("UmamusumePrettyDerby_Jpn.old.exe"))
+    }
+
+    pub fn get_orig_exe_path(&self) -> Option<PathBuf> {
+        Some(self.install_dir.as_ref()?.join("UmamusumePrettyDerby_Jpn.exe"))
+    }
+}
+
+impl Default for Installer {
+    fn default() -> Installer {
+        let install_dir = Target::VALUES.iter().find_map(|t| Self::detect_install_dir(*t));
+
+        Installer {
+            install_dir,
+            target: Target::default(),
+            custom_target: None,
+            hwnd: Arc::new(Mutex::new(None)),
+            #[cfg(feature = "net_install")]
+            hachimi_dll: Arc::new(Mutex::new(None)),
+            #[cfg(feature = "net_install")]
+            hachimi_version: Arc::new(Mutex::new(None)),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub enum Target {
+    UnityPlayer,
+    CriManaVpx,
+    CriManaVpxGlobal,
+}
+
+impl Target {
+    pub const VALUES: &[Self] = &[Self::UnityPlayer, Self::CriManaVpx, Self::CriManaVpxGlobal];
+
+    pub fn dll_name(&self) -> &'static str {
+        match self {
+            Self::UnityPlayer => "UnityPlayer.dll",
+            Self::CriManaVpx => "cri_mana_vpx.dll",
+            Self::CriManaVpxGlobal => "cri_mana_vpx.dll",
+        }
+    }
+}
+
+impl Default for Target {
+    // default to whatever target is detected
+    // default to dmm, and prioritize jp steam over globe
+    fn default() -> Self {
+        if detect_dmm_install_dir().is_some() {
+            Self::UnityPlayer
+        } else if detect_steam_install_dir(JP_STEAM_ID).is_some() {
+            Self::CriManaVpx
+        } else if detect_steam_install_dir(GLOBAL_STEAM_ID).is_some() {
+            Self::CriManaVpxGlobal
+        } else {
+            Self::UnityPlayer
+        }
+    }
+}
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum TargetType {
+    DotLocal,
+    Direct,
+}
+
+impl From<Target> for TargetType {
+    fn from(value: Target) -> Self {
+        match value {
+            Target::UnityPlayer => Self::DotLocal,
+            Target::CriManaVpx => Self::Direct,
+            Target::CriManaVpxGlobal => Self::Direct,
+        }
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct TargetVersionInfo {
+    pub name: Option<String>,
+    pub version: Option<String>,
+}
+
+impl TargetVersionInfo {
+    pub fn is_hachimi(&self) -> bool {
+        if let Some(name) = &self.name {
+            return name == "Hachimi";
+        }
+        false
+    }
+}
+
+#[derive(Debug)]
+pub enum Error {
+    NoInstallDir,
+    IoError(std::io::Error),
+    RegistryValueError(registry::value::Error),
+    FailedToRestore,
+    ConfigWriteFailed,
+    #[cfg(feature = "net_install")]
+    ReqwestError(reqwest::Error),
+    #[cfg(feature = "net_install")]
+    DownloadNotStarted,
+    #[cfg(feature = "net_install")]
+    DownloadFailed,
+}
+
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Error::NoInstallDir => write!(f, "{}", t!("error.no_install_dir")),
+            Error::IoError(e) => write!(f, "{}", t!("error.io_error", error = e)),
+            Error::RegistryValueError(e) => write!(f, "{}", t!("error.registry_value_error", error = e)),
+            Error::FailedToRestore => write!(f, "{}", t!("error.failed_to_restore")),
+            Error::ConfigWriteFailed => write!(f, "{}", t!("error.config_write_failed")),
+            #[cfg(feature = "net_install")]
+            Error::ReqwestError(e) => write!(f, "Download error: {}", e),
+            #[cfg(feature = "net_install")]
+            Error::DownloadFailed => write!(
+                f,
+                "Download failed on a previous attempt. Please restart the installer."
+            ),
+            #[cfg(feature = "net_install")]
+            Error::DownloadNotStarted => write!(f, "Download has not started."),
+        }
+    }
+}
+
+impl From<std::io::Error> for Error {
+    fn from(e: std::io::Error) -> Self {
+        Error::IoError(e)
+    }
+}
+
+impl From<registry::value::Error> for Error {
+    fn from(e: registry::value::Error) -> Self {
+        Error::RegistryValueError(e)
+    }
+}
+
+#[cfg(feature = "net_install")]
+impl From<reqwest::Error> for Error {
+    fn from(e: reqwest::Error) -> Self {
+        Error::ReqwestError(e)
+    }
+}

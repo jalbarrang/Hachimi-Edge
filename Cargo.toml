@@ -6,6 +6,17 @@ members = [
     "crates/hachimi-plugin-sdk",
     "crates/hachimi-plugin-macros",
     "plugins/training-tracker",
+    "installer",
+]
+# The installer is built explicitly (`-p hachimi_installer`) after its embedded
+# artifacts are staged. Keep it out of the default set so bare cargo
+# check/clippy/test/build (CI + dev) don't try to compile it without those files.
+default-members = [
+    ".",
+    "crates/hachimi-plugin-abi",
+    "crates/hachimi-plugin-sdk",
+    "crates/hachimi-plugin-macros",
+    "plugins/training-tracker",
 ]
 
 [package]

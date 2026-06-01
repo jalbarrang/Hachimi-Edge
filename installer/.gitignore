@@ -1,0 +1,6 @@
+# Build-time embedded artifacts (copied in by the release workflow, never committed)
+/hachimi.dll
+/cellar.dll
+/FunnyHoney.exe
+/hachimi_training_tracker.dll
+/skill_grades.json

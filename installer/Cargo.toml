@@ -1,0 +1,46 @@
+[package]
+name = "hachimi_installer"
+version = "3.3.0"
+edition = "2021"
+# Vendored fork of teiosteppa/Installer (MIT, see LICENSE). Built as a workspace
+# member; release profile + the embed-resource patch live in the root Cargo.toml.
+
+[dependencies]
+tinyjson = "2.5"
+pelite = "0.10"
+include-bytes-zstd = { version = "0.1", optional = true }
+registry = "1.3"
+steamlocate = "2.0.1"
+bsdiff = "0.2.1"
+reqwest = { version = "0.12.23", features = ["blocking", "json"], optional = true }
+bytes = { version = "1.10.1", optional = true }
+once_cell = "1.19"
+rust-i18n = "2.3.1"
+
+[dependencies.windows]
+version = "0.58"
+features = [
+    "Win32_System_LibraryLoader",
+    "Win32_System_Com",
+    "Win32_System_SystemInformation",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_UI_Controls",
+    "Win32_UI_Shell",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_System_Diagnostics_ToolHelp",
+    "Win32_Foundation",
+    "Win32_UI",
+    "Win32_Globalization"
+]
+
+[build-dependencies]
+embed-resource = "2.4"
+pelite = "0.10"
+cc = "1.1"
+
+[features]
+compress_bin = ["dep:include-bytes-zstd"]
+net_install = ["dep:reqwest", "dep:bytes"]
+# Embeds hachimi_training_tracker.dll + skill_grades.json (must be in project root
+# at build time) and exposes the optional Training Tracker install toggle.
+training_tracker = []

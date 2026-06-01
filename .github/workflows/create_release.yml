@@ -73,18 +73,15 @@ jobs:
 
       - name: Build Installer
         run: |
-          # Pinned to an installer release tag. Bump only when cutting a new installer
-          # version (tag vX.Y.Z on github.com/jalbarrang/Installer).
-          git clone --depth 1 --branch v3.3.0 https://github.com/jalbarrang/Installer
-          copy build\hachimi.dll Installer
-          copy build\hachimi_training_tracker.dll Installer
-          copy build\skill_grades.json Installer
-          move Cellar\build\cellar.dll Installer
-          move FunnyHoney\FunnyHoney.exe Installer
-          cd Installer
-          cargo build --target x86_64-pc-windows-msvc --target-dir build --release --features compress_bin,training_tracker
-          cd ..
-          move Installer\build\x86_64-pc-windows-msvc\release\hachimi_installer.exe build
+          # The installer is a vendored workspace member (installer/). Stage the
+          # artifacts it embeds, then build it explicitly (-p) from the workspace.
+          copy build\hachimi.dll installer\
+          copy build\hachimi_training_tracker.dll installer\
+          copy build\skill_grades.json installer\
+          move Cellar\build\cellar.dll installer\
+          move FunnyHoney\FunnyHoney.exe installer\
+          cargo build --target x86_64-pc-windows-msvc --target-dir build --release -p hachimi_installer --features compress_bin,training_tracker
+          move build\x86_64-pc-windows-msvc\release\hachimi_installer.exe build
 
       - name: Get checksums for Windows binaries
         shell: bash
