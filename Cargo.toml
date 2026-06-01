@@ -1,12 +1,12 @@
 [workspace]
 resolver = "2"
 members = [
-    ".",
+    "apps/hachimi",
+    "apps/installer",
     "crates/hachimi-plugin-abi",
     "crates/hachimi-plugin-sdk",
     "crates/hachimi-plugin-macros",
     "plugins/training-tracker",
-    "installer",
 ]
 # Transient external crate cloned into the repo root by the release workflow
 # (github.com/Hachimi-Hachimi/Cellar). Not ours — keep it out of the workspace so
@@ -16,21 +16,12 @@ exclude = ["Cellar"]
 # artifacts are staged. Keep it out of the default set so bare cargo
 # check/clippy/test/build (CI + dev) don't try to compile it without those files.
 default-members = [
-    ".",
+    "apps/hachimi",
     "crates/hachimi-plugin-abi",
     "crates/hachimi-plugin-sdk",
     "crates/hachimi-plugin-macros",
     "plugins/training-tracker",
 ]
-
-[package]
-name = "hachimi"
-version = "0.1.0"
-edition = "2021"
-
-[lib]
-name = "hachimi"
-crate-type = ["cdylib", "lib"]
 
 [profile.release]
 opt-level = 3
@@ -41,163 +32,7 @@ codegen-units = 1
 [profile.dev]
 debug = "limited"
 
-[dependencies]
-hachimi-plugin-abi = { path = "crates/hachimi-plugin-abi", version = "0.1.0" }
-log = "0.4"
-cstr = "0.2"
-once_cell = "1.19"
-chrono = "0.4.42"
-arc-swap = "1.7"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-fnv = "1.0"
-widestring = "1.1"
-egui = { version = "0.33.3", default-features = false, features = ["serde"] }
-egui-scale = "0.3.0"
-egui_extras = { version = "0.33.3", default-features = false, features = ["image"] }
-image = { version = "0.25.9", default-features = false, features = ["png"] }
-png = "0.17"
-sqlparser = "0.43"
-textwrap = "0.16"
-blake3 = "1.5"
-ureq = { version = "3.2.0", features = ["json"] }
-http = "1.4.0"
-size = "0.4"
-memmap2 = "0.9.9"
-thread-priority = "3.0.0"
-zip = { version = "0.6", default-features = false, features = ["deflate"] }
-unicode-width = "0.1"
-tiny_http = "0.12"
-rust-i18n = "3.1"
-sys-locale = "0.3.2"
-simplelog = "0.12.2"
-
-[target.'cfg(target_os = "windows")'.dependencies]
-windebug_logger = "0.1"
-minhook = "0.5"
-egui-directx11 = "0.12.1"
-discord-rich-presence = "1.0.0"
-pelite = "0.10"
-
-[target.'cfg(target_os = "windows")'.dependencies.windows]
-version = "0.62.2"
-features = [
-    "Win32_System_LibraryLoader",
-    "Win32_System_Memory",
-    "Win32_System_SystemInformation",
-    "Win32_System_DataExchange",
-    "Win32_System_SystemServices",
-    "Win32_System_Ole",
-    "Win32_System_Diagnostics",
-    "Win32_System_Diagnostics_ToolHelp",
-    "Win32_System_Threading",
-    "Win32_UI_WindowsAndMessaging",
-    "Win32_UI_Input_Ime",
-    "Win32_UI_Input_KeyboardAndMouse",
-    "Win32_UI_Shell",
-    "Win32_Graphics_Dxgi",
-    "Win32_Storage_FileSystem",
-    "Win32_Graphics_Gdi"
-]
-
-# ============================================================================
-# Lint Configuration — Rust compiler lints
-# Strategy: deny on safety-critical, warn on quality. CI runs with -D warnings
-# so ALL of these become hard errors in the pipeline.
-# ============================================================================
-[lints.rust]
-unsafe_op_in_unsafe_fn = "warn"       # Require explicit unsafe blocks inside unsafe fns
-improper_ctypes = "warn"              # Catch C ABI issues in extern declarations
-improper_ctypes_definitions = "warn"  # Catch C ABI issues in type definitions
-non_ascii_idents = "deny"             # Prevent confusing non-ASCII identifiers
-unnecessary_transmutes = "allow"       # bindgen bitfield accessors use u32→u32 transmutes
-# rust_2024_compatibility: uncomment when ready to migrate to edition 2024
-# rust_2024_compatibility = { level = "warn", priority = -1 }
-
-# ============================================================================
-# Lint Configuration — Clippy lints
-#
-# DESIGN PRINCIPLE: Everything here is "warn", but CI runs `clippy -- -D warnings`
-# which promotes ALL warnings to errors. This means:
-#   - Local dev: you see yellow warnings, can iterate
-#   - CI / pre-commit: zero tolerance, nothing merges with warnings
-#   - Legacy code: must be fixed or get explicit #[allow(lint, reason = "...")]
-# ============================================================================
-[lints.clippy]
-# --- Lint groups: deny correctness (always bugs), warn everything else ---
-correctness = { level = "deny", priority = -1 }
-suspicious = { level = "warn", priority = -1 }
-style = { level = "warn", priority = -1 }
-complexity = { level = "warn", priority = -1 }
-perf = { level = "warn", priority = -1 }
-
-# --- Safety-critical lints (the reason this config exists) ---
-# In an IL2CPP hooking codebase with AI-generated code, these catch real crashes.
-undocumented_unsafe_blocks = "warn"      # Every unsafe block MUST have // SAFETY: comment
-
-transmute_ptr_to_ref = "warn"            # Catch dangerous transmute to reference
-as_underscore = "allow"                  # `as _` is idiomatic for FFI pointer casts in this codebase
-
-# --- Anti-AI-slop lints: things AI-generated code does wrong ---
-disallowed_methods = "warn"              # Configured in clippy.toml (bans unwrap() etc.)
-unwrap_in_result = "allow"               # expect() in Result fns is acceptable for mutex locks etc.
-panic_in_result_fn = "allow"             # Hook functions may panic on unrecoverable errors
-unnecessary_wraps = "warn"               # Functions that always return Some/Ok
-redundant_clone = "warn"                 # AI clones when it doesn't need to
-redundant_closure_for_method_calls = "warn" # AI wraps methods in closures unnecessarily
-inefficient_to_string = "warn"           # AI does `.to_string()` on &str
-cloned_instead_of_copied = "warn"        # AI uses .clone() on Copy types
-manual_let_else = "warn"                 # AI writes match when let-else is cleaner
-implicit_clone = "warn"                  # Catch hidden .clone() via .to_owned() on owned types
-
-# --- Code health lints ---
-
-large_types_passed_by_value = "warn"     # Large structs should be passed by reference
-verbose_bit_mask = "warn"               # Use .is_power_of_two() etc.
-map_unwrap_or = "warn"                   # Use map_or instead of map().unwrap_or()
-unnested_or_patterns = "warn"            # Simplify nested match patterns
-
-# --- Explicitly allow (too noisy or incompatible with this codebase) ---
-module_name_repetitions = "allow"        # Common in mod.rs re-exports
-too_many_arguments = "allow"             # IL2CPP hooks have many params by nature
-missing_errors_doc = "allow"             # We don't doc all error conditions yet
-missing_panics_doc = "allow"             # Same
-wildcard_imports = "allow"               # Used extensively for il2cpp bindings
-cast_lossless = "allow"                  # Too many false positives with FFI pointer casts
-struct_excessive_bools = "allow"         # Config structs legitimately have many bools
-used_underscore_binding = "allow"        # Used for unused hook params
-single_match_else = "allow"              # Match with else is often clearer than if-let in hooks
-if_not_else = "allow"                    # Negative conditions are sometimes clearer in hook code
-must_use_candidate = "allow"             # Too noisy for internal code
-return_self_not_must_use = "allow"       # Builder pattern without must_use is fine here
-match_bool = "allow"                     # Sometimes clearer than if/else in config parsing
-doc_markdown = "allow"                   # Too many IL2CPP/Unity terms that aren't in backticks
-
-# --- IL2CPP FFI patterns: allow inherent unsafe patterns ---
-fn_to_numeric_cast = "allow"             # Function pointer → usize casts required for hooking
-fn_to_numeric_cast_any = "allow"         # Same, broader variant
-useless_transmute = "allow"              # bindgen generates u32→u32 transmutes for bitfield accessors
-ptr_as_ptr = "allow"                     # Raw pointer casts are pervasive in IL2CPP interop
-transmute_undefined_repr = "allow"       # IL2CPP object layout is defined by the runtime, not Rust
-missing_safety_doc = "allow"             # Too many unsafe fns to document all at once (tracked debt)
-too_many_lines = "allow"                 # IL2CPP hook init functions are inherently long
-cognitive_complexity = "allow"           # IL2CPP hook logic is inherently complex
-cast_possible_truncation = "allow"       # FFI casts between usize/u32/i32 are intentional
-cast_sign_loss = "allow"                 # FFI casts between signed/unsigned are intentional
-cast_possible_wrap = "allow"             # FFI casts between signed/unsigned are intentional
-needless_pass_by_value = "allow"         # Hook function signatures are ABI-constrained
-# Note: unnecessary_transmutes is a rustc lint, not clippy — handled via [lints.rust] below
-missing_transmute_annotations = "allow" # IL2CPP transmutes have clear context from surrounding code
-type_complexity = "allow"               # IL2CPP generics can be legitimately complex
-len_without_is_empty = "allow"          # IL2CPP Array wrapper doesn't need is_empty
-
-[build-dependencies]
-tauri-winres = "0.1"
-cc = "1.1"
-
-[package.metadata.tauri-winres]
-ProductName = "Hachimi"
-FileDescription = "Game enhancement and translation mod"
-
+# Keep [patch.crates-io] as the LAST section: the release workflow appends egui
+# path patches to the end of this file, and they must land under this table.
 [patch.crates-io]
 embed-resource = { git = "https://github.com/nabijaczleweli/rust-embed-resource.git", rev = "e98e9aa28d66b0c2ff43516b41847cac372310dd" }

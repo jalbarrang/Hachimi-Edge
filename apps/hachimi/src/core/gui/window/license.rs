@@ -25,7 +25,7 @@ impl Window for LicenseWindow {
                     ui.heading(t!("hachimi"));
                     ui.collapsing(t!("license.gpl_v3_only_notice"), |ui| {
                         ui.add(
-                            egui::TextEdit::multiline(&mut include_str!("../../../../LICENSE"))
+                            egui::TextEdit::multiline(&mut include_str!("../../../../../../LICENSE"))
                                 .font(egui::TextStyle::Monospace)
                                 .desired_rows(10)
                                 .interactive(false),

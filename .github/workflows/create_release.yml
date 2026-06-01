@@ -75,11 +75,11 @@ jobs:
         run: |
           # The installer is a vendored workspace member (installer/). Stage the
           # artifacts it embeds, then build it explicitly (-p) from the workspace.
-          copy build\hachimi.dll installer\
-          copy build\hachimi_training_tracker.dll installer\
-          copy build\skill_grades.json installer\
-          move Cellar\build\cellar.dll installer\
-          move FunnyHoney\FunnyHoney.exe installer\
+          copy build\hachimi.dll apps\installer\
+          copy build\hachimi_training_tracker.dll apps\installer\
+          copy build\skill_grades.json apps\installer\
+          move Cellar\build\cellar.dll apps\installer\
+          move FunnyHoney\FunnyHoney.exe apps\installer\
           cargo build --target x86_64-pc-windows-msvc --target-dir build --release -p hachimi_installer --features compress_bin,training_tracker
           move build\x86_64-pc-windows-msvc\release\hachimi_installer.exe build
 
@@ -132,7 +132,7 @@ jobs:
       - name: Get release version
         id: get_info
         run: |
-          VERSION=$(curl -sL "https://raw.githubusercontent.com/${{ github.repository }}/main/Cargo.toml" | \
+          VERSION=$(curl -sL "https://raw.githubusercontent.com/${{ github.repository }}/main/apps/hachimi/Cargo.toml" | \
             awk '/^\[package\]/{flag=1} flag && /^version/{print $3; exit}' | \
             tr -d '"')
           echo "RELEASE_VERSION=v$VERSION" >> $GITHUB_ENV
