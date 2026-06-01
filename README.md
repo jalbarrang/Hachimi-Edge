@@ -8,7 +8,7 @@ English | [简体中文](README-zh_cn.md) | [繁體中文](README-zh_tw.md)
 
 Game enhancement and translation mod for UM:PD. HachimiRedux is a fork of Hachimi with an in-game training tracker plugin and a reworked native plugin SDK.
 
-<img height="400" src="apps/hachimi/assets/screenshot.jpg">
+<img height="400" src="apps/hachimi/assets/screenshot-2.png">
 
 # ⚠️ Please don't link to this repo or Hachimi's website
 We understand that you want to help people install Hachimi and have a better experience playing the game. However, this project is inherently against the game's TOS and The Game Developer most definitely wants it gone if they were ever to learn about it.
