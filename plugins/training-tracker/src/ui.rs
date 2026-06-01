@@ -23,7 +23,7 @@ use crate::stat_targets;
 const OVERLAY_FONT_SIZE: f32 = 12.0;
 const OVERLAY_MIN_WIDTH: f32 = 340.0;
 /// Max height for scrollable list tabs (Skills/Bonds/Shop), in points.
-const LIST_MAX_HEIGHT: f32 = 220.0;
+const LIST_MAX_HEIGHT: f32 = 300.0;
 
 /// The overlay ID used during registration — must match for show/hide calls.
 const OVERLAY_ID: &str = "training_tracker_overlay";
@@ -712,27 +712,31 @@ fn draw_skill_shop_controls(ui: &mut egui::Ui) {
         cycle_sort_mode();
     }
 
-    ui.small("Style:");
-    for &(label, filter) in StyleFilter::LABELS {
-        let selected = p.style_filter == filter;
-        if ui
-            .small_button(format!("{}{}", if selected { "*" } else { "" }, label))
-            .clicked()
-        {
-            set_prefs(|prefs| prefs.style_filter = filter);
+    ui.horizontal_wrapped(|ui| {
+        ui.small("Style:");
+        for &(label, filter) in StyleFilter::LABELS {
+            let selected = p.style_filter == filter;
+            if ui
+                .small_button(format!("{}{}", if selected { "*" } else { "" }, label))
+                .clicked()
+            {
+                set_prefs(|prefs| prefs.style_filter = filter);
+            }
         }
-    }
+    });
 
-    ui.small("Dist:");
-    for &(label, filter) in DistanceFilter::LABELS {
-        let selected = p.distance_filter == filter;
-        if ui
-            .small_button(format!("{}{}", if selected { "*" } else { "" }, label))
-            .clicked()
-        {
-            set_prefs(|prefs| prefs.distance_filter = filter);
+    ui.horizontal_wrapped(|ui| {
+        ui.small("Dist:");
+        for &(label, filter) in DistanceFilter::LABELS {
+            let selected = p.distance_filter == filter;
+            if ui
+                .small_button(format!("{}{}", if selected { "*" } else { "" }, label))
+                .clicked()
+            {
+                set_prefs(|prefs| prefs.distance_filter = filter);
+            }
         }
-    }
+    });
 
     let mut show_hintless = p.show_hintless;
     if ui.checkbox(&mut show_hintless, "Show full-price (no hint)").changed() {
