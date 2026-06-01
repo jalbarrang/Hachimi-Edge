@@ -147,3 +147,42 @@ pub unsafe fn read_list_field(
     let count = unsafe { call_i32(list_ptr, m_count.cast()) };
     Some((list_ptr, count, m_item.cast()))
 }
+
+/// Read an IL2CPP managed reference-type array (`T[]`).
+/// Layout (64-bit): bounds/length live in the array header; `max_length`
+/// (element count) is at offset `0x18` and the inline element buffer starts at
+/// `0x20`. For reference-type arrays each element slot is an object pointer.
+/// Returns `(elements_base_ptr, length)` or `None` if null/implausible.
+pub(super) unsafe fn read_obj_array(array: *mut c_void) -> Option<(*const *mut c_void, usize)> {
+    if array.is_null() {
+        return None;
+    }
+    // SAFETY: IL2CPP array header — element count at offset 0x18.
+    let len = unsafe { *(array.byte_add(0x18) as *const usize) };
+    if len > 4096 {
+        return None;
+    }
+    // SAFETY: element pointers begin at offset 0x20.
+    let base = unsafe { array.byte_add(0x20) as *const *mut c_void };
+    Some((base, len))
+}
+
+/// Read a plain `System.Int32` instance field by name from an object.
+/// Returns `0` if the object is null or the field cannot be resolved.
+pub(super) unsafe fn read_i32_field(obj: *mut c_void, field_name: &str) -> i32 {
+    if obj.is_null() {
+        return 0;
+    }
+    let sdk = Sdk::get();
+    // SAFETY: IL2CPP object header — klass pointer at offset 0.
+    let klass = unsafe { *(obj as *const *mut c_void) };
+    let Some(field) = sdk.get_field_from_name(klass.cast(), field_name) else {
+        return 0;
+    };
+    let mut val: i32 = 0;
+    // SAFETY: IL2CPP object and field from resolved metadata.
+    unsafe {
+        sdk.get_field_value(obj.cast(), field, &mut val as *mut _ as *mut c_void);
+    }
+    val
+}

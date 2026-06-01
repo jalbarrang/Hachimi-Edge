@@ -36,6 +36,7 @@ enum Tab {
     Skills = 1,
     Bonds = 2,
     Shop = 3,
+    Scenario = 4,
 }
 
 static SELECTED_TAB: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
@@ -45,6 +46,7 @@ fn selected_tab() -> Tab {
         1 => Tab::Skills,
         2 => Tab::Bonds,
         3 => Tab::Shop,
+        4 => Tab::Scenario,
         _ => Tab::Training,
     }
 }
@@ -213,6 +215,7 @@ fn draw_overlay_inner(ui: &mut egui::Ui) {
         Tab::Skills => draw_skills_tab(ui),
         Tab::Bonds => draw_bonds_tab(ui),
         Tab::Shop => draw_skill_shop_tab(ui),
+        Tab::Scenario => draw_scenario_tab(ui),
     }
 }
 
@@ -230,6 +233,7 @@ fn draw_tab_bar(ui: &mut egui::Ui) {
             (Tab::Skills, "Skills"),
             (Tab::Bonds, "Bonds"),
             (Tab::Shop, "Shop"),
+            (Tab::Scenario, "Scenario"),
         ] {
             if ui.selectable_label(selected_tab() == tab, label).clicked() {
                 set_selected_tab(tab);
@@ -450,6 +454,79 @@ fn draw_skill_shop_tab(ui: &mut egui::Ui) {
         .max_height(LIST_MAX_HEIGHT)
         .auto_shrink([false, true])
         .show(ui, draw_skill_shop_list);
+}
+
+/// Scenario tab: scenario-specific readout (currently the Trackblazer RaceCoin shop).
+fn draw_scenario_tab(ui: &mut egui::Ui) {
+    let Some(snap) = current_snapshot(ui) else {
+        return;
+    };
+    match snap.scenario_state {
+        Some(memory_reader::ScenarioState::Trackblazer(shop)) => draw_trackblazer_shop(ui, &shop),
+        None => {
+            ui.small("No scenario-specific data for this run.");
+            ui.small("(Supported: Trackblazer / Make a New Track.)");
+        }
+    }
+}
+
+/// Render the Trackblazer RaceCoin shop: coins + current lineup.
+fn draw_trackblazer_shop(ui: &mut egui::Ui, shop: &memory_reader::TrackblazerShop) {
+    ui.horizontal(|ui| {
+        ui.strong(format!("\u{1f3c5} RaceCoins: {}", shop.coins));
+        if shop.sale_value > 0 {
+            ui.colored_label(
+                egui::Color32::from_rgb(220, 120, 60),
+                format!("Sale {}%", shop.sale_value),
+            );
+        }
+        if shop.win_points > 0 {
+            ui.small(format!("WinPt: {}", shop.win_points));
+        }
+    });
+    ui.separator();
+    if shop.items.is_empty() {
+        ui.small("Shop lineup unavailable (open the shop in-game first).");
+        return;
+    }
+    egui::ScrollArea::vertical()
+        .max_height(LIST_MAX_HEIGHT)
+        .auto_shrink([false, true])
+        .show(ui, |ui| {
+            for item in &shop.items {
+                draw_shop_item_row(ui, item);
+            }
+        });
+}
+
+/// One shop lineup row: price (with strike-through original when discounted),
+/// item id, and bought/limit. Affordable items are highlighted green.
+fn draw_shop_item_row(ui: &mut egui::Ui, item: &memory_reader::TrackblazerShopItem) {
+    ui.horizontal(|ui| {
+        let price_color = if item.sold_out() {
+            egui::Color32::from_rgb(140, 140, 140)
+        } else if item.discounted() {
+            egui::Color32::from_rgb(220, 120, 60)
+        } else {
+            egui::Color32::from_rgb(230, 200, 90)
+        };
+        ui.colored_label(price_color, format!("{} \u{1fa99}", item.coin_num));
+        if item.discounted() {
+            ui.colored_label(
+                egui::Color32::from_rgb(140, 140, 140),
+                egui::RichText::new(format!("{}", item.original_coin_num)).strikethrough(),
+            );
+        }
+        ui.small(format!("#{}", item.item_id));
+        if item.limit > 0 {
+            let txt = format!("{}/{}", item.bought, item.limit);
+            if item.sold_out() {
+                ui.colored_label(egui::Color32::from_rgb(140, 140, 140), txt);
+            } else {
+                ui.small(txt);
+            }
+        }
+    });
 }
 
 /// Draw the skills panel inside a collapsing header.

@@ -8,6 +8,7 @@ use hachimi_plugin_sdk::Sdk;
 use super::chain::{ResolvedChain, CHAIN};
 use super::command_info::{read_command_infos, CommandInfo};
 use super::il2cpp::{call_bool, call_i32, call_i32_with_i32, call_obj, read_obscured_int_field};
+use super::scenario::{read_scenario_state, ScenarioState};
 use crate::evaluation::Aptitudes;
 
 /// Snapshot of career state read from game memory.
@@ -70,6 +71,10 @@ pub struct CareerSnapshot {
     /// Unity Cup, 1101 Trackblazer). Identifies the scenario for the rest-vs-race
     /// suggestion. `0` means unknown.
     pub scenario_command_base: i32,
+
+    /// Live scenario-specific state (e.g. Trackblazer shop). `None` for the base
+    /// URA Finale scenario or when not yet read.
+    pub scenario_state: Option<ScenarioState>,
 }
 
 /// Read a snapshot of the current career state from game memory.
@@ -227,6 +232,8 @@ fn read_snapshot_inner() -> Option<CareerSnapshot> {
         stat_gains,
         per_stat_gains,
         scenario_command_base,
+        // SAFETY: `chara` is a valid non-null IL2CPP object from the resolved chain.
+        scenario_state: read_scenario_state(chara),
     })
 }
 
