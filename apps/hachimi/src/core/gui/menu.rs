@@ -17,7 +17,8 @@ use super::{Gui, DISABLED_GAME_UIS};
 #[derive(Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) enum ControlTab {
     #[default]
-    Settings,
+    Config,
+    Translations,
     Plugins,
     Overlay,
     About,
@@ -67,7 +68,8 @@ impl Gui {
 
             // Fixed top tab bar.
             ui.horizontal(|ui| {
-                self.tab_button(ui, ControlTab::Settings, "\u{f013} Settings");
+                self.tab_button(ui, ControlTab::Config, "\u{f013} Config");
+                self.tab_button(ui, ControlTab::Translations, "\u{f1ab} Translations");
                 self.tab_button(ui, ControlTab::Plugins, "\u{f12e} Plugins");
                 self.tab_button(ui, ControlTab::Overlay, "\u{f2d0} Overlay");
                 self.tab_button(ui, ControlTab::About, "\u{f129} About");
@@ -77,10 +79,11 @@ impl Gui {
             egui::ScrollArea::vertical()
                 .auto_shrink([false, false])
                 .show(ui, |ui| match self.menu_tab {
-                    ControlTab::Settings => self.run_settings_tab(ui, &ctx, &mut show_window, &mut show_notification),
+                    ControlTab::Config => self.run_config_tab(ui, &ctx, &mut show_notification),
+                    ControlTab::Translations => self.run_translations_tab(ui, &ctx, &mut show_notification),
                     ControlTab::Plugins => self.run_plugins_tab(ui, &ctx, &mut show_notification),
                     ControlTab::Overlay => self.run_overlay_settings_tab(ui),
-                    ControlTab::About => self.run_about_tab(ui, &ctx, &mut show_window),
+                    ControlTab::About => self.run_about_tab(ui, &ctx, &mut show_window, &mut show_notification),
                 });
         });
 

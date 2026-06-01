@@ -19,10 +19,7 @@ use crate::il2cpp::hook::{
 
 use super::super::scale::get_scale;
 use super::super::Gui;
-use super::{
-    new_window, random_id, save_and_reload_config, simple_window_layout, LiveVocalsSwapWindow, SimpleOkDialog,
-    ThemeEditorWindow, Window,
-};
+use super::{random_id, save_and_reload_config, LiveVocalsSwapWindow, SimpleOkDialog, ThemeEditorWindow};
 
 pub(crate) struct ConfigEditor {
     last_ptr_config: usize,
@@ -63,6 +60,15 @@ impl ConfigEditor {
         let current_language = self.config.language;
         self.config = hachimi::Config::default();
         self.config.language = current_language;
+    }
+
+    /// Discard unsaved edits: reset the working copy to the currently saved config
+    /// and re-apply its language locale (the language combo applies locale live).
+    fn revert(&mut self) {
+        let handle = Hachimi::instance().config.load();
+        self.last_ptr_config = Arc::as_ptr(&handle) as usize;
+        self.config = (**handle).clone();
+        self.config.language.set_locale();
     }
 
     fn option_slider<Num: egui::emath::Numeric>(
@@ -120,24 +126,6 @@ impl ConfigEditor {
 
                 ui.label(t!("config_editor.ipv4_only"));
                 ui.checkbox(&mut config.ipv4_only, "");
-                ui.end_row();
-
-                ui.label(t!("config_editor.meta_index_url"));
-                let res = ui.add(egui::TextEdit::singleline(&mut config.meta_index_url).lock_focus(true));
-                #[cfg(target_os = "windows")]
-                if res.has_focus() {
-                    ui.memory_mut(|mem| {
-                        mem.set_focus_lock_filter(
-                            res.id,
-                            egui::EventFilter {
-                                tab: true,
-                                horizontal_arrows: true,
-                                vertical_arrows: true,
-                                escape: true,
-                            },
-                        )
-                    });
-                }
                 ui.end_row();
 
                 ui.label(t!("config_editor.gui_scale"));
@@ -204,24 +192,12 @@ impl ConfigEditor {
                 ui.checkbox(&mut config.apply_atlas_workaround, "");
                 ui.end_row();
 
-                ui.label(t!("config_editor.translator_mode"));
-                ui.checkbox(&mut config.translator_mode, "");
-                ui.end_row();
-
                 ui.label(t!("config_editor.skip_first_time_setup"));
                 ui.checkbox(&mut config.skip_first_time_setup, "");
                 ui.end_row();
 
-                ui.label(t!("config_editor.lazy_translation_updates"));
-                ui.checkbox(&mut config.lazy_translation_updates, "");
-                ui.end_row();
-
                 ui.label(t!("config_editor.disable_auto_update_check"));
                 ui.checkbox(&mut config.disable_auto_update_check, "");
-                ui.end_row();
-
-                ui.label(t!("config_editor.disable_translations"));
-                ui.checkbox(&mut config.disable_translations, "");
                 ui.end_row();
 
                 ui.label(t!("config_editor.enable_ipc"));
@@ -230,38 +206,6 @@ impl ConfigEditor {
 
                 ui.label(t!("config_editor.ipc_listen_all"));
                 ui.checkbox(&mut config.ipc_listen_all, "");
-                ui.end_row();
-
-                ui.label(t!("config_editor.auto_translate_stories"));
-                if ui.checkbox(&mut config.auto_translate_stories, "").clicked() && config.auto_translate_stories {
-                    thread::spawn(|| {
-                        Gui::instance()
-                            .expect("unexpected failure")
-                            .lock()
-                            .expect("unexpected failure")
-                            .show_window(Box::new(SimpleOkDialog::new(
-                                &t!("warning"),
-                                &t!("config_editor.auto_tl_warning"),
-                                || {},
-                            )));
-                    });
-                }
-                ui.end_row();
-
-                ui.label(t!("config_editor.auto_translate_ui"));
-                if ui.checkbox(&mut config.auto_translate_localize, "").clicked() && config.auto_translate_localize {
-                    thread::spawn(|| {
-                        Gui::instance()
-                            .expect("unexpected failure")
-                            .lock()
-                            .expect("unexpected failure")
-                            .show_window(Box::new(SimpleOkDialog::new(
-                                &t!("warning"),
-                                &t!("config_editor.auto_tl_warning"),
-                                || {},
-                            )));
-                    });
-                }
                 ui.end_row();
             }
 
@@ -474,10 +418,6 @@ impl ConfigEditor {
                 );
                 ui.end_row();
 
-                ui.label(t!("config_editor.disable_skill_name_translation"));
-                ui.checkbox(&mut config.disable_skill_name_translation, "");
-                ui.end_row();
-
                 ui.label(t!("config_editor.hide_ingame_ui_hotkey"));
                 if ui.checkbox(&mut config.hide_ingame_ui_hotkey, "").clicked() && config.hide_ingame_ui_hotkey {
                     thread::spawn(|| {
@@ -501,104 +441,188 @@ impl ConfigEditor {
         ui.horizontal(|ui| ui.add_space(150.0 * scale));
         ui.end_row();
     }
+
+    /// Translation-related options (moved out of the General/Gameplay grids into the
+    /// dedicated Translations tab). Edits the same shared working copy.
+    fn run_translations_grid(config: &mut hachimi::Config, ui: &mut egui::Ui) {
+        let scale = get_scale(ui.ctx());
+        ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
+
+        ui.label(t!("config_editor.meta_index_url"));
+        let res = ui.add(egui::TextEdit::singleline(&mut config.meta_index_url).lock_focus(true));
+        #[cfg(target_os = "windows")]
+        if res.has_focus() {
+            ui.memory_mut(|mem| {
+                mem.set_focus_lock_filter(
+                    res.id,
+                    egui::EventFilter {
+                        tab: true,
+                        horizontal_arrows: true,
+                        vertical_arrows: true,
+                        escape: true,
+                    },
+                )
+            });
+        }
+        #[cfg(not(target_os = "windows"))]
+        let _ = res;
+        ui.end_row();
+
+        ui.label(t!("config_editor.disable_translations"));
+        ui.checkbox(&mut config.disable_translations, "");
+        ui.end_row();
+
+        ui.label(t!("config_editor.lazy_translation_updates"));
+        ui.checkbox(&mut config.lazy_translation_updates, "");
+        ui.end_row();
+
+        ui.label(t!("config_editor.translator_mode"));
+        ui.checkbox(&mut config.translator_mode, "");
+        ui.end_row();
+
+        ui.label(t!("config_editor.disable_skill_name_translation"));
+        ui.checkbox(&mut config.disable_skill_name_translation, "");
+        ui.end_row();
+
+        ui.label(t!("config_editor.auto_translate_stories"));
+        if ui.checkbox(&mut config.auto_translate_stories, "").clicked() && config.auto_translate_stories {
+            thread::spawn(|| {
+                Gui::instance()
+                    .expect("unexpected failure")
+                    .lock()
+                    .expect("unexpected failure")
+                    .show_window(Box::new(SimpleOkDialog::new(
+                        &t!("warning"),
+                        &t!("config_editor.auto_tl_warning"),
+                        || {},
+                    )));
+            });
+        }
+        ui.end_row();
+
+        ui.label(t!("config_editor.auto_translate_ui"));
+        if ui.checkbox(&mut config.auto_translate_localize, "").clicked() && config.auto_translate_localize {
+            thread::spawn(|| {
+                Gui::instance()
+                    .expect("unexpected failure")
+                    .lock()
+                    .expect("unexpected failure")
+                    .show_window(Box::new(SimpleOkDialog::new(
+                        &t!("warning"),
+                        &t!("config_editor.auto_tl_warning"),
+                        || {},
+                    )));
+            });
+        }
+        ui.end_row();
+
+        // Column widths workaround
+        ui.horizontal(|ui| ui.add_space(100.0 * scale));
+        ui.horizontal(|ui| ui.add_space(150.0 * scale));
+        ui.end_row();
+    }
 }
 
-impl Window for ConfigEditor {
-    fn run(&mut self, ctx: &egui::Context) -> bool {
-        let scale = get_scale(ctx);
-
-        let mut open = true;
-        let mut open2 = true;
+impl ConfigEditor {
+    /// Sync the working copy if the saved config changed underneath us.
+    fn sync(&mut self) {
         let global_handle = Hachimi::instance().config.load();
         let global_ptr = Arc::as_ptr(&global_handle) as usize;
-
-        // sync config between diff windows
         if global_ptr != self.last_ptr_config {
             self.config = (**global_handle).clone();
             self.last_ptr_config = global_ptr;
         }
-        let mut config = self.config.clone();
         #[cfg(target_os = "windows")]
         {
-            config.windows.menu_open_key = global_handle.windows.menu_open_key;
+            self.config.windows.menu_open_key = global_handle.windows.menu_open_key;
         }
-        let mut reset_clicked = false;
+    }
 
-        new_window(ctx, self.id, t!("config_editor.title"))
-            .open(&mut open)
-            .show(ctx, |ui| {
-                simple_window_layout(
-                    ui,
-                    self.id,
-                    |ui| {
-                        egui::ScrollArea::horizontal().id_salt("tabs_scroll").show(ui, |ui| {
-                            ui.horizontal(|ui| {
-                                let style = ui.style_mut();
-                                style.spacing.button_padding = egui::vec2(8.0, 5.0);
-                                style.spacing.item_spacing = egui::Vec2::ZERO;
-                                let widgets = &mut style.visuals.widgets;
-                                widgets.inactive.corner_radius = egui::CornerRadius::ZERO;
-                                widgets.hovered.corner_radius = egui::CornerRadius::ZERO;
-                                widgets.active.corner_radius = egui::CornerRadius::ZERO;
+    /// Config tab body: the General / Graphics / Gameplay sub-tabs + options grid.
+    pub(crate) fn ui_editor(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
+        let scale = get_scale(ctx);
+        self.sync();
 
-                                for (tab, label) in ConfigEditorTab::display_list() {
-                                    if ui.selectable_label(self.current_tab == tab, label.as_ref()).clicked() {
-                                        self.current_tab = tab;
-                                    }
-                                }
-                            });
-                        });
+        // Inner sub-tab strip (General / Graphics / Gameplay).
+        egui::ScrollArea::horizontal().id_salt("tabs_scroll").show(ui, |ui| {
+            ui.horizontal(|ui| {
+                let style = ui.style_mut();
+                style.spacing.button_padding = egui::vec2(8.0, 5.0);
+                style.spacing.item_spacing = egui::Vec2::ZERO;
+                let widgets = &mut style.visuals.widgets;
+                widgets.inactive.corner_radius = egui::CornerRadius::ZERO;
+                widgets.hovered.corner_radius = egui::CornerRadius::ZERO;
+                widgets.active.corner_radius = egui::CornerRadius::ZERO;
 
-                        ui.add_space(4.0);
-
-                        egui::ScrollArea::vertical().id_salt("body_scroll").show(ui, |ui| {
-                            egui::Frame::NONE
-                                .inner_margin(egui::Margin::symmetric(8, 0))
-                                .show(ui, |ui| {
-                                    egui::Grid::new(self.id.with("options_grid"))
-                                        .striped(true)
-                                        .num_columns(2)
-                                        .spacing([40.0 * scale, 4.0 * scale])
-                                        .show(ui, |ui| {
-                                            Self::run_options_grid(&mut config, ui, self.current_tab);
-                                        });
-                                });
-                        });
-                    },
-                    |ui| {
-                        ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| {
-                            if ui.button(t!("config_editor.restore_defaults")).clicked() {
-                                reset_clicked = true;
-                            }
-
-                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
-                                if ui.button(t!("cancel")).clicked() {
-                                    open2 = false;
-                                }
-                                if ui.button(t!("save")).clicked() {
-                                    save_and_reload_config(self.config.clone());
-                                    open2 = false;
-                                }
-                            });
-                        });
-                    },
-                );
+                for (tab, label) in ConfigEditorTab::display_list() {
+                    if ui.selectable_label(self.current_tab == tab, label.as_ref()).clicked() {
+                        self.current_tab = tab;
+                    }
+                }
             });
+        });
 
-        self.config = config;
+        ui.add_space(4.0);
+
+        let current_tab = self.current_tab;
+        egui::Frame::NONE
+            .inner_margin(egui::Margin::symmetric(8, 0))
+            .show(ui, |ui| {
+                egui::Grid::new(self.id.with("options_grid"))
+                    .striped(true)
+                    .num_columns(2)
+                    .spacing([40.0 * scale, 4.0 * scale])
+                    .show(ui, |ui| {
+                        Self::run_options_grid(&mut self.config, ui, current_tab);
+                    });
+            });
+    }
+
+    /// Translations tab body: the translation-related options grid.
+    pub(crate) fn ui_translations(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
+        let scale = get_scale(ctx);
+        self.sync();
+
+        egui::Frame::NONE
+            .inner_margin(egui::Margin::symmetric(8, 0))
+            .show(ui, |ui| {
+                egui::Grid::new(self.id.with("translations_grid"))
+                    .striped(true)
+                    .num_columns(2)
+                    .spacing([40.0 * scale, 4.0 * scale])
+                    .show(ui, |ui| {
+                        Self::run_translations_grid(&mut self.config, ui);
+                    });
+            });
+    }
+
+    /// Shared footer (Restore Defaults · Revert · Save) for both config-editing tabs.
+    pub(crate) fn ui_footer(&mut self, ui: &mut egui::Ui) {
+        ui.separator();
+
+        let mut reset_clicked = false;
+        let mut revert_clicked = false;
+
+        ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| {
+            if ui.button(t!("config_editor.restore_defaults")).clicked() {
+                reset_clicked = true;
+            }
+
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
+                if ui.button(t!("save")).clicked() {
+                    save_and_reload_config(self.config.clone());
+                }
+                if ui.button(t!("config_editor.revert")).clicked() {
+                    revert_clicked = true;
+                }
+            });
+        });
 
         if reset_clicked {
             self.restore_defaults();
         }
-
-        open &= open2;
-        if !open {
-            let config_locale = Hachimi::instance().config.load().language.locale_str();
-            if config_locale != &*rust_i18n::locale() {
-                rust_i18n::set_locale(config_locale);
-            }
+        if revert_clicked {
+            self.revert();
         }
-
-        open
     }
 }

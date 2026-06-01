@@ -1,4 +1,4 @@
-use std::sync::{atomic, Mutex};
+use std::sync::Mutex;
 use std::time::Instant;
 
 use rust_i18n::t;
@@ -6,7 +6,7 @@ use rust_i18n::t;
 use crate::core::Hachimi;
 
 use super::tween::{Easing, TweenInOutWithDelay};
-use super::window::FirstTimeSetupWindow;
+use super::window::{ConfigEditor, FirstTimeSetupWindow};
 use super::{Gui, INSTANCE};
 
 macro_rules! add_font {
@@ -63,11 +63,6 @@ impl Gui {
 
         let default_style = style.clone();
 
-        let mut fps_value = hachimi.target_fps.load(atomic::Ordering::Relaxed);
-        if fps_value == -1 {
-            fps_value = 30;
-        }
-
         let mut windows: Vec<super::window::BoxedWindow> = Vec::new();
         if !config.skip_first_time_setup {
             windows.push(Box::new(FirstTimeSetupWindow::new()));
@@ -90,6 +85,7 @@ impl Gui {
 
             show_menu: false,
             menu_tab: super::menu::ControlTab::default(),
+            config_editor: ConfigEditor::new(),
             plugins_selected: None,
 
             splash_visible: true,
@@ -109,10 +105,6 @@ impl Gui {
 
             menu_visible: false,
             menu_anim_time: None,
-            menu_fps_value: fps_value,
-
-            #[cfg(target_os = "windows")]
-            menu_vsync_value: hachimi.vsync_count.load(atomic::Ordering::Relaxed),
 
             update_progress_visible: false,
 

@@ -25,6 +25,9 @@ warning: "Warning"
 confirm_dialog_title: "Confirm"
 soft_restart_confirm_content: "Are you sure you want to soft restart the game?"
 
+translations:
+  settings_heading: "\uf013 Translation settings"
+
 menu:
   check_for_updates: "\uf0aa Check for updates"
   fps_text: "FPS: %{fps}"
@@ -119,6 +122,7 @@ config_editor:
   gameplay_tab: "\uf11b Gameplay"
   language: "Language"
   restore_defaults: "Restore Defaults"
+  revert: "Revert"
   disable_overlay: "Disable overlay (GUI)"
   disable_overlay_warning: >-
     This option will disable the Hachimi overlay after you restart the game,

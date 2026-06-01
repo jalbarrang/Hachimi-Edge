@@ -28,7 +28,7 @@ use crate::core::utils::SendPtr;
 
 pub(crate) use notification::Notification;
 pub(crate) use tween::TweenInOutWithDelay;
-pub(crate) use window::BoxedWindow;
+pub(crate) use window::{BoxedWindow, ConfigEditor};
 
 pub use notification::NotificationGuard;
 pub use theme_preview::enqueue_theme_preview;
@@ -51,6 +51,8 @@ pub struct Gui {
 
     pub(crate) show_menu: bool,
     pub(crate) menu_tab: menu::ControlTab,
+    /// Persistent working state for the Config tab (formerly a floating window).
+    pub(crate) config_editor: ConfigEditor,
     /// Currently selected plugin page handle in the Plugins tab (None = list view).
     pub(crate) plugins_selected: Option<u64>,
 
@@ -60,10 +62,6 @@ pub struct Gui {
 
     pub(crate) menu_visible: bool,
     pub(crate) menu_anim_time: Option<Instant>,
-    pub(crate) menu_fps_value: i32,
-
-    #[cfg(target_os = "windows")]
-    pub(crate) menu_vsync_value: i32,
 
     pub update_progress_visible: bool,
 

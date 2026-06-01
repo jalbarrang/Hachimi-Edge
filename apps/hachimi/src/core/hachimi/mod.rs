@@ -191,6 +191,46 @@ impl Hachimi {
         }
     }
 
+    /// Push runtime-tweakable config values to their atomic mirrors and re-apply them
+    /// to the running game, so saving/reloading config affects the live game (not just
+    /// the on-disk file). Mirrors what the old quick Graphics toggles did.
+    pub fn apply_runtime_config(&self, config: &Config) {
+        use atomic::Ordering;
+
+        self.target_fps
+            .store(config.target_fps.unwrap_or(-1), Ordering::Relaxed);
+        il2cpp::symbols::Thread::main_thread().schedule(|| {
+            crate::il2cpp::hook::UnityEngine_CoreModule::Application::set_targetFrameRate(30);
+        });
+
+        #[cfg(target_os = "windows")]
+        {
+            use crate::il2cpp::hook::UnityEngine_CoreModule::QualitySettings;
+            use crate::windows::{discord, utils::set_window_topmost, wnd_hook};
+
+            self.vsync_count.store(config.windows.vsync_count, Ordering::Relaxed);
+            il2cpp::symbols::Thread::main_thread().schedule(|| {
+                QualitySettings::set_vSyncCount(1);
+            });
+
+            self.window_always_on_top
+                .store(config.windows.window_always_on_top, Ordering::Relaxed);
+            il2cpp::symbols::Thread::main_thread().schedule(|| {
+                let topmost = Hachimi::instance().window_always_on_top.load(Ordering::Relaxed);
+                // SAFETY: FFI / Win32 call required to toggle the window's topmost state
+                unsafe {
+                    _ = set_window_topmost(wnd_hook::get_target_hwnd(), topmost);
+                }
+            });
+
+            let rpc = config.windows.discord_rpc;
+            self.discord_rpc.store(rpc, Ordering::Relaxed);
+            if let Err(e) = if rpc { discord::start_rpc() } else { discord::stop_rpc() } {
+                error!("{}", e);
+            }
+        }
+    }
+
     pub fn reload_config(&self) {
         let new_config = match Self::load_config(&self.game.data_dir, &self.game.region) {
             Ok(v) => v,
@@ -201,6 +241,7 @@ impl Hachimi {
         };
 
         new_config.language.set_locale();
+        self.apply_runtime_config(&new_config);
         self.config.store(Arc::new(new_config));
         super::plugin::events::dispatch_config_reload();
     }
@@ -217,6 +258,7 @@ impl Hachimi {
         self.save_config(&config)?;
 
         config.language.set_locale();
+        self.apply_runtime_config(&config);
         self.config.store(Arc::new(config));
         super::plugin::events::dispatch_config_reload();
         Ok(())
