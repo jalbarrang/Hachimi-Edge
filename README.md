@@ -123,15 +123,3 @@ These projects have in turn been the basis for Hachimi's development; without th
 
 # License
 [GNU GPLv3](LICENSE)
-
-# Copyright and Fair Use Notice
-
-Uma Musume: Pretty Derby, its characters, names, artwork, game assets, and related trademarks are the property of
-**Cygames, Inc.** and their respective rights holders.
-
-This project is an independent, fan-made enhancement and translation tool. It is not affiliated with, endorsed by, or
-sponsored by Cygames, Inc.
-
-Any referenced game data, terminology, or limited derivative material is used for commentary, research, education,
-and interoperability purposes. This repository is intended to fall under applicable **fair use / fair dealing**
-principles and equivalent exceptions under relevant copyright laws.
