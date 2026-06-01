@@ -116,10 +116,6 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: windows
-          # archive: false stores files as-is. With the default (true), v7 wraps
-          # them in an inner zip, so download-artifact restores a nested archive
-          # instead of loose files and the gh-release `files` glob matches nothing.
-          archive: false
           path: |
             build/blake3.json
             build/hachimi.dll
@@ -144,7 +140,12 @@ jobs:
           echo "RELEASE_VERSION=v$VERSION" >> $GITHUB_ENV
 
       - name: Download all build artifacts
-        uses: actions/download-artifact@v8
+        # Pinned to v7: download-artifact@v8 no longer unconditionally unzips —
+        # it inspects the Content-Type header and skipped our archived (zip)
+        # artifact, leaving artifacts/windows/ with no loose files so the
+        # gh-release `artifacts/windows/*` glob matched nothing. v7 always
+        # extracts, restoring the loose files the release upload expects.
+        uses: actions/download-artifact@v7
         with:
           path: artifacts
 
