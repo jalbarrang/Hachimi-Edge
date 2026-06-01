@@ -1,5 +1,5 @@
 # =============================================================================
-# typos Configuration — Hachimi Edge
+# typos Configuration — HachimiRedux
 # Catches typos in code, comments, strings, and identifiers.
 #
 # Run: typos
@@ -56,7 +56,7 @@ extend-exclude = [
     "*.png",
     "*.jpg",
     "Cargo.lock",
-    "assets/locales/",
+    "apps/hachimi/assets/locales/",
     "docs/reverse-engineering/",
 ]
 

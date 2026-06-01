@@ -2,7 +2,7 @@
 
 ## Overview
 
-Hachimi Edge exposes a native C ABI plugin system. Plugins are dynamic libraries (`.dll`) that export a single entry point. The host passes a vtable of function pointers that give the plugin access to hooking, IL2CPP introspection, GUI rendering, and logging.
+HachimiRedux exposes a native C ABI plugin system. Plugins are dynamic libraries (`.dll`) that export a single entry point. The host passes a vtable of function pointers that give the plugin access to hooking, IL2CPP introspection, GUI rendering, and logging.
 
 ## Plugin Lifecycle
 

@@ -254,7 +254,7 @@ All implemented via hooks on `Gallop.Live.Cutt.LiveTimelineControl` methods.
 | File | Contents |
 |------|----------|
 | `src/hook.cpp` | Main hook file (~5600 lines), all 136 IL2CPP hook targets |
-| `src/il2cpp/il2cpp_symbols.cpp/.hpp` | IL2CPP resolution API, struct definitions |
+| `apps/hachimi/src/il2cpp/il2cpp_symbols.cpp/.hpp` | IL2CPP resolution API, struct definitions |
 | `src/requestConvert/request_conv.cpp/.hpp` | Msgpack request interception |
 | `src/eventHelper/eventHelper.cpp/.hpp` | Event choice/effect lookup |
 | `src/umadb/umadb.cpp/.hpp` | Master DB queries, asset resolution |

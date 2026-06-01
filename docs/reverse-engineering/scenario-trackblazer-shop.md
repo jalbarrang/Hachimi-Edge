@@ -68,7 +68,7 @@ equivalent signal if a non-structural key is ever needed.
   main-thread refresh.
 - `ui.rs` — `Tab::Scenario` + `draw_scenario_tab` / `draw_trackblazer_shop`.
 
-## v2 enrichment — name / value / owned (Hachimi-Edge-bt0)
+## v2 enrichment — name / value / owned (HachimiRedux-bt0)
 
 The Scenario tab renders the shop lineup as a grid **Item | Effect | Price | Avail | Worth**,
 with a separate **Owned items** list below (name + effect + ×count). Enrichment runs in

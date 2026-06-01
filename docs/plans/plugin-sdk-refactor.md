@@ -1,6 +1,6 @@
 # Plugin SDK Domain-Driven Refactor Plan
 
-**Issue**: Hachimi-Edge-1bq  
+**Issue**: HachimiRedux-1bq  
 **Status**: Planning complete — ready for phased implementation  
 **Date**: 2026-05-23
 
@@ -12,11 +12,11 @@
 
 | Location | What lives there | Lines | Problem |
 |----------|-----------------|-------|---------|
-| `src/core/plugin_api.rs` | Flat vtable (53 fn pointers), VERSION=3, `Plugin` struct, all FFI wrapper fns | ~580 | Monolithic — hook API, UI API, platform API, logging all in one `#[repr(C)]` struct |
-| `src/core/gui.rs` | 5 plugin statics (`PLUGIN_MENU_ITEMS`, `PLUGIN_MENU_SECTIONS`, `PLUGIN_MENU_ICONS`, `PLUGIN_NOTIFICATIONS`, `PLUGIN_OVERLAYS`), 8 pub registration fns, rendering in `run_menu()` + `run_overlays()`, `is_empty()` checks overlays | ~200 lines of plugin code in a 3100-line GUI module | Plugin state management mixed into GUI module |
-| `src/windows/main.rs` | `load_libraries()` — `LoadLibraryW` + `GetProcAddress("hachimi_init")` | ~30 | Platform-specific loading, no shared trait |
+| `apps/hachimi/src/core/plugin_api.rs` | Flat vtable (53 fn pointers), VERSION=3, `Plugin` struct, all FFI wrapper fns | ~580 | Monolithic — hook API, UI API, platform API, logging all in one `#[repr(C)]` struct |
+| `apps/hachimi/src/core/gui.rs` | 5 plugin statics (`PLUGIN_MENU_ITEMS`, `PLUGIN_MENU_SECTIONS`, `PLUGIN_MENU_ICONS`, `PLUGIN_NOTIFICATIONS`, `PLUGIN_OVERLAYS`), 8 pub registration fns, rendering in `run_menu()` + `run_overlays()`, `is_empty()` checks overlays | ~200 lines of plugin code in a 3100-line GUI module | Plugin state management mixed into GUI module |
+| `apps/hachimi/src/windows/main.rs` | `load_libraries()` — `LoadLibraryW` + `GetProcAddress("hachimi_init")` | ~30 | Platform-specific loading, no shared trait |
 | `src/android/plugin_loader.rs` | `load_libraries()` — `dlopen` + `dlsym`, autoscan `libhachimi_*.so` | ~110 | Same — platform-specific, no shared interface |
-| `src/core/hachimi.rs` | `plugins: Mutex<Vec<Plugin>>`, init loop in `hooking_finished()` | ~15 | Thin, but Plugin struct is too basic (no deinit, no metadata) |
+| `apps/hachimi/src/core/hachimi.rs` | `plugins: Mutex<Vec<Plugin>>`, init loop in `hooking_finished()` | ~15 | Thin, but Plugin struct is too basic (no deinit, no metadata) |
 | `plugins/training-tracker/src/vtable.rs` | Complete mirror of the flat vtable | ~170 | Must be manually kept in sync — no generated bindings |
 
 ### Vtable Structure (current)
@@ -37,7 +37,7 @@ Vtable (53 fields, #[repr(C)]):
 
 ### Cross-cutting Concerns
 
-1. **`is_empty()` gating**: Render hooks in both `src/windows/gui_impl/render_hook.rs:86` and `src/android/gui_impl/render_hook.rs:59` skip the entire egui pass when `gui.is_empty()` returns true. Plugin overlays must keep `is_empty()` returning false — the recent overlay fix (Hachimi-Edge-1vp) added `PLUGIN_OVERLAYS` to this check.
+1. **`is_empty()` gating**: Render hooks in both `apps/hachimi/src/windows/gui_impl/render_hook.rs:86` and `src/android/gui_impl/render_hook.rs:59` skip the entire egui pass when `gui.is_empty()` returns true. Plugin overlays must keep `is_empty()` returning false — the recent overlay fix (HachimiRedux-1vp) added `PLUGIN_OVERLAYS` to this check.
 
 2. **Thread safety**: All plugin statics use `Lazy<Mutex<...>>`. Registration fns are called from the plugin's `hachimi_init` (on the DllMain/attach thread). Rendering fns are called from the render thread. Current pattern: snapshot via `get_plugin_*()` (clone under lock), render from snapshot.
 
@@ -50,7 +50,7 @@ Vtable (53 fields, #[repr(C)]):
 ### Module Structure
 
 ```
-src/core/
+apps/hachimi/src/core/
   ├── plugin/
   │   ├── mod.rs           — re-exports, PluginManager, plugin init orchestration
   │   ├── api.rs           — C ABI vtable (Vtable struct, VERSION, FFI wrappers)
@@ -94,10 +94,10 @@ Each phase is a single PR that builds, passes all 81 tests, and maintains zero c
 ### Phase 1: Extract plugin types (`plugin::types`)
 **Risk**: Low  
 **Changes**:
-- Create `src/core/plugin/mod.rs` and `src/core/plugin/types.rs`
+- Create `apps/hachimi/src/core/plugin/mod.rs` and `apps/hachimi/src/core/plugin/types.rs`
 - Move `Plugin`, `InitResult`, `HachimiInitFn`, callback type aliases from `plugin_api.rs` → `plugin/types.rs`
 - `plugin/mod.rs` re-exports everything publicly
-- Update `src/core/mod.rs`: replace `pub mod plugin_api` with `pub mod plugin`
+- Update `apps/hachimi/src/core/mod.rs`: replace `pub mod plugin_api` with `pub mod plugin`
 - Update 3 import sites (`hachimi.rs`, `windows/main.rs`, `android/plugin_loader.rs`) from `plugin_api::Plugin` → `plugin::Plugin`
 - `plugin_api.rs` → `plugin/api.rs` (rename + move)
 
@@ -110,7 +110,7 @@ Each phase is a single PR that builds, passes all 81 tests, and maintains zero c
 ### Phase 2: Extract plugin overlay state (`plugin::overlay`)
 **Risk**: Medium — touches `is_empty()` and render hook gating  
 **Changes**:
-- Create `src/core/plugin/overlay.rs`
+- Create `apps/hachimi/src/core/plugin/overlay.rs`
 - Move from `gui.rs`: `PluginOverlay` struct, `PLUGIN_OVERLAYS` static, `register_plugin_overlay()`, `get_plugin_overlays()`
 - Add `has_plugin_overlays() -> bool` (replaces inline `PLUGIN_OVERLAYS.lock().map_or(true, |o| o.is_empty())` in `is_empty()`)
 - Add `catch_unwind` to overlay callback invocation in `run_overlays()`
@@ -125,7 +125,7 @@ Each phase is a single PR that builds, passes all 81 tests, and maintains zero c
 ### Phase 3: Extract plugin menu state (`plugin::menu`)
 **Risk**: Medium — largest extraction, many functions  
 **Changes**:
-- Create `src/core/plugin/menu.rs`
+- Create `apps/hachimi/src/core/plugin/menu.rs`
 - Move from `gui.rs`: `PluginMenuItem`, `PluginMenuSection`, `PluginMenuIcon`, `PLUGIN_MENU_ITEMS`, `PLUGIN_MENU_SECTIONS`, `PLUGIN_MENU_ICONS`, all registration fns, all getter fns
 - Move callback type aliases `PluginMenuCallback`, `PluginMenuSectionCallback` to `plugin/types.rs` (shared by menu + overlay)
 - `gui.rs` `run_menu()` calls `plugin::menu::get_*()` — rendering stays in gui.rs
@@ -139,7 +139,7 @@ Each phase is a single PR that builds, passes all 81 tests, and maintains zero c
 ### Phase 4: Extract plugin notifications (`plugin::notification`)
 **Risk**: Low  
 **Changes**:
-- Create `src/core/plugin/notification.rs`
+- Create `apps/hachimi/src/core/plugin/notification.rs`
 - Move from `gui.rs`: `PLUGIN_NOTIFICATIONS`, `enqueue_plugin_notification()`, `drain_plugin_notifications()`
 - `gui.rs` `run_menu()` calls `plugin::notification::drain_plugin_notifications()`
 - `plugin/api.rs` `gui_show_notification` wrapper calls `plugin::notification::enqueue()`

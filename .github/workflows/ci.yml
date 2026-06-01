@@ -1,5 +1,5 @@
 # =============================================================================
-# CI Pipeline — Hachimi Edge
+# CI Pipeline — HachimiRedux
 #
 # Design: fail fast, fail loud. Every check that passes green means the code
 # actually meets the bar. No silent warnings, no cosmetic passes.

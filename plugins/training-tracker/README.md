@@ -1,6 +1,6 @@
 # Hachimi Training Tracker Plugin
 
-A [Hachimi Edge](../../README.md) plugin that tracks how many times each training facility has been visited during a career run, displaying live counts in the in-game overlay.
+A [HachimiRedux](../../README.md) plugin that tracks how many times each training facility has been visited during a career run, displaying live counts in the in-game overlay.
 
 ![Plugin Type: Hachimi Native Plugin](https://img.shields.io/badge/type-hachimi_plugin-blue)
 
@@ -85,4 +85,4 @@ OnClickTraining
 
 ## License
 
-Same as [Hachimi Edge](../../LICENSE) — GNU GPLv3.
+Same as [HachimiRedux](../../LICENSE) — GNU GPLv3.

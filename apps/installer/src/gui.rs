@@ -86,7 +86,7 @@ pub fn run() -> Result<(), windows::core::Error> {
 
         let get_version = || -> Result<String, Box<dyn std::error::Error>> {
             let resp_text = client
-                .get("https://api.github.com/repos/jalbarrang/Hachimi-Edge/releases/latest")
+                .get("https://api.github.com/repos/jalbarrang/hachimi-redux/releases/latest")
                 .send()?
                 .text()?;
             let json: JsonValue = resp_text.parse()?;
@@ -126,7 +126,7 @@ pub fn run() -> Result<(), windows::core::Error> {
         let dll_handle = installer.hachimi_dll.clone();
         thread::spawn(move || {
             let result = reqwest::blocking::get(
-                "https://github.com/jalbarrang/Hachimi-Edge/releases/latest/download/hachimi.dll",
+                "https://github.com/jalbarrang/hachimi-redux/releases/latest/download/hachimi.dll",
             )
             .and_then(|resp| resp.bytes());
             *dll_handle.lock().unwrap() = Some(result);

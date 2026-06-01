@@ -1,5 +1,5 @@
 # HachimiRedux Installer for Steam
-Simple installer for [HachimiRedux](https://github.com/jalbarrang/Hachimi-Edge), adapted for use with the Steam version of Umamusume: Pretty Derby (JP). Built against the latest DLLs from the [HachimiRedux](https://github.com/jalbarrang/Hachimi-Edge) repository.
+Simple installer for [HachimiRedux](https://github.com/jalbarrang/hachimi-redux), adapted for use with the Steam version of Umamusume: Pretty Derby (JP). Built against the latest DLLs from the [HachimiRedux](https://github.com/jalbarrang/hachimi-redux) repository.
 
 This is a fork of the upstream Hachimi installer, extended to optionally bundle the HachimiRedux Training Tracker plugin.
 

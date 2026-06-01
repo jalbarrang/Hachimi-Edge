@@ -1,5 +1,5 @@
 # =============================================================================
-# Clippy Configuration — Hachimi Edge
+# Clippy Configuration — HachimiRedux
 # Tuned for an unsafe-heavy IL2CPP hooking codebase where most code is AI-generated.
 # =============================================================================
 

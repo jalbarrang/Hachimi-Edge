@@ -2,16 +2,18 @@
 
 ## Build
 
-The repo is a Cargo workspace (root + `crates/*` + `plugins/training-tracker` + `installer`). Build from the repo root:
+The repo is a Cargo workspace with a virtual root manifest and dedicated folders:
+`apps/*` (deployables: `apps/hachimi`, `apps/installer`), `crates/*` (libraries),
+`plugins/*` (plugins). Build from the repo root:
 
 - **Core**: `cargo build --release -p hachimi` → `target/release/hachimi.dll`
 - **Plugin ABI tests**: `cargo test -p hachimi-plugin-abi`
 - **Training tracker plugin**: `cargo build --release -p hachimi-training-tracker` → `target/release/hachimi_training_tracker.dll`
-- **Installer** (Windows): vendored MIT fork in `installer/`. It's kept out of
+- **Installer** (Windows): vendored MIT fork in `apps/installer/`. It's kept out of
   `default-members`, so build it explicitly and only after staging the binaries it
   embeds (`hachimi.dll`, `cellar.dll`, `FunnyHoney.exe`, and — with the
   `training_tracker` feature — `hachimi_training_tracker.dll` + `skill_grades.json`)
-  into `installer/`:
+  into `apps/installer/`:
   `cargo build --release -p hachimi_installer --features compress_bin,training_tracker`
   → `target/release/hachimi_installer.exe`. The release workflow does this staging
   automatically; those embedded files are gitignored.

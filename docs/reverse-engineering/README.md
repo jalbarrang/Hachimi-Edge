@@ -1,6 +1,6 @@
 # Reverse Engineering Research
 
-Documentation of internal game structures, IL2CPP class hierarchies, and modding surface area for UM:PD. This research supports both Hachimi Edge core development and plugin authoring.
+Documentation of internal game structures, IL2CPP class hierarchies, and modding surface area for UM:PD. This research supports both HachimiRedux core development and plugin authoring.
 
 ## Contents
 
@@ -22,7 +22,7 @@ Research was conducted through:
 
 1. **Static metadata analysis** — Parsing `global-metadata.dat` (IL2CPP metadata v31) to extract all class, method, field, and property names without needing to execute the game binary
 2. **Runtime full class dump (2026-05-25)** — The training tracker plugin can enumerate ALL IL2CPP classes at runtime via `il2cpp_domain_get_assemblies` → `il2cpp_image_get_class` → fields/methods. Outputs to `il2cpp_classes.txt` (~21 MB, 105 assemblies, 14,832 classes in `umamusume.dll` alone). Triggered by a menu button. Includes declaring-type chain for nested classes (e.g. `MasterSkillData.SkillData`).
-3. **Existing mod analysis** — Studying [Hachimi Edge](https://github.com/Hachimi-Hachimi/Hachimi), [Trainers-Legend-G](https://github.com/MinamiChiwa/Trainers-Legend-G) (136 IL2CPP hooks, see [cross-reference](trainers-legend-g-crossref.md)), and [UmamusumeResponseAnalyzer](https://github.com/UmamusumeResponseAnalyzer/UmamusumeResponseAnalyzer) source code
+3. **Existing mod analysis** — Studying [HachimiRedux](https://github.com/Hachimi-Hachimi/Hachimi), [Trainers-Legend-G](https://github.com/MinamiChiwa/Trainers-Legend-G) (136 IL2CPP hooks, see [cross-reference](trainers-legend-g-crossref.md)), and [UmamusumeResponseAnalyzer](https://github.com/UmamusumeResponseAnalyzer/UmamusumeResponseAnalyzer) source code
 4. **Community protocol research** — Analyzing the MessagePack data structures from UmamusumeResponseAnalyzer's `Gallop/` namespace
 5. **Hook point identification** — Mapping Hachimi's existing IL2CPP hooks to understand what's already intercepted and what gaps remain
 

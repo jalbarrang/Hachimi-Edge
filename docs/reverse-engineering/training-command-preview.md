@@ -3,7 +3,7 @@
 How the training-tracker plugin reads, **live and per-turn**, each training
 facility's **failure rate** (%) and **total stat gain** — the numbers the game
 only surfaces on hover. Powers the Training-tab columns for issues
-`Hachimi-Edge-6cy` (Failure Rate Display) and `Hachimi-Edge-dsz` (Stat Gain
+`HachimiRedux-6cy` (Failure Rate Display) and `HachimiRedux-dsz` (Stat Gain
 Preview).
 
 Implemented in `plugins/training-tracker/src/memory_reader/command_info.rs`
@@ -79,7 +79,7 @@ WorkSingleModeData
   zero on non-amplified turns and populates when a bonus is active. Summing
   `base + bonus` is therefore **scenario-agnostic** — no scenario detection needed.
   The reader sums all four components so any future non-zero `BonusValue` is still
-  counted. See issue `Hachimi-Edge-23x`.
+  counted. See issue `HachimiRedux-23x`.
 - **Total stat gain** = sum of per-stat gains over the 5 main stats (Speed..Wiz).
   Skill points / motivation / Hp deltas are intentionally excluded from the
   headline number (they are not "stats"); they can be surfaced separately later.

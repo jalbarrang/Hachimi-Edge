@@ -1,7 +1,7 @@
 # Smart Training Recommendation
 
 How the training-tracker plugin scores each training facility per turn and flags
-the best one (`Hachimi-Edge-9ge`). Builds on the Tier-1 data features (stat-cap
+the best one (`HachimiRedux-9ge`). Builds on the Tier-1 data features (stat-cap
 warning `36o`, failure rate `6cy`, stat-gain preview `dsz`).
 
 Implemented in `plugins/training-tracker/src/recommend.rs` (pure scoring + tests),

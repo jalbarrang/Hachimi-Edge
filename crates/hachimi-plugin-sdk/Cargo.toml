@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 license = "GPL-3.0-or-later"
 description = "Ergonomic SDK for Hachimi plugins (Sdk, ApiVersion, safe wrappers)"
-repository = "https://github.com/jalbarrang/Hachimi-Edge"
+repository = "https://github.com/jalbarrang/hachimi-redux"
 keywords = ["hachimi", "plugin", "sdk", "egui"]
 categories = ["game-development", "api-bindings"]
 # Distributed via git tags (sdk-vX.Y.Z), not a registry. Block accidental publishes.

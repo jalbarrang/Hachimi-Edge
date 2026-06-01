@@ -1041,9 +1041,9 @@ Each has a corresponding `*Response` and `*Task` class.
 - `SingleModeTeamTeamRaceStartRequest` / `EndRequest` / `OutRequest`
 - `SingleModeTeamSaveTeamEditFlagRequest`
 
-## Classes Already Hooked by Hachimi Edge
+## Classes Already Hooked by HachimiRedux
 
-The tables below list hooks relevant to career/training. For the full list of hooked modules, see `src/il2cpp/hook/umamusume/mod.rs` which initializes **34+ additional modules** covering graphics, story, camera, race, UI, and text rendering.
+The tables below list hooks relevant to career/training. For the full list of hooked modules, see `apps/hachimi/src/il2cpp/hook/umamusume/mod.rs` which initializes **34+ additional modules** covering graphics, story, camera, race, UI, and text rendering.
 
 ### Career / Training Hooks
 
@@ -1068,7 +1068,7 @@ The tables below list hooks relevant to career/training. For the full list of ho
 
 ### Other Hooked Modules (non-exhaustive)
 
-These are initialized in `src/il2cpp/hook/umamusume/mod.rs` and provide hooks for graphics, story, camera, race, and UI:
+These are initialized in `apps/hachimi/src/il2cpp/hook/umamusume/mod.rs` and provide hooks for graphics, story, camera, race, and UI:
 
 `ButtonCommon`, `CameraController`, `CameraData`, `CharacterNoteTopView`, `CharacterNoteTopViewController`, `CySpringController`, `DialogCommon`, `DialogCommonBase`, `DialogManager`, `DialogObject`, `DialogRaceOrientation`, `FlashActionPlayer`, `GallopUtil`, `GameSystem`, `GraphicSettings`, `ImageCommon`, `JikkyoDisplay`, `LiveTheaterCharaSelect`, `LiveTheaterViewController`, `LiveUtil`, `LowResolutionCamera`, `LyricsController`, `MasterDataUtil`, `MasterMissionData`, `NowLoading`, `PartsCommonHeaderTitle`, `PartsRaceAnalyzeRaceEventListItem`, `PaymentUtility`, `RaceInfo`, `RaceUtil`, `SaveDataManager`, `SceneManager`, `Screen`, `SingleModeStartResultCharaViewer`, `StoryChoiceController`, `StoryParamChangeEffect`, `StoryRaceTextAsset`, `StoryTimelineBlockData`, `StoryTimelineCharaTrackData`, `StoryTimelineClipData`, `StoryTimelineController`, `StoryTimelineData`, `StoryTimelineTextClipData`, `StoryTimelineTrackData`, `StoryViewController`, `StoryViewTextControllerLandscape`, `StoryViewTextControllerSingleMode`, `TextCommon`, `TextDotData`, `TextFontManager`, `TextFormat`, `TextFrame`, `TextId`, `TextMeshProUguiCommon`, `TimeUtil`, `TweenAnimationTimelineComponent`, `TweenAnimationTimelineData`, `TweenAnimationTimelineSheetData`, `UIManager`, `ViewControllerBase`, `WebViewDefine`, `WebViewManager`
 

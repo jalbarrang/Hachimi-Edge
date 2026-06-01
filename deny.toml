@@ -1,5 +1,5 @@
 # =============================================================================
-# cargo-deny Configuration — Hachimi Edge (cargo-deny v0.19+)
+# cargo-deny Configuration — HachimiRedux (cargo-deny v0.19+)
 # Supply chain security: licenses, advisories, bans, and source restrictions.
 #
 # Run:  cargo deny check

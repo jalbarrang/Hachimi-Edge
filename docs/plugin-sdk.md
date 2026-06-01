@@ -30,9 +30,9 @@ crate-type = ["cdylib", "lib"]
 
 [dependencies]
 # Distributed via git tags (not crates.io). Pin a SDK release tag.
-hachimi-plugin-sdk = { git = "https://github.com/jalbarrang/Hachimi-Edge", tag = "sdk-v0.1.0" }
+hachimi-plugin-sdk = { git = "https://github.com/jalbarrang/hachimi-redux", tag = "sdk-v0.1.0" }
 # Needed directly only for the hlog_* macros + event/capability constants.
-hachimi-plugin-abi = { git = "https://github.com/jalbarrang/Hachimi-Edge", tag = "sdk-v0.1.0" }
+hachimi-plugin-abi = { git = "https://github.com/jalbarrang/hachimi-redux", tag = "sdk-v0.1.0" }
 ```
 
 > **In-tree plugins** (inside this workspace, like `training-tracker`) use `path =`
@@ -326,7 +326,7 @@ Panicking across an FFI boundary is undefined behavior. Mark callbacks `extern "
 
 ## Host Module Structure
 
-For contributors working on the host side, plugin loader/host code lives in `src/core/plugin/`:
+For contributors working on the host side, plugin loader/host code lives in `apps/hachimi/src/core/plugin/`:
 
 | File | Owns |
 |------|------|
@@ -339,4 +339,4 @@ For contributors working on the host side, plugin loader/host code lives in `src
 | `career.rs` | Career lifecycle event emission |
 | `mod.rs` | Re-exports public surface |
 
-GUI rendering stays in `src/core/gui.rs` — it reads plugin state through `pub(crate)` getters but does not own it.
+GUI rendering stays in `apps/hachimi/src/core/gui.rs` — it reads plugin state through `pub(crate)` getters but does not own it.
