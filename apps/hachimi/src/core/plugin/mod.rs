@@ -83,31 +83,13 @@ pub(crate) fn teardown_owner(owner: u32) {
     overlay::remove_by_owner(owner);
 }
 
-/// Reload every loaded plugin that opted in to runtime unload (`UNLOADABLE`).
-/// Returns `(reloaded, skipped)`. Runtime (un)loading is Windows-only; on other
-/// platforms this is a no-op.
+/// Unload a single plugin by library name. Windows-only; returns `false` if not loaded.
 #[cfg(target_os = "windows")]
-pub fn reload_all() -> (usize, usize) {
-    let plugins: Vec<(String, bool)> = crate::core::Hachimi::instance()
-        .plugins
-        .lock()
-        .expect("lock poisoned")
-        .iter()
-        .map(|p| (p.name.clone(), p.unloadable))
-        .collect();
-    let mut reloaded = 0usize;
-    let mut skipped = 0usize;
-    for (name, unloadable) in plugins {
-        if unloadable && crate::windows::main::reload_plugin(&name) {
-            reloaded += 1;
-        } else {
-            skipped += 1;
-        }
-    }
-    (reloaded, skipped)
+pub fn unload_by_name(name: &str) -> bool {
+    crate::windows::main::unload_plugin(name)
 }
 
 #[cfg(not(target_os = "windows"))]
-pub fn reload_all() -> (usize, usize) {
-    (0, 0)
+pub fn unload_by_name(_name: &str) -> bool {
+    false
 }

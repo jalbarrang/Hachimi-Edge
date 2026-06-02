@@ -52,7 +52,6 @@ menu:
   danger_zone_warning: "These options might have unintended effects on the game. Use with caution!"
   soft_restart: "\uf021 Soft restart"
   toggle_game_ui: "\uf06e Toggle game UI"
-  reload_plugins: "\uf021 Reload plugins"
   discord_rpc: "Discord RPC"
 
 notification:

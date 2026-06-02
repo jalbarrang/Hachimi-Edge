@@ -11,12 +11,6 @@ pub struct Plugin {
     /// Non-zero owner id used to attribute this plugin's registrations and event
     /// subscriptions (see [`super::OwnerScope`]).
     pub id: u32,
-    /// Raw OS module handle for the loaded library (`HMODULE` on Windows), or 0 if
-    /// unknown. Kept so the host can unload the library later.
-    pub module_handle: usize,
-    /// Whether the plugin opted in to runtime unload/reload via
-    /// `capability::UNLOADABLE`. The host only `FreeLibrary`s opted-in plugins.
-    pub unloadable: bool,
     pub init_fn: HachimiInitFn,
 }
 

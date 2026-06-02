@@ -13,8 +13,10 @@ use hachimi_plugin_sdk::Sdk;
 /// Fired before the host unloads this plugin (or on process detach). Remove every
 /// IL2CPP hook we installed so the host can safely free the DLL (UNLOADABLE).
 extern "C" fn on_shutdown(_event_id: u32, _data: *const c_void, _userdata: *mut c_void) {
+    crate::memory_reader::stop_tracking();
+    crate::overlay_cache::shutdown();
     crate::shop_hooks::uninstall_shop_hooks();
-    hlog_info!("Shutdown: hooks removed");
+    hlog_info!("Shutdown: tracking stopped, hooks removed");
 }
 
 /// Subscribe to the host events we need. Returns `true` if the host advertises the

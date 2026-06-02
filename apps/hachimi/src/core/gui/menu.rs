@@ -83,7 +83,7 @@ impl Gui {
                     ControlTab::Translations => self.run_translations_tab(ui, &ctx, &mut show_notification),
                     ControlTab::Plugins => self.run_plugins_tab(ui, &ctx, &mut show_notification),
                     ControlTab::Overlay => self.run_overlay_settings_tab(ui),
-                    ControlTab::About => self.run_about_tab(ui, &ctx, &mut show_window, &mut show_notification),
+                    ControlTab::About => self.run_about_tab(ui, &ctx, &mut show_window),
                 });
         });
 

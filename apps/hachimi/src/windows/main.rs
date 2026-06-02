@@ -4,7 +4,7 @@ use widestring::U16CString;
 use windows::{
     core::PCWSTR,
     Win32::{
-        Foundation::{FreeLibrary, HMODULE, TRUE},
+        Foundation::{HMODULE, TRUE},
         System::LibraryLoader::LoadLibraryW,
     },
 };
@@ -53,7 +53,7 @@ fn load_plugin_library(name: &str, id: u32) -> Option<Plugin> {
     if hachimi_init_addr == 0 {
         return None;
     }
-    let Some(caps) = plugin_is_compatible(name, handle) else {
+    let Some(_caps) = plugin_is_compatible(name, handle) else {
         crate::core::utils::notify_error(format!(
             "Plugin '{}' is incompatible with this Hachimi build and was not loaded (see log)",
             name
@@ -64,76 +64,32 @@ fn load_plugin_library(name: &str, id: u32) -> Option<Plugin> {
     Some(Plugin {
         name: name.to_owned(),
         id,
-        module_handle: handle.0 as usize,
-        unloadable: caps & hachimi_plugin_abi::capability::UNLOADABLE != 0,
         // SAFETY: Transmute required for IL2CPP type conversion
         init_fn: unsafe { std::mem::transmute(hachimi_init_addr) },
     })
 }
 
-/// Unload a single plugin by name: tear down its GUI/event registrations (firing
-/// `SHUTDOWN` to the plugin), then free its library. Returns `false` if not loaded.
+/// Disconnect a plugin by name: dispatch `SHUTDOWN` and drop its GUI/event
+/// registrations, then forget it. Returns `false` if it was not loaded.
 ///
-/// # Safety contract
-/// This is only safe if the plugin removed every IL2CPP hook it installed (in its
-/// `SHUTDOWN` handler). The host cannot track a plugin's hooks, so freeing the
-/// library while the game still holds trampolines into it will crash. Call only
-/// from host context — never from inside the target plugin's own callback.
+/// The plugin's DLL is **deliberately kept mapped** — the host cannot track the
+/// IL2CPP hooks a plugin installs, so `FreeLibrary`-ing it while the game still
+/// holds trampolines into its code would crash on the next call. A pure disconnect
+/// (stop driving the plugin via GUI/events) is the most we can safely do at
+/// runtime; fully removing a plugin requires restarting the game. Call only from
+/// host context — never from inside the target plugin's own callback.
 pub fn unload_plugin(name: &str) -> bool {
     let hachimi = Hachimi::instance();
-    let (module, unloadable) = {
-        let mut plugins = hachimi.plugins.lock().expect("lock poisoned");
-        let Some(pos) = plugins.iter().position(|p| p.name == name) else {
-            warn!("unload_plugin: '{}' not loaded", name);
-            return false;
-        };
-        let plugin = plugins.remove(pos);
-        crate::core::plugin::teardown_owner(plugin.id);
-        (plugin.module_handle, plugin.unloadable)
-    };
-    if unloadable && module != 0 {
-        // SAFETY: handle was returned by LoadLibraryW for this plugin, which opted in
-        // to unload (UNLOADABLE) and has unhooked its IL2CPP hooks in SHUTDOWN.
-        let _ = unsafe { FreeLibrary(HMODULE(module as _)) };
-        info!("Unloaded and freed plugin: {}", name);
-    } else {
-        info!(
-            "Disconnected plugin '{}' (GUI/events torn down); DLL kept mapped (not UNLOADABLE)",
-            name
-        );
-    }
-    true
-}
-
-/// Unload (if loaded) then load and re-initialize a plugin by name, mirroring a
-/// hot reload. Subject to the same safety contract as [`unload_plugin`]. Returns
-/// whether the freshly loaded plugin initialized successfully.
-pub fn reload_plugin(name: &str) -> bool {
-    {
-        // Reload requires a fresh DLL mapping so the plugin's statics (e.g. the SDK
-        // OnceLock) reset; that is only possible for UNLOADABLE plugins we FreeLibrary.
-        let hachimi = Hachimi::instance();
-        let plugins = hachimi.plugins.lock().expect("lock poisoned");
-        match plugins.iter().find(|p| p.name == name) {
-            Some(p) if !p.unloadable => {
-                warn!("reload_plugin: '{}' is not UNLOADABLE; cannot reload safely", name);
-                return false;
-            }
-            _ => {}
-        }
-    }
-
-    unload_plugin(name);
-
-    let hachimi = Hachimi::instance();
     let mut plugins = hachimi.plugins.lock().expect("lock poisoned");
-    let next_id = plugins.iter().map(|p| p.id).max().unwrap_or(0) + 1;
-    let Some(plugin) = load_plugin_library(name, next_id) else {
+    let Some(pos) = plugins.iter().position(|p| p.name == name) else {
+        warn!("unload_plugin: '{}' not loaded", name);
         return false;
     };
-    let ok = plugin.init().is_ok();
-    plugins.push(plugin);
-    ok
+    let plugin = plugins.remove(pos);
+    drop(plugins);
+    crate::core::plugin::teardown_owner(plugin.id);
+    info!("Disconnected plugin '{}' (GUI/events torn down); DLL kept mapped", name);
+    true
 }
 
 /// Read a plugin's `hachimi_plugin_manifest` and decide whether it is safe to load.

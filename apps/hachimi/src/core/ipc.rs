@@ -172,6 +172,12 @@ fn on_http_request(request: &mut Request) -> Result<CommandResponse, Error> {
                 notify_error("SoftReset needs exec=true");
             }
         }
+
+        Command::UnloadPlugin { name } => {
+            if !crate::core::plugin::unload_by_name(&name) {
+                warn!("IPC UnloadPlugin: '{}' was not loaded", name);
+            }
+        }
     }
 
     Ok(CommandResponse::Ok)
@@ -204,6 +210,9 @@ enum Command {
     ReloadLocalizedData,
     SoftReset {
         exec: bool,
+    },
+    UnloadPlugin {
+        name: String,
     },
 }
 

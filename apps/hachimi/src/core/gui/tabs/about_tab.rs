@@ -1,7 +1,5 @@
 //! L1 About tab — about info, update check, stats, and the danger zone.
 
-use std::borrow::Cow;
-
 use chrono::{Datelike, Utc};
 use rust_i18n::t;
 
@@ -22,7 +20,6 @@ impl Gui {
         ui: &mut egui::Ui,
         ctx: &egui::Context,
         show_window: &mut Option<BoxedWindow>,
-        show_notification: &mut Option<Cow<'_, str>>,
     ) {
         ui.add_space(4.0);
         ui.horizontal(|ui| {
@@ -72,10 +69,6 @@ impl Gui {
         }
         if ui.button(t!("menu.toggle_game_ui")).clicked() {
             Thread::main_thread().schedule(Self::toggle_game_ui);
-        }
-        if ui.button(t!("menu.reload_plugins")).clicked() {
-            let (reloaded, skipped) = crate::core::plugin::reload_all();
-            *show_notification = Some(format!("Reloaded {reloaded} plugin(s), skipped {skipped}").into());
         }
     }
 }

@@ -34,6 +34,7 @@ static CACHE: Mutex<OverlayCache> = Mutex::new(OverlayCache {
 });
 static PENDING: AtomicBool = AtomicBool::new(false);
 static LAST_REFRESH_MS: AtomicU64 = AtomicU64::new(0);
+static SHUTTING_DOWN: AtomicBool = AtomicBool::new(false);
 
 fn now_ms() -> u64 {
     SystemTime::now()
@@ -57,6 +58,9 @@ fn elapsed_since_last_refresh_ms() -> u64 {
 }
 
 fn schedule_refresh() {
+    if SHUTTING_DOWN.load(AtomicOrdering::Acquire) {
+        return;
+    }
     if PENDING.swap(true, AtomicOrdering::AcqRel) {
         return;
     }
@@ -64,6 +68,10 @@ fn schedule_refresh() {
 }
 
 extern "C" fn refresh_cache_cb() {
+    if SHUTTING_DOWN.load(AtomicOrdering::Acquire) {
+        PENDING.store(false, AtomicOrdering::Release);
+        return;
+    }
     let mut snapshot = memory_reader::read_snapshot();
     let skills = memory_reader::read_acquired_skills();
     let evaluations = memory_reader::read_evaluations();
@@ -136,6 +144,14 @@ pub fn skill_points() -> Option<i32> {
     CACHE.lock().ok().and_then(|g| g.skill_points)
 }
 
+/// Stop scheduling refreshes and bail out of any in-flight main-thread callback.
+/// Call from the plugin `SHUTDOWN` handler before the host frees the DLL.
+pub fn shutdown() {
+    SHUTTING_DOWN.store(true, AtomicOrdering::Release);
+    PENDING.store(false, AtomicOrdering::Release);
+    LAST_REFRESH_MS.store(0, AtomicOrdering::Release);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -146,5 +162,12 @@ mod tests {
         assert!(!should_auto_refresh(1999, AUTO_REFRESH_INTERVAL_MS));
         assert!(should_auto_refresh(2000, AUTO_REFRESH_INTERVAL_MS));
         assert!(should_auto_refresh(3000, AUTO_REFRESH_INTERVAL_MS));
+    }
+
+    #[test]
+    fn shutdown_blocks_refresh_scheduling() {
+        shutdown();
+        schedule_refresh();
+        assert!(!PENDING.load(AtomicOrdering::Relaxed));
     }
 }

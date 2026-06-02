@@ -41,6 +41,20 @@ $env:HACHIMI_GAME_DIR = "D:\path\to\UmamusumePrettyDerby"
 
 The script copies `hachimi.dll` → `cri_mana_vpx.dll` and `hachimi_training_tracker.dll` into the game directory. It never modifies `cri_mana_vpx.dll.backup`.
 
+Plugin-only deploy (skip the core proxy):
+
+```powershell
+.\scripts\deploy-windows.ps1 -PluginOnly -Build
+```
+
+Hot-swap while the game is running (unload → copy → reload via IPC; requires `enable_ipc: true` in config.json). Do **not** also click **Reload plugins** afterward — the script already reloads the plugin.
+
+```powershell
+.\scripts\deploy-windows.ps1 -PluginOnly -HotSwap -Build
+```
+
+After updating the host (for IPC unload/reload support), deploy core once and restart the game before relying on hot-swap.
+
 ### Manual
 
 - **Deploy core**: Copy `target/release/hachimi.dll` as `C:/Program Files (x86)/Steam/steamapps/common/UmamusumePrettyDerby/cri_mana_vpx.dll`
