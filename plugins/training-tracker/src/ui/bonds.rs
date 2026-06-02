@@ -1,14 +1,20 @@
-//! Bonds tab: bond names + progress (scrollable).
+//! Bonds section: bond names + progress (scrollable).
+//! Rendered inside the Training tab under a "Bonds" heading.
 
 use hachimi_plugin_sdk::egui;
 
 use crate::overlay_cache;
 
+use super::constants::OVERLAY_FONT_SIZE;
 use super::overlay;
 use super::util::bond_color;
 
-pub(super) fn draw(ui: &mut egui::Ui) {
+/// Draw the "Bonds" heading (h2) followed by the bond list on the next rows.
+pub(super) fn draw_section(ui: &mut egui::Ui) {
     overlay_cache::maybe_request_refresh();
+    ui.add_space(8.0);
+    ui.label(egui::RichText::new("Bonds").size(OVERLAY_FONT_SIZE * 1.4).strong());
+    ui.add_space(4.0);
     overlay::scroll_list(ui, draw_panel);
 }
 

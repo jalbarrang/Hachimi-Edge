@@ -34,7 +34,6 @@ fn draw_tab_bar(ui: &mut egui::Ui) {
         for (tab, label) in [
             (Tab::Training, "Training"),
             (Tab::Skills, "Skills"),
-            (Tab::Bonds, "Bonds"),
             (Tab::Shop, "Shop"),
             (Tab::Scenario, "Scenario"),
         ] {

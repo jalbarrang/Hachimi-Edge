@@ -73,7 +73,6 @@ fn draw_overlay_inner(ui: &mut egui::Ui) {
     match state::selected_tab() {
         state::Tab::Training => training::draw(ui),
         state::Tab::Skills => skills::draw(ui),
-        state::Tab::Bonds => bonds::draw(ui),
         state::Tab::Shop => skill_shop_tab::draw(ui),
         state::Tab::Scenario => scenario::draw(ui),
     }

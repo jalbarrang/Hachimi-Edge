@@ -18,4 +18,6 @@ pub(super) fn draw(ui: &mut egui::Ui) {
     let rec = stats_grid::score_facilities(&snap);
     let any_capped = stats_grid::draw(ui, &snap, &stats, &rec);
     footer::draw(ui, &snap, &stats, &rec, any_capped);
+
+    super::bonds::draw_section(ui);
 }

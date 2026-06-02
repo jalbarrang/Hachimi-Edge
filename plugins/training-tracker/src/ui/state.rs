@@ -8,7 +8,6 @@ use std::sync::atomic::Ordering;
 pub(super) enum Tab {
     Training = 0,
     Skills = 1,
-    Bonds = 2,
     Shop = 3,
     Scenario = 4,
 }
@@ -18,7 +17,6 @@ static SELECTED_TAB: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::
 pub(super) fn selected_tab() -> Tab {
     match SELECTED_TAB.load(Ordering::Relaxed) {
         1 => Tab::Skills,
-        2 => Tab::Bonds,
         3 => Tab::Shop,
         4 => Tab::Scenario,
         _ => Tab::Training,
