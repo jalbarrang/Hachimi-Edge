@@ -27,7 +27,7 @@ There is **no live source** for the overall evaluation. A full field+method dump
   chara.
 
 The game computes the score at **career result** in native code. The in-career
-*Umamusume Details* screen shows stats/aptitudes/skills but **no score or rank**.
+Character Details screen shows stats/aptitudes/skills but **no score or rank**.
 So a live rank must be **predicted** from the same inputs the game uses.
 
 ---
@@ -168,7 +168,7 @@ two sources by skill id ↔ name:
 2. `affinity_role` per skill — fetched from UmaTools'
    [`assets/uma_skills.csv`](https://github.com/daftuyda/UmaTools) (override with `--csv`).
 
-`fetch-master-db` ports the Umamusume CDN manifest chain (resolves the resource
+`fetch-master-db` ports the Honse game CDN manifest chain (resolves the resource
 version from `uma.moe/api/ver`); see [docs/gametora-data.md](../gametora-data.md)
 for the sibling data pipeline.
 

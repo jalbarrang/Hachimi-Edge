@@ -1,6 +1,6 @@
 //! master.mdb fetcher (CI/maintainer tool).
 //!
-//! Resolves the current resource version from uma.moe, then walks the Umamusume
+//! Resolves the current resource version from uma.moe, then walks the Honse game
 //! CDN manifest chain (root -> platform -> master -> master.mdb), decompressing
 //! LZ4 and parsing the BSV manifests, and writes `db/master.mdb`.
 //!
