@@ -15,6 +15,10 @@ pub struct EvaluationInfo {
     pub value: i32,      // friendship/bond value (0-100+)
     pub is_appear: bool, // whether the character is present in this career
     pub name: String,    // resolved character name
+    /// Support-card story/outing progress step (`get_StoryStep`). `0` when none.
+    pub story_step: i32,
+    /// Guest character id (`get_GuestCharaId`); `0`/`-1` for non-guest. Diagnostic only.
+    pub guest_chara_id: i32,
 }
 
 /// Read the evaluation (friendship) list from the chara object.
@@ -61,6 +65,8 @@ unsafe fn read_evaluations_inner() -> Vec<EvaluationInfo> {
     let mut m_target_id: *const c_void = std::ptr::null();
     let mut m_value: *const c_void = std::ptr::null();
     let mut m_is_appear: *const c_void = std::ptr::null();
+    let mut m_story_step: *const c_void = std::ptr::null();
+    let mut m_guest_chara_id: *const c_void = std::ptr::null();
     let mut m_get_chara_name: *const c_void = std::ptr::null();
     let mut methods_resolved = false;
 
@@ -89,6 +95,14 @@ unsafe fn read_evaluations_inner() -> Vec<EvaluationInfo> {
                 .get_method(klass.cast(), "get_IsAppear", 0)
                 .map(|m| m.cast())
                 .unwrap_or(std::ptr::null());
+            m_story_step = sdk
+                .get_method(klass.cast(), "get_StoryStep", 0)
+                .map(|m| m.cast())
+                .unwrap_or(std::ptr::null());
+            m_guest_chara_id = sdk
+                .get_method(klass.cast(), "get_GuestCharaId", 0)
+                .map(|m| m.cast())
+                .unwrap_or(std::ptr::null());
 
             if let Some(image) = sdk.get_assembly_image("umamusume.dll") {
                 if let Some(mdu) = sdk.get_class(image, "Gallop", "MasterDataUtil") {
@@ -102,8 +116,10 @@ unsafe fn read_evaluations_inner() -> Vec<EvaluationInfo> {
             static LOGGED: AtomicBool = AtomicBool::new(false);
             if !LOGGED.swap(true, Ordering::Relaxed) {
                 hlog_info!(
-                    "Evaluation: resolved get_TargetId + get_Value + get_IsAppear={} + GetCharaName={}",
+                    "Evaluation: resolved get_TargetId + get_Value + get_IsAppear={} + get_StoryStep={} + get_GuestCharaId={} + GetCharaName={}",
                     !m_is_appear.is_null(),
+                    !m_story_step.is_null(),
+                    !m_guest_chara_id.is_null(),
                     !m_get_chara_name.is_null()
                 );
             }
@@ -119,6 +135,19 @@ unsafe fn read_evaluations_inner() -> Vec<EvaluationInfo> {
             unsafe { call_bool(item, m_is_appear) }
         } else {
             true // assume present if we can't check
+        };
+
+        let story_step = if !m_story_step.is_null() {
+            // SAFETY: Reading field or calling method on non-null IL2CPP object pointer.
+            unsafe { call_i32(item, m_story_step) }
+        } else {
+            0
+        };
+        let guest_chara_id = if !m_guest_chara_id.is_null() {
+            // SAFETY: Reading field or calling method on non-null IL2CPP object pointer.
+            unsafe { call_i32(item, m_guest_chara_id) }
+        } else {
+            0
         };
 
         // Resolve name via MasterDataUtil.GetCharaNameByCharaId (static)
@@ -140,6 +169,8 @@ unsafe fn read_evaluations_inner() -> Vec<EvaluationInfo> {
             value,
             is_appear,
             name,
+            story_step,
+            guest_chara_id,
         });
     }
 

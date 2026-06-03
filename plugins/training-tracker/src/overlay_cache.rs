@@ -10,7 +10,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use hachimi_plugin_sdk::Sdk;
 
 use crate::deck_bonuses;
-use crate::memory_reader::{self, AcquiredSkillInfo, CareerSnapshot, EvaluationInfo};
+use crate::memory_reader::{self, AcquiredSkillInfo, CareerSnapshot, EvaluationInfo, FiredEvent};
 use crate::skill_shop::{self, SkillShopEntry};
 
 /// Auto-refresh interval while memory tracking is on (milliseconds).
@@ -23,6 +23,8 @@ struct OverlayCache {
     evaluations: Vec<EvaluationInfo>,
     skill_shop: Vec<SkillShopEntry>,
     skill_points: Option<i32>,
+    /// Equipped `(deck slot, support_card_id)` map, captured once per career.
+    support_ids: Vec<(i32, i32)>,
 }
 
 static CACHE: Mutex<OverlayCache> = Mutex::new(OverlayCache {
@@ -31,6 +33,7 @@ static CACHE: Mutex<OverlayCache> = Mutex::new(OverlayCache {
     evaluations: Vec::new(),
     skill_shop: Vec::new(),
     skill_points: None,
+    support_ids: Vec::new(),
 });
 static PENDING: AtomicBool = AtomicBool::new(false);
 static LAST_REFRESH_MS: AtomicU64 = AtomicU64::new(0);
@@ -80,6 +83,29 @@ extern "C" fn refresh_cache_cb() {
 
     // Deck bonuses: capture once when career starts, clear when it ends.
     let is_playing = snapshot.as_ref().is_some_and(|s| s.is_playing);
+    // Equipped support-card ids: read once per career (safe ObscuredInt field read).
+    let support_ids = if is_playing {
+        let existing = CACHE.lock().ok().map(|g| g.support_ids.clone()).unwrap_or_default();
+        if existing.is_empty() {
+            memory_reader::read_equipped_support_ids()
+        } else {
+            existing
+        }
+    } else {
+        Vec::new()
+    };
+    // Fired-event history: re-read each refresh (read-only; grows over the career).
+    let fired_events = if is_playing {
+        memory_reader::read_fired_events()
+    } else {
+        Vec::new()
+    };
+    // Accumulate observed events into per-career progress (auto counter).
+    if is_playing {
+        crate::bond_progress::observe(&support_ids, &fired_events);
+    } else {
+        crate::bond_progress::clear();
+    }
     if is_playing {
         if let Some(chara) = memory_reader::get_chara_ptr() {
             deck_bonuses::try_capture(chara);
@@ -89,8 +115,10 @@ extern "C" fn refresh_cache_cb() {
             let stats = [s.speed, s.stamina, s.power, s.guts, s.wiz];
             s.evaluation_value = crate::evaluation::compute(stats, &s.aptitudes, s.star, &skills);
         }
+        log_career_diagnostic(&evaluations, &support_ids, &fired_events);
     } else {
         deck_bonuses::clear();
+        EVAL_DIAG_LOGGED.store(false, AtomicOrdering::Relaxed);
     }
 
     if let Ok(mut guard) = CACHE.lock() {
@@ -99,10 +127,60 @@ extern "C" fn refresh_cache_cb() {
         guard.evaluations = evaluations;
         guard.skill_shop = skill_shop;
         guard.skill_points = skill_points;
+        guard.support_ids = support_ids;
     }
 
     LAST_REFRESH_MS.store(now_ms(), AtomicOrdering::Relaxed);
     PENDING.store(false, AtomicOrdering::Release);
+}
+
+/// One-shot per career: dump the (safe, already-read) evaluation rows so the
+/// `target_id` (deck slot 1–6 / guest) ↔ `story_step` relationship can be correlated
+/// against a known deck. Evaluation-only — touches no support-card/deck memory.
+static EVAL_DIAG_LOGGED: AtomicBool = AtomicBool::new(false);
+
+fn log_career_diagnostic(evaluations: &[EvaluationInfo], support_ids: &[(i32, i32)], fired: &[FiredEvent]) {
+    if evaluations.is_empty() || EVAL_DIAG_LOGGED.swap(true, AtomicOrdering::Relaxed) {
+        return;
+    }
+    hlog_info!(target: "training-tracker", "Eval diagnostic ({} rows):", evaluations.len());
+    for e in evaluations {
+        hlog_info!(
+            target: "training-tracker",
+            "  target_id={} value={} story_step={} guest_chara_id={} is_appear={} name={:?}",
+            e.target_id, e.value, e.story_step, e.guest_chara_id, e.is_appear, e.name
+        );
+    }
+    // Probe the master evaluation table to learn target_id -> chara_id mapping.
+    let target_ids: Vec<i32> = evaluations.iter().map(|e| e.target_id).collect();
+    memory_reader::probe_eval_master(&target_ids);
+
+    // Fired-event history sample (to compare ids against catalog chain keys).
+    let ev_ids: std::collections::HashSet<i32> = fired.iter().map(|e| e.event_id).collect();
+    let st_ids: std::collections::HashSet<i32> = fired.iter().map(|e| e.story_id).collect();
+    hlog_info!(target: "training-tracker", "Fired events: {} total", fired.len());
+    for e in fired.iter().take(12) {
+        hlog_info!(target: "training-tracker", "  event_id={} story_id={}", e.event_id, e.story_id);
+    }
+
+    hlog_info!(target: "training-tracker", "Deck map ({} slots):", support_ids.len());
+    for (slot, support_id) in support_ids {
+        let name = crate::gametora_data::support_card_name(*support_id as i64).unwrap_or("?");
+        let max = crate::gametora_data::max_chain_steps(*support_id as i64);
+        let keys = crate::gametora_data::chain_event_keys(*support_id as i64);
+        let matched = keys
+            .iter()
+            .filter(|(eid, sid)| {
+                (*eid != 0 && ev_ids.contains(&(*eid as i32))) || (*sid != 0 && st_ids.contains(&(*sid as i32)))
+            })
+            .count();
+        let sample: Vec<(i64, i64)> = keys.iter().take(3).copied().collect();
+        hlog_info!(
+            target: "training-tracker",
+            "  slot={} support_id={} name={:?} max={:?} chain_keys={} matched={} keys_sample={:?}",
+            slot, support_id, name, max, keys.len(), matched, sample
+        );
+    }
 }
 
 /// Throttled auto-refresh (call from render thread each overlay frame).
@@ -134,6 +212,11 @@ pub fn skills() -> Vec<AcquiredSkillInfo> {
 
 pub fn evaluations() -> Vec<EvaluationInfo> {
     CACHE.lock().ok().map(|g| g.evaluations.clone()).unwrap_or_default()
+}
+
+/// Equipped `(deck slot, support_card_id)` pairs for the active career.
+pub fn equipped_support_ids() -> Vec<(i32, i32)> {
+    CACHE.lock().ok().map(|g| g.support_ids.clone()).unwrap_or_default()
 }
 
 pub fn skill_shop() -> Vec<SkillShopEntry> {

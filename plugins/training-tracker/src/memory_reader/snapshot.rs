@@ -75,6 +75,9 @@ pub struct CareerSnapshot {
     /// suggestion. `0` means unknown.
     pub scenario_command_base: i32,
 
+    /// Active scenario id (`get_ScenarioId`). e.g. 4 = Trackblazer. `0` = unknown.
+    pub scenario_id: i32,
+
     /// Live scenario-specific state (e.g. Trackblazer shop). `None` for the base
     /// URA Finale scenario or when not yet read.
     pub scenario_state: Option<ScenarioState>,
@@ -235,6 +238,7 @@ fn read_snapshot_inner() -> Option<CareerSnapshot> {
         stat_gains,
         per_stat_gains,
         scenario_command_base,
+        scenario_id,
         // SAFETY: `chara` is a valid non-null IL2CPP object from the resolved chain.
         scenario_state: read_scenario_state(chara),
     })

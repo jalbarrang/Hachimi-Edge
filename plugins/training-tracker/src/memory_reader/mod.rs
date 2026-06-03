@@ -23,20 +23,26 @@ use std::sync::atomic::AtomicBool;
 
 mod chain;
 mod command_info;
+mod eval_master;
 mod evaluations;
 mod il2cpp;
 mod presentation;
 mod scenario;
 mod skills;
 mod snapshot;
+mod story_events;
+mod support_deck;
 
 pub use chain::{get_chara_ptr, start_tracking, stop_tracking};
+pub use eval_master::probe as probe_eval_master;
 pub use evaluations::{read_evaluations, EvaluationInfo};
 pub use il2cpp::read_list_field;
 pub use presentation::{mood_label, motivation_color};
 pub use scenario::{ScenarioState, TrackblazerOwnedItem, TrackblazerShop, TrackblazerShopItem, Worth};
 pub use skills::{read_acquired_skill_list, read_acquired_skills, AcquiredSkillInfo};
 pub use snapshot::{read_snapshot, CareerSnapshot};
+pub use story_events::{read_fired_events, FiredEvent};
+pub use support_deck::read_equipped_support_ids;
 
 /// Whether the memory reader is actively tracking.
 pub static TRACKING: AtomicBool = AtomicBool::new(false);

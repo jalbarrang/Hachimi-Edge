@@ -9,6 +9,7 @@
 #[macro_use]
 extern crate hachimi_plugin_abi;
 
+mod bond_progress;
 mod class_dump;
 mod config;
 mod deck_bonuses;

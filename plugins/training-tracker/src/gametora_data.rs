@@ -162,6 +162,80 @@ struct Catalog {
     skills: HashMap<i64, Skill>,
     support_cards: HashMap<i64, SupportCard>,
     character_cards: HashMap<i64, CharacterCard>,
+    /// Pal (`friend`) outing count keyed by **char_id** (last event-group size).
+    friend_steps: HashMap<i64, u32>,
+    /// Group outing count keyed by **support_id** (last event-group size).
+    group_steps: HashMap<i64, u32>,
+    /// Chain `(event_id, story_id)` keys per card, for matching fired events.
+    /// Stat cards keyed by support_id (ssr+sr); friend by char_id; group by support_id.
+    stat_event_keys: HashMap<i64, Vec<(i64, i64)>>,
+    friend_event_keys: HashMap<i64, Vec<(i64, i64)>>,
+    group_event_keys: HashMap<i64, Vec<(i64, i64)>>,
+}
+
+/// GameTora event-string ids are sometimes JSON strings (friend file). Accept both.
+fn as_id(v: &Value) -> Option<i64> {
+    v.as_i64().or_else(|| v.as_str().and_then(|s| s.parse().ok()))
+}
+
+/// Parse a training-event tree into `key -> [(event_id, story_id)]`. `last_group`
+/// selects the outing group (friend/group); otherwise the flat list at index 1
+/// (ssr/sr). Each event is `[event_id, choices, event_string_id, ...]`.
+fn parse_event_keys(file: &str, last_group: bool) -> HashMap<i64, Vec<(i64, i64)>> {
+    let mut map = HashMap::new();
+    let Some(value): Option<Value> = load_file(file) else {
+        return map;
+    };
+    let Some(arr) = value.as_array() else {
+        return map;
+    };
+    for entry in arr {
+        let Some(e) = entry.as_array() else { continue };
+        let Some(key) = e.first().and_then(Value::as_i64) else {
+            continue;
+        };
+        let events = if last_group { e.last() } else { e.get(1) };
+        let Some(events) = events.and_then(Value::as_array) else {
+            continue;
+        };
+        let keys: Vec<(i64, i64)> = events
+            .iter()
+            .filter_map(|ev| ev.as_array())
+            .map(|ev| {
+                let event_id = ev.first().and_then(as_id).unwrap_or(0);
+                let story_id = ev.get(2).and_then(as_id).unwrap_or(0);
+                (event_id, story_id)
+            })
+            .collect();
+        map.insert(key, keys);
+    }
+    map
+}
+
+/// Parse a training-event tree into `key -> last-group size`. Entries are
+/// `[key, ...groups]`; the **last** group is the outing list (friend: keyed by
+/// char_id; group: keyed by support_id). Validated in
+/// docs/reverse-engineering/support-card-event-chains.md.
+fn parse_chain_steps(file: &str) -> HashMap<i64, u32> {
+    let mut map = HashMap::new();
+    let Some(value): Option<Value> = load_file(file) else {
+        return map;
+    };
+    let Some(arr) = value.as_array() else {
+        return map;
+    };
+    for entry in arr {
+        let Some(e) = entry.as_array() else { continue };
+        let Some(key) = e.first().and_then(Value::as_i64) else {
+            continue;
+        };
+        let Some(last) = e.last().and_then(Value::as_array) else {
+            continue;
+        };
+        let n = last.iter().filter(|v| !v.is_null()).count() as u32;
+        map.insert(key, n);
+    }
+    map
 }
 
 static CATALOG: OnceLock<Catalog> = OnceLock::new();
@@ -208,6 +282,15 @@ fn catalog() -> &'static Catalog {
             skills: index_by("skills.json", |s: &Skill| s.id),
             support_cards: index_by("support-cards.json", |c: &SupportCard| c.support_id),
             character_cards: index_by("character-cards.json", |c: &CharacterCard| c.card_id),
+            friend_steps: parse_chain_steps(EventKind::Friend.file()),
+            group_steps: parse_chain_steps(EventKind::Group.file()),
+            stat_event_keys: {
+                let mut m = parse_event_keys(EventKind::Ssr.file(), false);
+                m.extend(parse_event_keys(EventKind::Sr.file(), false));
+                m
+            },
+            friend_event_keys: parse_event_keys(EventKind::Friend.file(), true),
+            group_event_keys: parse_event_keys(EventKind::Group.file(), true),
         };
         hlog_info!(
             target: "training-tracker",
@@ -232,6 +315,50 @@ pub fn support_card(id: i64) -> Option<&'static SupportCard> {
 #[must_use]
 pub fn skill(id: i64) -> Option<&'static Skill> {
     catalog().skills.get(&id)
+}
+
+/// Max event-chain / outing steps for a support card (the `Y` in `X/Y`).
+///
+/// - Stat cards (speed/stamina/power/guts/intelligence): rarity formula R=0/SR=2/SSR=3
+///   — robust to GameTora event-tree lag for new/promo cards.
+/// - Pal (`friend`): outing count by char_id.
+/// - Group: outing count by support_id.
+#[must_use]
+pub fn max_chain_steps(support_id: i64) -> Option<u32> {
+    let c = support_card(support_id)?;
+    match c.r#type.as_deref()? {
+        "speed" | "stamina" | "power" | "guts" | "intelligence" => Some(match c.rarity {
+            Some(3) => 3,
+            Some(2) => 2,
+            _ => 0,
+        }),
+        "friend" => catalog().friend_steps.get(&c.char_id?).copied(),
+        "group" => catalog().group_steps.get(&support_id).copied(),
+        _ => None,
+    }
+}
+
+/// Display name for a support card (character name), if catalogued.
+#[must_use]
+pub fn support_card_name(support_id: i64) -> Option<&'static str> {
+    support_card(support_id).and_then(|c| c.char_name.as_deref())
+}
+
+/// `(event_id, story_id)` keys for a card's event chain / outings, for matching
+/// against the fired-event history. Empty when not catalogued.
+#[must_use]
+pub fn chain_event_keys(support_id: i64) -> &'static [(i64, i64)] {
+    let empty: &[(i64, i64)] = &[];
+    let Some(c) = support_card(support_id) else {
+        return empty;
+    };
+    let keys = match c.r#type.as_deref() {
+        Some("speed" | "stamina" | "power" | "guts" | "intelligence") => catalog().stat_event_keys.get(&support_id),
+        Some("friend") => c.char_id.and_then(|cid| catalog().friend_event_keys.get(&cid)),
+        Some("group") => catalog().group_event_keys.get(&support_id),
+        _ => None,
+    };
+    keys.map_or(empty, Vec::as_slice)
 }
 
 /// Look up a character (outfit) card by `card_id`.
