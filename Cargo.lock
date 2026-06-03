@@ -668,7 +668,6 @@ name = "fetch-master-db"
 version = "0.1.0"
 dependencies = [
  "lz4_flex",
- "serde",
  "serde_json",
  "sha1",
  "ureq",
