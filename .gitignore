@@ -14,3 +14,6 @@ dump.cs
 
 # Game IL2CPP metadata dumps (proprietary; keep local-only)
 docs/reverse-engineering/il2cpp/
+
+# Fetched game master DB (proprietary; keep local-only)
+db/

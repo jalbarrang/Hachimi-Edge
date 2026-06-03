@@ -244,7 +244,7 @@ if (Test-Path -LiteralPath $SkillGradesSrc) {
   Copy-Item -LiteralPath $SkillGradesSrc -Destination (Join-Path $GameDir "skill_grades.json") -Force
   Write-Host "  skill_grades.json  ->  skill_grades.json"
 } else {
-  Write-Host "  (skill_grades.json missing; run scripts/gen-skill-grades.mjs)" -ForegroundColor Yellow
+  Write-Host "  (skill_grades.json missing; run: cargo run -p fetch-master-db; cargo run -p skill-grades)" -ForegroundColor Yellow
 }
 
 Write-Host ""

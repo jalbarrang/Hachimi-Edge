@@ -154,16 +154,23 @@ refreshed per game version without rebuilding.
 ### Regenerating (per game update)
 
 ```sh
-node scripts/gen-skill-grades.mjs <skills.json> <uma_skills.csv> \
-    plugins/training-tracker/assets/skill_grades.json
+# 1. fetch the latest global master.mdb -> db/master.mdb (gitignored)
+cargo run -p fetch-master-db
+# 2. join master.mdb + UmaTools CSV -> plugins/training-tracker/assets/skill_grades.json
+cargo run -p skill-grades
 ```
 
-Joins two sources by skill id ↔ name:
+Both are Rust workspace tools (no Node / uma-sim dependency). `skill-grades` joins
+two sources by skill id ↔ name:
 
-1. `gradeValue` (+ rarity, name) per skill — from the game's `master.mdb`
-   (e.g. the uma-sim `skills.json` export).
-2. `affinity_role` per skill — from UmaTools'
-   [`assets/uma_skills.csv`](https://github.com/daftuyda/UmaTools).
+1. `grade_value` (+ rarity, English name via `text_data` category 47) per skill —
+   read directly from the game's `master.mdb` with rusqlite.
+2. `affinity_role` per skill — fetched from UmaTools'
+   [`assets/uma_skills.csv`](https://github.com/daftuyda/UmaTools) (override with `--csv`).
+
+`fetch-master-db` ports the Umamusume CDN manifest chain (resolves the resource
+version from `uma.moe/api/ver`); see [docs/gametora-data.md](../gametora-data.md)
+for the sibling data pipeline.
 
 The deploy script (`scripts/deploy-windows.ps1 -Build`) copies the JSON to the game
 folder alongside the DLLs.

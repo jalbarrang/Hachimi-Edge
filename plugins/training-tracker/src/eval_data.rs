@@ -1,8 +1,9 @@
 //! Skill-evaluation resource: per-skill grade value + aptitude role + unique flag.
 //!
 //! Loaded once at runtime from `skill_grades.json` next to the plugin DLL (copied
-//! there by the deploy script). Generated offline by `scripts/gen-skill-grades.mjs`
-//! from the game's master.mdb `gradeValue` + UmaTools `affinity_role`.
+//! there by the deploy script). Generated offline by the `skill-grades` tool
+//! (`cargo run -p skill-grades`) from the game's master.mdb `grade_value` +
+//! UmaTools `affinity_role`. Fetch master.mdb first with `cargo run -p fetch-master-db`.
 //!
 //! Keeping the data in a sidecar file (not bundled in the DLL) lets it be updated
 //! per game version without rebuilding.
