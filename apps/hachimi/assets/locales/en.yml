@@ -30,6 +30,7 @@ translations:
 
 menu:
   check_for_updates: "\uf0aa Check for updates"
+  sync_gametora_data: "\uf0aa Sync GameTora data"
   fps_text: "FPS: %{fps}"
   close_menu: "\uf00d Close menu"
   stats_heading: "\uf022 Stats"
@@ -67,6 +68,10 @@ notification:
   errors_during_update: "%{count} errors occurred during update. Check logs for more info."
   checking_for_updates: "Checking for updates..."
   no_updates: "No updates available."
+  gametora_syncing: "Syncing GameTora data..."
+  gametora_up_to_date: "GameTora data is up to date."
+  gametora_sync_complete: "GameTora data synced (%{count} updated)."
+  gametora_sync_failed: "GameTora data sync failed: %{reason}"
   press_to_set_menu_key: "Press a key in the game window to set the open-menu hotkey."
   menu_open_key_set: "Open-menu hotkey set to %{key}"
   ipc_softreset_exec: "IPC remote soft-reset executed"

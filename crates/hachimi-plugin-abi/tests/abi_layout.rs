@@ -17,6 +17,6 @@ fn vtable_is_copy() {
 
 #[test]
 fn api_version_constant() {
-    assert_eq!(API_VERSION, 9);
-    assert_eq!(VTABLE_SLOT_COUNT, 42);
+    assert_eq!(API_VERSION, 10);
+    assert_eq!(VTABLE_SLOT_COUNT, 43);
 }

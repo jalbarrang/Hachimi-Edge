@@ -89,6 +89,8 @@ pub mod capability {
     pub const OVERLAY: u64 = 1 << 1;
     pub const EVENTS: u64 = 1 << 2;
     pub const IL2CPP: u64 = 1 << 3;
+    /// Host can resolve paths under the game data dir (see [`Vtable::host_data_path`]).
+    pub const DATA_PATHS: u64 = 1 << 4;
 
     // Plugin-declared flags (set in the manifest `requested_caps`).
     /// The plugin promises it can be unloaded/reloaded at runtime: it removes every
@@ -239,4 +241,19 @@ pub struct Vtable {
     pub gui_unregister: unsafe extern "C" fn(handle: u64) -> bool,
     pub gui_show_notification: unsafe extern "C" fn(message: *const c_char) -> bool,
     pub gui_overlay_set_visible: unsafe extern "C" fn(id: *const c_char, visible: bool) -> bool,
+
+    // ── Data paths (API v10) ──
+    /// Resolve `rel` against the game **data** directory and write the absolute
+    /// path (UTF-8) into `out_buf`, NUL-terminated when there is room.
+    ///
+    /// Returns the number of bytes the full path requires, excluding the NUL
+    /// terminator. If that value is `>= buf_len`, the path was truncated; the
+    /// caller should retry with a buffer of at least `returned + 1` bytes. Pass
+    /// a null `out_buf` (or `buf_len == 0`) to query the required length only.
+    /// Returns `0` on error (null/invalid `rel`).
+    pub host_data_path: unsafe extern "C" fn(rel: *const c_char, out_buf: *mut c_char, buf_len: usize) -> usize,
 }
+
+/// Subdirectory (under the game data dir) where the host caches GameTora data
+/// snapshots. Shared so host and plugins resolve the same location.
+pub const GAMETORA_DATA_SUBDIR: &str = "gametora";

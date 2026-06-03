@@ -38,7 +38,7 @@ use crate::{
 
 use super::{
     game::{Game, Region},
-    ipc, template, template_filters, tl_repo, utils, Error, Interceptor,
+    gametora_data, ipc, template, template_filters, tl_repo, utils, Error, Interceptor,
 };
 
 pub const REPO_PATH: &str = "jalbarrang/hachimi-redux";
@@ -57,6 +57,7 @@ pub struct Hachimi {
     // Localized data
     pub localized_data: ArcSwap<LocalizedData>,
     pub tl_updater: Arc<tl_repo::Updater>,
+    pub gametora_updater: Arc<gametora_data::Updater>,
 
     // Character data
     pub chara_data: ArcSwap<CharacterData>,
@@ -148,6 +149,7 @@ impl Hachimi {
             // Don't load localized data initially since it might fail, logging the error is not possible here
             localized_data: ArcSwap::default(),
             tl_updater: Arc::default(),
+            gametora_updater: Arc::default(),
 
             // Same with these
             chara_data: ArcSwap::default(),
@@ -357,6 +359,11 @@ impl Hachimi {
                     hachimi.tl_updater.clone().check_for_updates(false);
                 }
             });
+        }
+        // Independent of the hachimi/translation update flow: refresh the GameTora
+        // data catalog (gated by its own config flag inside `sync`).
+        if !self.config.load().disable_auto_update_check {
+            self.gametora_updater.clone().sync(false);
         }
     }
 }

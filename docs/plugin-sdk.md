@@ -14,7 +14,7 @@ Three crates make up the plugin stack:
 | `hachimi-plugin-sdk` | Safe `Sdk` wrapper around the vtable, the `#[hachimi_plugin]` macro re-export, and the shared `egui` re-export. **This is what plugins depend on.** |
 | `hachimi-plugin-macros` | The proc-macro implementing `#[hachimi_plugin]`. Pulled in transitively via the SDK. |
 
-The current host API version is **9** (`hachimi_plugin_abi::API_VERSION`).
+The current host API version is **10** (`hachimi_plugin_abi::API_VERSION`).
 
 ---
 
@@ -128,7 +128,29 @@ if sdk.has_capability(hachimi_plugin_abi::capability::EVENTS) {
 }
 ```
 
-Host capability bits: `GUI`, `OVERLAY`, `EVENTS`, `IL2CPP`.
+Host capability bits: `GUI`, `OVERLAY`, `EVENTS`, `IL2CPP`, `DATA_PATHS`.
+
+---
+
+## Data paths (host API v10)
+
+With `capability::DATA_PATHS` the host resolves paths under the game **data**
+directory, letting plugins read host-managed files without knowing the install
+layout. Absolute paths and `..` segments are rejected.
+
+```rust
+// Any path under the data dir:
+if let Some(p) = sdk.host_data_path("some/file.json") { /* read p */ }
+
+// The GameTora data cache (skills / support-cards / character-cards / events):
+if let Some(dir) = sdk.gametora_data_dir() {
+    let skills = std::fs::read(dir.join("skills.json"));
+}
+```
+
+The host downloads the GameTora snapshots at launch (see
+[gametora-data.md](gametora-data.md)); plugins only read the cached JSON and
+should degrade gracefully when a file is absent (first run / offline).
 
 ---
 

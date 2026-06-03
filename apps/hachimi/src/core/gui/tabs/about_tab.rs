@@ -47,6 +47,9 @@ impl Gui {
         if ui.button(t!("menu.check_for_updates")).clicked() {
             Hachimi::instance().updater.clone().check_for_updates(|_| {});
         }
+        if ui.button(t!("menu.sync_gametora_data")).clicked() {
+            Hachimi::instance().gametora_updater.clone().sync(true);
+        }
 
         widgets::section_header(ui, t!("menu.stats_heading"));
         ui.label(&self.fps_text);

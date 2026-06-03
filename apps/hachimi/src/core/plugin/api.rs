@@ -314,7 +314,34 @@ unsafe extern "C" fn log(level: i32, target: *const c_char, message: *const c_ch
 // ── Host services ──
 
 unsafe extern "C" fn host_capabilities() -> u64 {
-    capability::GUI | capability::OVERLAY | capability::EVENTS | capability::IL2CPP
+    capability::GUI | capability::OVERLAY | capability::EVENTS | capability::IL2CPP | capability::DATA_PATHS
+}
+
+unsafe extern "C" fn host_data_path(rel: *const c_char, out_buf: *mut c_char, buf_len: usize) -> usize {
+    // SAFETY: FFI / raw pointer operation; caller-provided buffer is written within bounds.
+    unsafe {
+        if rel.is_null() {
+            return 0;
+        }
+        let Ok(rel) = CStr::from_ptr(rel).to_str() else {
+            return 0;
+        };
+        // Reject absolute/escaping paths: the service only exposes the data dir subtree.
+        let rel_path = std::path::Path::new(rel);
+        if rel_path.has_root() || rel.split(['/', '\\']).any(|c| c == "..") {
+            return 0;
+        }
+        let path = HostHachimi::instance().get_data_path(rel);
+        let s = path.to_string_lossy();
+        let bytes = s.as_bytes();
+        let needed = bytes.len();
+        if !out_buf.is_null() && buf_len > 0 {
+            let copy = needed.min(buf_len - 1);
+            std::ptr::copy_nonoverlapping(bytes.as_ptr(), out_buf as *mut u8, copy);
+            *out_buf.add(copy) = 0; // NUL terminator
+        }
+        needed
+    }
 }
 
 unsafe extern "C" fn host_subscribe(event_id: u32, callback: PluginEventFn, userdata: *mut c_void) -> u64 {
@@ -506,6 +533,7 @@ fn build_host_vtable() -> Vtable {
         gui_unregister,
         gui_show_notification,
         gui_overlay_set_visible,
+        host_data_path,
     }
 }
 

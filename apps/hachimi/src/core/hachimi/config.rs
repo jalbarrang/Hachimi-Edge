@@ -34,6 +34,13 @@ pub struct Config {
     pub lazy_translation_updates: bool,
     #[serde(default)]
     pub disable_auto_update_check: bool,
+    /// Disable the GameTora data catalog sync (skills/support-cards/umas/events)
+    /// downloaded alongside the auto update check.
+    #[serde(default)]
+    pub disable_gametora_data: bool,
+    /// Override the base URL the GameTora data catalog is downloaded from. `None`
+    /// uses the repo's hosted copy. Dev/testing escape hatch.
+    pub gametora_data_url: Option<String>,
     #[serde(default)]
     pub disable_translations: bool,
     #[serde(default = "Config::default_gui_scale")]

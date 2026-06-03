@@ -694,6 +694,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "gametora-sync"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "chrono",
+ "serde",
+ "serde_json",
+ "ureq",
+]
+
+[[package]]
 name = "getrandom"
 version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -780,7 +791,7 @@ dependencies = [
 
 [[package]]
 name = "hachimi"
-version = "0.31.0"
+version = "0.32.0"
 dependencies = [
  "arc-swap",
  "blake3",
@@ -2084,6 +2095,7 @@ version = "1.0.145"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "402a6f66d8c709116cf22f558eab210f5a50187f702eb4d7e5ef38d9a7f1c79c"
 dependencies = [
+ "indexmap 2.12.0",
  "itoa",
  "memchr",
  "ryu",

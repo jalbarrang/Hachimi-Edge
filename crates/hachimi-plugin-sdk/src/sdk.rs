@@ -207,6 +207,41 @@ impl Sdk {
         // SAFETY: handle was issued by a `gui_register_*` slot.
         unsafe { (vt().gui_unregister)(handle) }
     }
+
+    // ── Data paths (host API v10) ──
+
+    /// Resolve `rel` against the game **data** directory via the host.
+    ///
+    /// Returns `None` if the host is too old to provide [`capability::DATA_PATHS`],
+    /// or if `rel` is rejected (absolute / contains `..`). The returned path is not
+    /// guaranteed to exist on disk.
+    #[must_use]
+    pub fn host_data_path(&self, rel: &str) -> Option<std::path::PathBuf> {
+        if !self.has_capability(crate::capability::DATA_PATHS) {
+            return None;
+        }
+        let rel_c = CString::new(rel).ok()?;
+        // First call: query the required length.
+        // SAFETY: host vtable slot valid after init; null out_buf is allowed.
+        let needed = unsafe { (vt().host_data_path)(rel_c.as_ptr(), std::ptr::null_mut(), 0) };
+        if needed == 0 {
+            return None;
+        }
+        let mut buf = vec![0u8; needed + 1];
+        // SAFETY: buf has space for `needed` bytes plus the NUL terminator.
+        let written = unsafe { (vt().host_data_path)(rel_c.as_ptr(), buf.as_mut_ptr() as *mut _, buf.len()) };
+        if written == 0 || written > needed {
+            return None;
+        }
+        buf.truncate(written);
+        Some(std::path::PathBuf::from(String::from_utf8(buf).ok()?))
+    }
+
+    /// Absolute path to the host's cached GameTora data directory, if available.
+    #[must_use]
+    pub fn gametora_data_dir(&self) -> Option<std::path::PathBuf> {
+        self.host_data_path(hachimi_plugin_abi::GAMETORA_DATA_SUBDIR)
+    }
 }
 
 /// Convert init result to raw `i32` for the C entry point.

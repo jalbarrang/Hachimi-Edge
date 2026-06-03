@@ -15,6 +15,7 @@ mod deck_bonuses;
 mod diagnostics;
 mod eval_data;
 mod evaluation;
+mod gametora_data;
 mod hooks;
 mod memory_reader;
 mod overlay_cache;
@@ -42,6 +43,19 @@ fn init(sdk: &Sdk) -> Result<(), &'static str> {
 
     config::load();
     ui::register_ui();
+
+    // Warm the GameTora catalog off-thread (a 2MB+ parse) so it's ready for
+    // tracker features, and surface load diagnostics in the log.
+    std::thread::spawn(|| {
+        if gametora_data::is_available() {
+            hlog_info!(target: "training-tracker", "GameTora catalog ready");
+        } else {
+            hlog_warn!(
+                target: "training-tracker",
+                "GameTora catalog unavailable (no cache yet, or host too old)"
+            );
+        }
+    });
 
     let events = hooks::subscribe_events();
     if shop_hooks::try_install_shop_hooks() {
