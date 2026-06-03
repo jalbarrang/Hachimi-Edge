@@ -81,19 +81,26 @@ extern "C" fn refresh_cache_cb() {
     let skill_points = skill_shop::read_skill_points();
     let skill_shop = skill_shop::read_skill_shop();
 
-    // Deck bonuses: capture once when career starts, clear when it ends.
     let is_playing = snapshot.as_ref().is_some_and(|s| s.is_playing);
-    // Equipped support-card ids: read once per career (safe ObscuredInt field read).
+    // Equipped support-card ids: re-read every refresh (pure ObscuredInt field reads,
+    // no Convert). Cheap, and avoids stale deck mapping when the game keeps SingleMode
+    // "playing" across a career -> new-career transition.
     let support_ids = if is_playing {
-        let existing = CACHE.lock().ok().map(|g| g.support_ids.clone()).unwrap_or_default();
-        if existing.is_empty() {
-            memory_reader::read_equipped_support_ids()
-        } else {
-            existing
-        }
+        memory_reader::read_equipped_support_ids()
     } else {
         Vec::new()
     };
+    // Deck change (new career / reshuffled deck) invalidates per-career progress and
+    // the once-per-career deck-bonus capture. Detect by comparing to the prior deck.
+    if is_playing {
+        let prev = CACHE.lock().ok().map(|g| g.support_ids.clone()).unwrap_or_default();
+        // Require both non-empty so a transient empty read can't wipe progress mid-career.
+        if !prev.is_empty() && !support_ids.is_empty() && prev != support_ids {
+            crate::bond_progress::clear();
+            deck_bonuses::clear(); // re-captured below via try_capture
+            EVAL_DIAG_LOGGED.store(false, AtomicOrdering::Relaxed);
+        }
+    }
     // Fired-event history: re-read each refresh (read-only; grows over the career).
     let fired_events = if is_playing {
         memory_reader::read_fired_events()
