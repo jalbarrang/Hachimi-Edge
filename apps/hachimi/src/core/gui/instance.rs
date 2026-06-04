@@ -5,6 +5,7 @@ use rust_i18n::t;
 
 use crate::core::Hachimi;
 
+use super::theme;
 use super::tween::{Easing, TweenInOutWithDelay};
 use super::window::{ConfigEditor, FirstTimeSetupWindow};
 use super::{Gui, INSTANCE};
@@ -21,23 +22,9 @@ macro_rules! add_font {
 
 impl Gui {
     pub fn apply_theme(ctx: &egui::Context, style: &mut egui::Style, config: &crate::core::hachimi::Config) {
-        let mut visuals = egui::Visuals::dark();
-
-        visuals.window_fill = config.ui_window_fill;
-        visuals.panel_fill = config.ui_panel_fill;
-        visuals.extreme_bg_color = config.ui_extreme_bg_color;
-        visuals.window_corner_radius = config.ui_window_rounding.into();
-
-        visuals.widgets.noninteractive.fg_stroke = egui::Stroke::new(1.0, config.ui_text_color);
-
-        visuals.widgets.active.bg_fill = config.ui_accent_color;
-        visuals.widgets.hovered.bg_fill = config.ui_accent_color.linear_multiply(0.8);
-        visuals.selection.bg_fill = config.ui_accent_color.linear_multiply(0.5);
-
-        visuals.override_text_color = Some(config.ui_text_color);
-
-        style.visuals = visuals.clone();
-        ctx.set_visuals(visuals);
+        style.visuals = egui::Visuals::dark();
+        theme::apply_style(style, config);
+        ctx.set_visuals(style.visuals.clone());
     }
 
     pub fn instance_or_init(#[cfg_attr(target_os = "windows", allow(unused))] open_key_id: &str) -> &Mutex<Gui> {
@@ -54,9 +41,6 @@ impl Gui {
         context.set_fonts(Self::get_font_definitions());
 
         let mut style = egui::Style::default();
-        style.spacing.button_padding = egui::Vec2::new(8.0, 5.0);
-        style.interaction.selectable_labels = false;
-
         Self::apply_theme(&context, &mut style, &config);
 
         context.set_style(style.clone());

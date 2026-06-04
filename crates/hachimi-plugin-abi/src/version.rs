@@ -10,7 +10,10 @@
 /// v10: added `host_data_path` (resolve paths under the game data dir) and the
 /// `capability::DATA_PATHS` bit, enabling plugins to locate host-cached data
 /// such as the GameTora snapshots.
-pub const API_VERSION: i32 = 10;
+///
+/// v11: added `host_view_name` (resolve a `Gallop.SceneDefine.ViewId` to a
+/// host-owned label), letting plugins display view names without their own catalog.
+pub const API_VERSION: i32 = 11;
 
 /// Number of function pointers in `Vtable`.
-pub const VTABLE_SLOT_COUNT: usize = 43;
+pub const VTABLE_SLOT_COUNT: usize = 44;

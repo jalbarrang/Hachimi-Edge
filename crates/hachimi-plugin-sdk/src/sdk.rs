@@ -242,6 +242,26 @@ impl Sdk {
     pub fn gametora_data_dir(&self) -> Option<std::path::PathBuf> {
         self.host_data_path(hachimi_plugin_abi::GAMETORA_DATA_SUBDIR)
     }
+
+    // ── Scene view names (host API v11) ──
+
+    /// Resolve a `Gallop.SceneDefine.ViewId` to a host-owned label.
+    ///
+    /// Returns `None` if the host is older than API v11 or the id is uncatalogued.
+    #[must_use]
+    pub fn view_name(&self, view_id: i32) -> Option<&'static str> {
+        if !self.version.at_least(11) {
+            return None;
+        }
+        // SAFETY: host vtable slot valid after init (v11+); the host returns a
+        // 'static NUL-terminated UTF-8 string or null.
+        let ptr = unsafe { (vt().host_view_name)(view_id) };
+        if ptr.is_null() {
+            return None;
+        }
+        // SAFETY: non-null host pointer to a 'static NUL-terminated string.
+        unsafe { std::ffi::CStr::from_ptr(ptr) }.to_str().ok()
+    }
 }
 
 /// Convert init result to raw `i32` for the C entry point.

@@ -3,12 +3,17 @@
     Copy release-built Hachimi core and/or training-tracker plugin into the game directory.
 
 .DESCRIPTION
-    By default copies both:
+    By default copies:
     - target\release\hachimi.dll → <GameDir>\cri_mana_vpx.dll (proxy)
     - target\release\hachimi_training_tracker.dll → <GameDir>\
+    - target\release\hachimi_debug_viewer.dll → <GameDir>\  (dev-only diagnostics)
+    - target\release\hachimi_race_hud.dll → <GameDir>\
 
-    With -PluginOnly, copies only the training-tracker plugin (+ skill_grades.json).
+    With -PluginOnly, copies the plugins (+ skill_grades.json) but skips the proxy.
     Never modifies cri_mana_vpx.dll.backup.
+
+    -HotSwap only swaps the training-tracker plugin via IPC; the debug-viewer and
+    race-hud plugins are deployed only in non-HotSwap runs (need a game restart).
 
     With -PluginOnly -HotSwap, unloads the plugin via Hachimi IPC (requires
     enable_ipc in config.json), copies the new DLL, then reloads it — no game restart.
@@ -61,6 +66,10 @@ $TargetDir = Join-Path $RepoRoot "target\release"
 $HostDll = Join-Path $TargetDir "hachimi.dll"
 $PluginDll = Join-Path $TargetDir "hachimi_training_tracker.dll"
 $PluginFileName = "hachimi_training_tracker.dll"
+$DebugViewerDll = Join-Path $TargetDir "hachimi_debug_viewer.dll"
+$DebugViewerFileName = "hachimi_debug_viewer.dll"
+$RaceHudDll = Join-Path $TargetDir "hachimi_race_hud.dll"
+$RaceHudFileName = "hachimi_race_hud.dll"
 $ProxyName = "cri_mana_vpx.dll"
 $BackupName = "cri_mana_vpx.dll.backup"
 $IpcUrl = "http://127.0.0.1:50433"
@@ -176,6 +185,10 @@ if ($Build) {
         }
         cargo build --release -p hachimi-training-tracker
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        cargo build --release -p hachimi-debug-viewer
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        cargo build --release -p hachimi-race-hud
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     }
     finally {
         Pop-Location
@@ -186,6 +199,8 @@ if (-not $PluginOnly) {
     Require-File $HostDll "Run: cargo build --release -p hachimi`nOr pass -Build"
 }
 Require-File $PluginDll "Run: cargo build --release -p hachimi-training-tracker`nOr pass -Build"
+Require-File $DebugViewerDll "Run: cargo build --release -p hachimi-debug-viewer`nOr pass -Build"
+Require-File $RaceHudDll "Run: cargo build --release -p hachimi-race-hud`nOr pass -Build"
 
 $GameDir = $GameDir.TrimEnd('\')
 if (-not (Test-Path -LiteralPath $GameDir -PathType Container)) {
@@ -199,6 +214,8 @@ Set -GameDir or env:HACHIMI_GAME_DIR to your UmamusumePrettyDerby folder.
 $ProxyPath = Join-Path $GameDir $ProxyName
 $BackupPath = Join-Path $GameDir $BackupName
 $PluginDest = Join-Path $GameDir $PluginFileName
+$DebugViewerDest = Join-Path $GameDir $DebugViewerFileName
+$RaceHudDest = Join-Path $GameDir $RaceHudFileName
 
 if (-not $PluginOnly) {
     if (-not (Test-Path -LiteralPath $BackupPath)) {
@@ -236,6 +253,11 @@ Write-Host "  hachimi_training_tracker.dll  ->  hachimi_training_tracker.dll"
 
 if ($HotSwap) {
     Reload-PluginViaIpc -Name $PluginFileName
+} else {
+    Copy-PluginDll -Source $DebugViewerDll -Dest $DebugViewerDest
+    Write-Host "  hachimi_debug_viewer.dll  ->  hachimi_debug_viewer.dll"
+    Copy-PluginDll -Source $RaceHudDll -Dest $RaceHudDest
+    Write-Host "  hachimi_race_hud.dll  ->  hachimi_race_hud.dll"
 }
 
 # Skill-evaluation resource (read at runtime by the training-tracker eval engine).
@@ -248,8 +270,8 @@ if (Test-Path -LiteralPath $SkillGradesSrc) {
 }
 
 Write-Host ""
-Write-Host "Done. Ensure config.json lists the plugin under windows.load_libraries:" -ForegroundColor Cyan
-Write-Host '  "load_libraries": ["hachimi_training_tracker.dll"]'
+Write-Host "Done. Ensure config.json lists the plugins under windows.load_libraries:" -ForegroundColor Cyan
+Write-Host '  "load_libraries": ["hachimi_training_tracker.dll", "hachimi_debug_viewer.dll", "hachimi_race_hud.dll"]'
 if ($PluginOnly -and -not $HotSwap) {
     Write-Host ""
     Write-Host "If the game is already running, use -HotSwap or About -> Danger Zone -> Reload plugins." -ForegroundColor Cyan

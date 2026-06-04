@@ -348,6 +348,10 @@ unsafe extern "C" fn host_subscribe(event_id: u32, callback: PluginEventFn, user
     super::events::subscribe(event_id, callback, userdata)
 }
 
+unsafe extern "C" fn host_view_name(view_id: i32) -> *const c_char {
+    crate::core::scene_views::view_name_cstr(view_id).map_or(std::ptr::null(), CStr::as_ptr)
+}
+
 unsafe extern "C" fn host_unsubscribe(handle: u64) {
     super::events::unsubscribe(handle);
 }
@@ -534,6 +538,7 @@ fn build_host_vtable() -> Vtable {
         gui_show_notification,
         gui_overlay_set_visible,
         host_data_path,
+        host_view_name,
     }
 }
 

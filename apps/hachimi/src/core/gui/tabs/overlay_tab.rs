@@ -45,8 +45,7 @@ impl Gui {
                 }
                 ui.label(&title);
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui
-                        .small_button("Reset")
+                    if widgets::ghost_button(ui, "Reset")
                         .on_hover_text("Reset position and size")
                         .clicked()
                     {

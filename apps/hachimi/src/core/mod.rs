@@ -12,6 +12,7 @@ pub mod gui;
 pub use gui::Gui;
 
 pub mod plurals;
+pub mod scene_views;
 mod template_filters;
 
 #[macro_use]

@@ -18,6 +18,8 @@ use crate::il2cpp::hook::{
 };
 
 use super::super::scale::get_scale;
+use super::super::widgets;
+use super::super::widgets::PillButtonKind;
 use super::super::Gui;
 use super::{random_id, save_and_reload_config, LiveVocalsSwapWindow, SimpleOkDialog, ThemeEditorWindow};
 
@@ -145,7 +147,7 @@ impl ConfigEditor {
 
                 ui.label(t!("theme_editor.title"));
                 ui.horizontal(|ui| {
-                    if ui.button(t!("open")).clicked() {
+                    if widgets::secondary_button(ui, t!("open").into_owned()).clicked() {
                         thread::spawn(|| {
                             Gui::instance()
                                 .expect("unexpected failure")
@@ -166,7 +168,7 @@ impl ConfigEditor {
                     ui.label(t!("config_editor.menu_open_key"));
                     ui.horizontal(|ui| {
                         ui.label(crate::windows::utils::vk_to_display_label(config.windows.menu_open_key));
-                        if ui.button(t!("config_editor.menu_open_key_set")).clicked() {
+                        if widgets::secondary_button(ui, t!("config_editor.menu_open_key_set").into_owned()).clicked() {
                             crate::windows::wnd_hook::start_menu_key_capture();
                             thread::spawn(|| {
                                 Gui::instance()
@@ -385,7 +387,7 @@ impl ConfigEditor {
 
                 ui.label(t!("config_editor.live_vocals_swap"));
                 ui.horizontal(|ui| {
-                    if ui.button(t!("open")).clicked() {
+                    if widgets::secondary_button(ui, t!("open").into_owned()).clicked() {
                         thread::spawn(|| {
                             Gui::instance()
                                 .expect("unexpected failure")
@@ -546,16 +548,15 @@ impl ConfigEditor {
         // Inner sub-tab strip (General / Graphics / Gameplay).
         egui::ScrollArea::horizontal().id_salt("tabs_scroll").show(ui, |ui| {
             ui.horizontal(|ui| {
-                let style = ui.style_mut();
-                style.spacing.button_padding = egui::vec2(8.0, 5.0);
-                style.spacing.item_spacing = egui::Vec2::ZERO;
-                let widgets = &mut style.visuals.widgets;
-                widgets.inactive.corner_radius = egui::CornerRadius::ZERO;
-                widgets.hovered.corner_radius = egui::CornerRadius::ZERO;
-                widgets.active.corner_radius = egui::CornerRadius::ZERO;
+                ui.spacing_mut().item_spacing.x = 6.0 * scale;
 
                 for (tab, label) in ConfigEditorTab::display_list() {
-                    if ui.selectable_label(self.current_tab == tab, label.as_ref()).clicked() {
+                    let kind = if self.current_tab == tab {
+                        PillButtonKind::Primary
+                    } else {
+                        PillButtonKind::Secondary
+                    };
+                    if widgets::pill_button(ui, label.into_owned(), kind).clicked() {
                         self.current_tab = tab;
                     }
                 }
@@ -604,15 +605,15 @@ impl ConfigEditor {
         let mut revert_clicked = false;
 
         ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| {
-            if ui.button(t!("config_editor.restore_defaults")).clicked() {
+            if widgets::danger_button(ui, t!("config_editor.restore_defaults").into_owned()).clicked() {
                 reset_clicked = true;
             }
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
-                if ui.button(t!("save")).clicked() {
+                if widgets::primary_button(ui, t!("save").into_owned()).clicked() {
                     save_and_reload_config(self.config.clone());
                 }
-                if ui.button(t!("config_editor.revert")).clicked() {
+                if widgets::secondary_button(ui, t!("config_editor.revert").into_owned()).clicked() {
                     revert_clicked = true;
                 }
             });

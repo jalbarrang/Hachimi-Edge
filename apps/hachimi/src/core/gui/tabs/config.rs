@@ -5,6 +5,7 @@ use std::borrow::Cow;
 
 use rust_i18n::t;
 
+use crate::core::gui::widgets;
 use crate::core::gui::window::FirstTimeSetupWindow;
 use crate::core::gui::Gui;
 use crate::core::Hachimi;
@@ -18,16 +19,17 @@ impl Gui {
     ) {
         let hachimi = Hachimi::instance();
 
+        widgets::section_header(ui, t!("config_editor.general_tab").into_owned());
         ui.horizontal_wrapped(|ui| {
-            if ui.button(t!("menu.reload_config")).clicked() {
+            if widgets::primary_button(ui, t!("menu.reload_config").into_owned()).clicked() {
                 hachimi.reload_config();
                 *show_notification = Some(t!("notification.config_reloaded"));
             }
-            if ui.button(t!("menu.open_first_time_setup")).clicked() {
+            if widgets::secondary_button(ui, t!("menu.open_first_time_setup").into_owned()).clicked() {
                 self.show_window(Box::new(FirstTimeSetupWindow::new()));
             }
         });
-        ui.separator();
+        ui.add_space(8.0);
 
         self.config_editor.ui_editor(ui, ctx);
         self.config_editor.ui_footer(ui);

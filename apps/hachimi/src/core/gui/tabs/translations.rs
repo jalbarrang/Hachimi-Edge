@@ -22,18 +22,21 @@ impl Gui {
         let localize_dict_count = localized_data.localize_dict.len().to_string();
         let hashed_dict_count = localized_data.hashed_dict.len().to_string();
 
+        widgets::section_header(ui, t!("translations.settings_heading").into_owned());
         ui.horizontal_wrapped(|ui| {
-            if ui.button(t!("menu.reload_localized_data")).clicked() {
+            if widgets::primary_button(ui, t!("menu.reload_localized_data").into_owned()).clicked() {
                 hachimi.load_localized_data();
                 *show_notification = Some(t!("notification.localized_data_reloaded"));
             }
-            if ui.button(t!("menu.tl_check_for_updates")).clicked() {
+            if widgets::secondary_button(ui, t!("menu.tl_check_for_updates").into_owned()).clicked() {
                 hachimi.tl_updater.clone().check_for_updates(false);
             }
-            if ui.button(t!("menu.tl_check_for_updates_pedantic")).clicked() {
+            if widgets::secondary_button(ui, t!("menu.tl_check_for_updates_pedantic").into_owned()).clicked() {
                 hachimi.tl_updater.clone().check_for_updates(true);
             }
-            if hachimi.config.load().translator_mode && ui.button(t!("menu.dump_localize_dict")).clicked() {
+            if hachimi.config.load().translator_mode
+                && widgets::secondary_button(ui, t!("menu.dump_localize_dict").into_owned()).clicked()
+            {
                 Thread::main_thread().schedule(|| {
                     let data = Localize::dump_strings();
                     let dict_path = Hachimi::instance().get_data_path("localize_dump.json");
@@ -54,7 +57,6 @@ impl Gui {
         ui.label(t!("menu.localize_dict_entries", count = localize_dict_count));
         ui.label(t!("menu.hashed_dict_entries", count = hashed_dict_count));
 
-        widgets::section_header(ui, t!("translations.settings_heading"));
         self.config_editor.ui_translations(ui, ctx);
         self.config_editor.ui_footer(ui);
     }

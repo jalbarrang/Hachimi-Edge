@@ -18,6 +18,11 @@ fn ChangeViewCommon(next_view_id: i32) {
             crate::core::plugin::events::dispatch_splash_shown();
         }
     }
+    if let Some(name) = crate::core::scene_views::view_name(next_view_id) {
+        debug!("ChangeView -> {} ({})", next_view_id, name);
+    } else {
+        debug!("ChangeView -> {} (uncatalogued)", next_view_id);
+    }
     crate::core::plugin::events::dispatch_view_change(next_view_id);
     // Re-evaluate Single Mode (career) state on each view change.
     crate::core::plugin::career::on_view_change();

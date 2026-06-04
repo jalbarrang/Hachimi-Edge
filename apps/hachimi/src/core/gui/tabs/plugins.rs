@@ -7,6 +7,8 @@ use std::ffi::c_void;
 use std::panic::{self, AssertUnwindSafe};
 
 use crate::core::gui::scale::get_scale;
+use crate::core::gui::widgets;
+use crate::core::gui::widgets::PillButtonKind;
 use crate::core::gui::Gui;
 use crate::core::plugin::menu::{get_plugin_menu_icon, get_plugin_menu_items, get_plugin_menu_sections};
 use crate::core::plugin::OwnerScope;
@@ -24,7 +26,7 @@ impl Gui {
 
         if items.is_empty() && sections.is_empty() {
             ui.add_space(8.0);
-            ui.weak("No plugins have registered any pages.");
+            widgets::empty_state(ui, "No plugins have registered any pages.");
             return;
         }
 
@@ -36,9 +38,9 @@ impl Gui {
                         Some(icon) => {
                             let size = 18.0 * scale;
                             ui.add(egui::Image::new((icon.uri, icon.bytes)).fit_to_exact_size(egui::Vec2::splat(size)));
-                            ui.button(&item.label).clicked()
+                            widgets::secondary_button(ui, item.label.clone()).clicked()
                         }
-                        None => ui.button(&item.label).clicked(),
+                        None => widgets::secondary_button(ui, item.label.clone()).clicked(),
                     };
                     if clicked {
                         if let Some(callback) = item.callback {
@@ -72,7 +74,12 @@ impl Gui {
             for (i, section) in sections.iter().enumerate() {
                 let label = page_label(section.title.as_deref(), i);
                 let selected = self.plugins_selected == Some(section.handle);
-                if ui.selectable_label(selected, label).clicked() {
+                let kind = if selected {
+                    PillButtonKind::Primary
+                } else {
+                    PillButtonKind::Secondary
+                };
+                if widgets::pill_button(ui, label, kind).clicked() {
                     self.plugins_selected = Some(section.handle);
                 }
             }
@@ -93,7 +100,7 @@ impl Gui {
                             .fit_to_exact_size(egui::Vec2::splat(size)),
                     );
                 }
-                ui.heading(title);
+                widgets::section_banner(ui, title.clone());
             });
         }
 

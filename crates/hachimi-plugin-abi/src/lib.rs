@@ -252,6 +252,12 @@ pub struct Vtable {
     /// a null `out_buf` (or `buf_len == 0`) to query the required length only.
     /// Returns `0` on error (null/invalid `rel`).
     pub host_data_path: unsafe extern "C" fn(rel: *const c_char, out_buf: *mut c_char, buf_len: usize) -> usize,
+
+    // ── Scene view names (API v11) ──
+    /// Resolve a `Gallop.SceneDefine.ViewId` to a human-readable, NUL-terminated
+    /// `'static` UTF-8 label owned by the host, or null if the id is uncatalogued.
+    /// Documentation/diagnostics only — it does not classify gameplay state.
+    pub host_view_name: unsafe extern "C" fn(view_id: i32) -> *const c_char,
 }
 
 /// Subdirectory (under the game data dir) where the host caches GameTora data

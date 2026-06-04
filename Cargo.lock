@@ -924,6 +924,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "hachimi-debug-viewer"
+version = "0.1.0"
+dependencies = [
+ "hachimi-plugin-abi",
+ "hachimi-plugin-sdk",
+]
+
+[[package]]
 name = "hachimi-plugin-abi"
 version = "0.1.0"
 
@@ -942,6 +950,16 @@ dependencies = [
  "egui",
  "hachimi-plugin-abi",
  "hachimi-plugin-macros",
+]
+
+[[package]]
+name = "hachimi-race-hud"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "flate2",
+ "hachimi-plugin-abi",
+ "hachimi-plugin-sdk",
 ]
 
 [[package]]

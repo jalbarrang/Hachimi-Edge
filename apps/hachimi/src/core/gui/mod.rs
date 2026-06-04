@@ -8,6 +8,7 @@ mod overlays;
 mod scale;
 mod splash;
 mod tabs;
+mod theme;
 mod theme_preview;
 mod tween;
 mod update_progress;

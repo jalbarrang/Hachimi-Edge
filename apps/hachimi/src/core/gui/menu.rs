@@ -10,6 +10,7 @@ use rust_i18n::t;
 use crate::core::utils::SendPtr;
 
 use super::scale::get_scale;
+use super::widgets::{self, PillButtonKind};
 use super::window::BoxedWindow;
 use super::{Gui, DISABLED_GAME_UIS};
 
@@ -50,26 +51,33 @@ impl Gui {
             ui.set_max_height(ctx.input(|i| i.viewport_rect().height()) * 0.85);
 
             // Header row: icon + title + version, close button on the right.
-            ui.horizontal(|ui| {
-                ui.add(Self::icon(&ctx));
-                ui.heading(t!("hachimi"));
-                ui.label(env!("HACHIMI_DISPLAY_VERSION"));
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button("\u{f00d}").on_hover_text(t!("menu.close_menu")).clicked() {
-                        keep_open = false;
-                    }
+            widgets::card_frame(ui).show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.add(Self::icon(&ctx));
+                    ui.heading(t!("hachimi"));
+                    widgets::category_tag(ui, env!("HACHIMI_DISPLAY_VERSION"));
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if widgets::ghost_button(ui, "\u{f00d}")
+                            .on_hover_text(t!("menu.close_menu"))
+                            .clicked()
+                        {
+                            keep_open = false;
+                        }
+                    });
                 });
             });
 
+            ui.add_space(8.0 * scale);
+
             // Fixed top tab bar.
-            ui.horizontal(|ui| {
+            ui.horizontal_wrapped(|ui| {
                 self.tab_button(ui, ControlTab::Config, "\u{f013} Config");
                 self.tab_button(ui, ControlTab::Translations, "\u{f1ab} Translations");
                 self.tab_button(ui, ControlTab::Plugins, "\u{f12e} Plugins");
                 self.tab_button(ui, ControlTab::Overlay, "\u{f2d0} Overlay");
                 self.tab_button(ui, ControlTab::About, "\u{f129} About");
             });
-            ui.separator();
+            ui.add_space(8.0 * scale);
 
             egui::ScrollArea::vertical()
                 .auto_shrink([false, false])
@@ -97,7 +105,12 @@ impl Gui {
     }
 
     fn tab_button(&mut self, ui: &mut egui::Ui, tab: ControlTab, label: &str) {
-        if ui.selectable_label(self.menu_tab == tab, label).clicked() {
+        let kind = if self.menu_tab == tab {
+            PillButtonKind::Primary
+        } else {
+            PillButtonKind::Secondary
+        };
+        if widgets::pill_button(ui, label, kind).clicked() {
             self.menu_tab = tab;
         }
     }
