@@ -22,7 +22,6 @@ impl Gui {
         let localize_dict_count = localized_data.localize_dict.len().to_string();
         let hashed_dict_count = localized_data.hashed_dict.len().to_string();
 
-        widgets::section_header(ui, t!("translations.settings_heading").into_owned());
         ui.horizontal_wrapped(|ui| {
             if widgets::primary_button(ui, t!("menu.reload_localized_data").into_owned()).clicked() {
                 hachimi.load_localized_data();
