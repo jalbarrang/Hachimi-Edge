@@ -20,6 +20,7 @@ mod gametora_data;
 mod hooks;
 mod memory_reader;
 mod overlay_cache;
+mod overlay_prefs;
 mod rank_table;
 mod recommend;
 mod shop_hooks;

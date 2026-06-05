@@ -13,7 +13,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::{recommend, stat_targets, tabs};
+use crate::{overlay_prefs, recommend, stat_targets, tabs};
 
 #[derive(Debug, Serialize, Deserialize)]
 struct PersistedConfig {
@@ -23,6 +23,8 @@ struct PersistedConfig {
     enabled_tabs: u8,
     #[serde(default)]
     recommend: recommend::RecommendParams,
+    #[serde(default = "overlay_prefs::default_zoom")]
+    overlay_zoom: f32,
 }
 
 impl Default for PersistedConfig {
@@ -31,6 +33,7 @@ impl Default for PersistedConfig {
             stat_targets: [0; 5],
             enabled_tabs: default_enabled_tabs(),
             recommend: recommend::RecommendParams::default(),
+            overlay_zoom: overlay_prefs::default_zoom(),
         }
     }
 }
@@ -64,6 +67,7 @@ pub fn load() {
     stat_targets::set_targets(cfg.stat_targets);
     tabs::set_enabled_mask(cfg.enabled_tabs);
     recommend::set_params(cfg.recommend);
+    overlay_prefs::set_zoom(cfg.overlay_zoom);
     hlog_info!(
         target: "training-tracker",
         "config loaded: targets={:?} tabs={:#06b}",
@@ -79,6 +83,7 @@ pub fn persist() {
         stat_targets: stat_targets::targets(),
         enabled_tabs: tabs::enabled_mask(),
         recommend: recommend::params(),
+        overlay_zoom: overlay_prefs::zoom(),
     };
     let Ok(bytes) = serde_json::to_vec_pretty(&cfg) else {
         return;
