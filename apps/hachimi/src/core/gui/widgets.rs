@@ -77,12 +77,7 @@ pub(crate) fn section_banner(ui: &mut egui::Ui, text: impl Into<String>) -> egui
 
     if ui.is_rect_visible(rect) {
         let painter = ui.painter();
-        painter.rect_filled(rect, tokens.pill_radius, tokens.accent_2);
-        painter.rect_filled(
-            rect.shrink2(egui::vec2(0.0, rect.height() * 0.42)),
-            tokens.pill_radius,
-            tokens.accent,
-        );
+        painter.rect_filled(rect, tokens.pill_radius, tokens.accent);
 
         let galley = ui.painter().layout_no_wrap(
             text.into(),
