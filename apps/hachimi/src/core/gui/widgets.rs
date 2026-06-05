@@ -84,17 +84,6 @@ pub(crate) fn section_banner(ui: &mut egui::Ui, text: impl Into<String>) -> egui
             tokens.accent,
         );
 
-        // Lightweight hatch texture, clipped by the filled rounded rect visually.
-        let hatch = tokens.accent_ink.linear_multiply(0.45);
-        let mut x = rect.left() - rect.height();
-        while x < rect.right() {
-            painter.line_segment(
-                [egui::pos2(x, rect.bottom()), egui::pos2(x + rect.height(), rect.top())],
-                egui::Stroke::new(1.0, hatch.linear_multiply(0.35)),
-            );
-            x += 8.0;
-        }
-
         let galley = ui.painter().layout_no_wrap(
             text.into(),
             egui::TextStyle::Button.resolve(ui.style()),
