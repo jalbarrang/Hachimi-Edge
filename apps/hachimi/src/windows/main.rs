@@ -21,8 +21,11 @@ const DLL_PROCESS_DETACH: c_ulong = 0;
 
 pub fn load_libraries() -> Vec<Plugin> {
     let mut plugins = Vec::new();
-    for name in Hachimi::instance().config.load().windows.load_libraries.iter() {
-        if let Some(plugin) = load_plugin_library(name, plugins.len() as u32 + 1) {
+    let config = Hachimi::instance().config.load();
+    for name in config.windows.load_libraries.iter() {
+        // Opt-in compatibility path for manifest-less, legacy-ABI plugins.
+        let legacy = config.windows.legacy_libraries.iter().any(|l| l == name);
+        if let Some(plugin) = load_plugin_library(name, plugins.len() as u32 + 1, legacy) {
             plugins.push(plugin);
         }
     }
@@ -31,7 +34,11 @@ pub fn load_libraries() -> Vec<Plugin> {
 
 /// Load a single library by name and build its [`Plugin`] (without calling init).
 /// Returns `None` if the library can't be loaded or fails the compatibility gate.
-fn load_plugin_library(name: &str, id: u32) -> Option<Plugin> {
+///
+/// `legacy = true` opts the plugin into the manifest-less compatibility path: it is
+/// loaded as long as it exports `hachimi_init`, trusting that it only relies on the
+/// stable vtable prefix (the host can neither verify nor track such plugins).
+fn load_plugin_library(name: &str, id: u32, legacy: bool) -> Option<Plugin> {
     let Ok(name_cstr) = U16CString::from_str(name) else {
         warn!("Invalid library name: {}", name);
         return None;
@@ -53,13 +60,22 @@ fn load_plugin_library(name: &str, id: u32) -> Option<Plugin> {
     if hachimi_init_addr == 0 {
         return None;
     }
-    let Some(_caps) = plugin_is_compatible(name, handle) else {
+    if legacy {
+        // No manifest check: the host cannot validate or track legacy plugins. They
+        // are trusted to read only the stable vtable prefix and to manage (and never
+        // hand back) their own IL2CPP hooks, so the DLL stays mapped for the process.
+        warn!(
+            "Plugin '{}' loaded via the LEGACY compatibility path (no manifest, unsupported ABI). \
+             It must rely only on the stable vtable prefix; its hooks cannot be tracked or unloaded.",
+            name
+        );
+    } else if plugin_is_compatible(name, handle).is_none() {
         crate::core::utils::notify_error(format!(
             "Plugin '{}' is incompatible with this Hachimi build and was not loaded (see log)",
             name
         ));
         return None;
-    };
+    }
 
     Some(Plugin {
         name: name.to_owned(),
