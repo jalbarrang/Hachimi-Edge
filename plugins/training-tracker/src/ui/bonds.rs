@@ -1,5 +1,5 @@
-//! Bonds section: bond names + progress (scrollable).
-//! Rendered inside the Training tab under a "Bonds" heading.
+//! Bonds section: bond names + progress.
+//! Rendered inline (no scroll view) inside the Training tab under a "Bonds" heading.
 
 use hachimi_plugin_sdk::egui;
 
@@ -7,17 +7,17 @@ use crate::bond_progress;
 use crate::gametora_data;
 use crate::overlay_cache;
 
-use super::constants::OVERLAY_FONT_SIZE;
 use super::overlay;
 use super::util::bond_color;
 
-/// Draw the "Bonds" heading (h2) followed by the bond list on the next rows.
+/// Draw the "Bonds" heading (h2) followed by the bond list, rendered inline so
+/// every bond is always visible (no inner scroll area).
 pub(super) fn draw_section(ui: &mut egui::Ui) {
     overlay_cache::maybe_request_refresh();
-    ui.add_space(8.0);
-    ui.label(egui::RichText::new("Bonds").size(OVERLAY_FONT_SIZE * 1.4).strong());
-    ui.add_space(4.0);
-    overlay::scroll_list(ui, draw_panel);
+    overlay::space(ui, 8.0);
+    ui.label(egui::RichText::new("Bonds").size(overlay::font_size() * 1.4).strong());
+    overlay::space(ui, 4.0);
+    draw_panel(ui);
 }
 
 /// Names for scenario-specific NPC bonds (not real support cards, so absent from
@@ -45,9 +45,10 @@ fn draw_panel(ui: &mut egui::Ui) {
     let deck = overlay_cache::equipped_support_ids();
 
     // Three columns (name | bond | chain) aligned like the stats table, 12px gap.
+    let s = overlay::scale();
     egui::Grid::new("tt_bonds")
         .num_columns(3)
-        .spacing([12.0, 4.0])
+        .spacing([12.0 * s, 4.0 * s])
         .striped(true)
         .show(ui, |ui| {
             ui.strong("Support");

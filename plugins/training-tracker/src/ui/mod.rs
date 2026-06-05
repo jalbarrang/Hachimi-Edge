@@ -62,7 +62,9 @@ extern "C" fn draw_overlay(ui: *mut c_void, _userdata: *mut c_void) {
 fn draw_overlay_inner(ui: &mut egui::Ui) {
     let tracking = memory_reader::TRACKING.load(Ordering::Relaxed);
 
-    ui.style_mut().override_font_id = Some(egui::FontId::proportional(constants::OVERLAY_FONT_SIZE));
+    // Drive a uniform content zoom from the panel width: resizing the window
+    // scales the whole panel (font + spacing) instead of scrolling/reflowing.
+    overlay::apply_scale(ui);
     ui.set_min_width(constants::OVERLAY_MIN_WIDTH);
 
     if !overlay::draw_shell(ui, tracking) {

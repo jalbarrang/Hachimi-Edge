@@ -1,11 +1,51 @@
-//! L2 overlay shell: tracking toggle, tab bar, scroll helper.
+//! L2 overlay shell: tracking toggle, tab bar, scroll helper, content scaling.
+
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use hachimi_plugin_sdk::{egui, Sdk};
 
 use crate::memory_reader;
 
-use super::constants::MIN_LIST_HEIGHT;
+use super::constants::{MIN_LIST_HEIGHT, OVERLAY_FONT_SIZE, OVERLAY_MIN_WIDTH};
 use crate::tabs::{self, selected_tab, set_selected_tab, Tab};
+
+/// Current overlay content scale (font + spacing multiplier), driven by the
+/// panel's width so resizing the window zooms the whole panel uniformly.
+static OVERLAY_SCALE: AtomicU32 = AtomicU32::new(0x3f80_0000); // 1.0f32 bits
+
+/// Largest content zoom; keeps very wide panels from becoming comically large.
+const MAX_SCALE: f32 = 3.0;
+const MIN_SCALE: f32 = 0.85;
+
+/// Compute the content scale from the available panel width, apply it to `ui`
+/// (font size + spacing), and store it for size-dependent callers. Returns it.
+pub(super) fn apply_scale(ui: &mut egui::Ui) -> f32 {
+    let scale = (ui.available_width() / OVERLAY_MIN_WIDTH).clamp(MIN_SCALE, MAX_SCALE);
+    OVERLAY_SCALE.store(scale.to_bits(), Ordering::Relaxed);
+
+    ui.style_mut().override_font_id = Some(egui::FontId::proportional(OVERLAY_FONT_SIZE * scale));
+    let sp = ui.spacing_mut();
+    sp.item_spacing *= scale;
+    sp.button_padding *= scale;
+    sp.interact_size *= scale;
+    sp.indent *= scale;
+    scale
+}
+
+/// The current overlay content scale.
+pub(super) fn scale() -> f32 {
+    f32::from_bits(OVERLAY_SCALE.load(Ordering::Relaxed))
+}
+
+/// Scaled base font size for callers that set an explicit text size.
+pub(super) fn font_size() -> f32 {
+    OVERLAY_FONT_SIZE * scale()
+}
+
+/// Add vertical space that scales with the panel.
+pub(super) fn space(ui: &mut egui::Ui, base: f32) {
+    ui.add_space(base * scale());
+}
 
 /// Apply overlay chrome and draw tracking toggle + tab bar when tracking is on.
 pub(super) fn draw_shell(ui: &mut egui::Ui, tracking: bool) -> bool {
