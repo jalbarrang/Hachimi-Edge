@@ -1,5 +1,5 @@
 # git-cliff configuration
-# Used by scripts/bump-version.sh to compute the next release version from
+# Used by scripts/bump-version.ps1 to compute the next release version from
 # conventional-commit history (`git cliff --bumped-version`).
 #
 # Versioning policy: STANDARD semver, even though the project is pre-1.0.

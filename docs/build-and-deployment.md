@@ -69,22 +69,22 @@ trigger the `Create Release` workflow via `workflow_dispatch` on GitHub.
 
 ### Bumping the version (script)
 
-`scripts/bump-version.sh` computes the next version from conventional-commit history
+`scripts/bump-version.ps1` computes the next version from conventional-commit history
 since the last `v*` tag and writes it into `apps/hachimi/Cargo.toml` (also refreshing
 `Cargo.lock`). It uses standard semver — breaking→major, `feat`→minor, `fix`/other→patch
 (configured in `cliff.toml`).
 
 Prerequisites (one-time):
 
-```bash
+```powershell
 cargo install git-cliff
 cargo install cargo-edit
 ```
 
 Run it from anywhere in the repo:
 
-```bash
-./scripts/bump-version.sh
+```powershell
+./scripts/bump-version.ps1
 ```
 
 The script only edits files — it does **not** commit, tag, or push. After running:
