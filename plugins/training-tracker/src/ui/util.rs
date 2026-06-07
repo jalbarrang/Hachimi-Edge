@@ -27,6 +27,30 @@ pub(super) fn cap_level(value: i32, cap: i32) -> CapLevel {
     }
 }
 
+/// Color for a single stat's letter rank, keyed off its value.
+///
+/// Mirrors uma-sim `rankForStat` breakpoints (G/F→1199 SS+). Per the feature
+/// request: S/SS gold, A orange, B red, C green, D blue, E pink/purple, G & F
+/// gray. Values ≥ 1200 (UG and above) stay gold (top tier).
+pub(super) fn stat_rank_color(value: i32) -> egui::Color32 {
+    let (r, g, b) = if value >= 1000 {
+        (255, 200, 50) // S / SS / UG+ - gold
+    } else if value >= 800 {
+        (255, 140, 50) // A - orange
+    } else if value >= 600 {
+        (255, 80, 80) // B - red
+    } else if value >= 400 {
+        (120, 220, 120) // C - green
+    } else if value >= 300 {
+        (100, 150, 255) // D - blue
+    } else if value >= 200 {
+        (200, 120, 230) // E - pink/purple
+    } else {
+        (150, 150, 150) // F / G - gray
+    };
+    egui::Color32::from_rgb(r, g, b)
+}
+
 /// Color for a training failure rate %: green (safe) → yellow → orange → red.
 pub(super) fn failure_rate_color(pct: i32) -> (u8, u8, u8) {
     if pct >= 60 {
@@ -94,6 +118,24 @@ mod tests {
         assert_eq!(cap_level(1199, 1200), CapLevel::Near);
         assert_eq!(cap_level(1200, 1200), CapLevel::AtCap);
         assert_eq!(cap_level(1300, 1200), CapLevel::AtCap);
+    }
+
+    #[test]
+    fn stat_rank_color_thresholds() {
+        let gray = egui::Color32::from_rgb(150, 150, 150);
+        assert_eq!(stat_rank_color(0), gray); // G
+        assert_eq!(stat_rank_color(150), gray); // F
+        assert_eq!(stat_rank_color(199), gray);
+        assert_eq!(stat_rank_color(200), egui::Color32::from_rgb(200, 120, 230)); // E
+        assert_eq!(stat_rank_color(300), egui::Color32::from_rgb(100, 150, 255)); // D
+        assert_eq!(stat_rank_color(400), egui::Color32::from_rgb(120, 220, 120)); // C
+        assert_eq!(stat_rank_color(599), egui::Color32::from_rgb(120, 220, 120)); // C+
+        assert_eq!(stat_rank_color(600), egui::Color32::from_rgb(255, 80, 80)); // B
+        assert_eq!(stat_rank_color(800), egui::Color32::from_rgb(255, 140, 50)); // A
+        assert_eq!(stat_rank_color(1000), egui::Color32::from_rgb(255, 200, 50)); // S
+        assert_eq!(stat_rank_color(1100), egui::Color32::from_rgb(255, 200, 50)); // SS
+        assert_eq!(stat_rank_color(1300), egui::Color32::from_rgb(255, 200, 50));
+        // UG+
     }
 
     #[test]

@@ -6,7 +6,7 @@ use crate::memory_reader;
 use crate::recommend;
 use crate::stat_targets;
 
-use super::super::util::{cap_level, failure_rate_color, CapLevel};
+use super::super::util::{cap_level, failure_rate_color, stat_rank_color, CapLevel};
 
 /// Per-stat display row: name, value, training level, effective cap threshold.
 pub(super) type StatRow = (&'static str, i32, i32, i32);
@@ -59,18 +59,17 @@ pub(super) fn draw(
 
             ui.strong("Stat");
             for (_, value, _, cap) in stats {
-                match cap_level(*value, *cap) {
+                // Color is keyed off the stat's letter rank; the cap warning
+                // (⚠) is preserved as a marker when the stat is at its cap.
+                let color = stat_rank_color(*value);
+                let text = match cap_level(*value, *cap) {
                     CapLevel::AtCap => {
                         any_capped = true;
-                        ui.colored_label(egui::Color32::from_rgb(255, 80, 80), format!("{}\u{26a0}", value));
+                        format!("{}\u{26a0}", value)
                     }
-                    CapLevel::Near => {
-                        ui.colored_label(egui::Color32::from_rgb(255, 200, 50), value.to_string());
-                    }
-                    CapLevel::Normal => {
-                        ui.strong(value.to_string());
-                    }
+                    CapLevel::Near | CapLevel::Normal => value.to_string(),
                 };
+                ui.colored_label(color, text);
             }
             ui.end_row();
 
