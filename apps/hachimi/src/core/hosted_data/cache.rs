@@ -1,14 +1,11 @@
 //! On-disk cache manifest tracking the last-synced hash per snapshot filename.
 //!
-//! The set of files to fetch is driven entirely by the hosted `manifest.json`
-//! (the CI tool owns the GameTora key -> filename mapping); the runtime just
-//! mirrors whatever filenames that manifest lists, after sanitizing them.
+//! The set of files to fetch is driven entirely by the hosted `manifest.json`;
+//! the runtime just mirrors whatever filenames that manifest lists, after
+//! sanitizing them. The cache-manifest filename is per-set ([`super::DataSet`]).
 
 use fnv::FnvHashMap;
 use serde::{Deserialize, Serialize};
-
-/// Filename of the local cache manifest within the data subdir.
-pub(super) const CACHE_FILENAME: &str = ".gametora_cache.json";
 
 /// Persisted record of the last successful sync: content hash per filename.
 #[derive(Serialize, Deserialize, Default)]

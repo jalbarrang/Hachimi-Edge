@@ -16,7 +16,7 @@ use Polarity::{Negative, Positive};
 
 /// (id, English name, polarity), ascending by id.
 const EFFECTS: &[(i32, &str, Polarity)] = &[
-    (1, "Night Owl", Negative),
+    (1, "Hot Topic", Positive),
     (2, "Slacker", Negative),
     (3, "Skin Outbreak", Negative),
     (4, "Slow Metabolism", Negative),
@@ -24,7 +24,7 @@ const EFFECTS: &[(i32, &str, Polarity)] = &[
     (6, "Practice Poor", Negative),
     (7, "Fast Learner", Positive),
     (8, "Charming \u{25cb}", Positive),
-    (9, "Hot Topic", Positive),
+    (9, "Night Owl", Negative),
     (10, "Practice Perfect \u{25cb}", Positive),
     (11, "Practice Perfect \u{25ce}", Positive),
     (12, "Under the Weather", Negative),
@@ -60,9 +60,10 @@ mod tests {
 
     #[test]
     fn known_effects_resolve() {
+        assert_eq!(lookup(1), ("Hot Topic".to_string(), Polarity::Positive));
         assert_eq!(lookup(2), ("Slacker".to_string(), Polarity::Negative));
         assert_eq!(lookup(7), ("Fast Learner".to_string(), Polarity::Positive));
-        assert_eq!(lookup(9), ("Hot Topic".to_string(), Polarity::Positive));
+        assert_eq!(lookup(9), ("Night Owl".to_string(), Polarity::Negative));
     }
 
     #[test]

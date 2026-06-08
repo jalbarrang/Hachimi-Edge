@@ -2,7 +2,10 @@
 
 use hachimi_plugin_sdk::egui;
 
+use crate::build_profile;
+use crate::course_data;
 use crate::memory_reader;
+use crate::planner;
 use crate::recommend;
 use crate::stat_targets;
 
@@ -25,15 +28,51 @@ pub(super) fn build_stats(snap: &memory_reader::CareerSnapshot) -> [StatRow; 5] 
     ]
 }
 
-pub(super) fn score_facilities(snap: &memory_reader::CareerSnapshot) -> [recommend::FacilityScore; 5] {
-    let caps = snap.stat_caps;
+/// Build the multi-turn planner context from the live snapshot + active targets.
+/// `bond_pressure` comes from each facility's present supports (their bond gauge
+/// vs the rainbow threshold), read live into the snapshot.
+pub(super) fn plan_context(snap: &memory_reader::CareerSnapshot) -> planner::PlannerContext {
+    let current = [snap.speed, snap.stamina, snap.power, snap.guts, snap.wiz];
+    planner::PlannerContext {
+        hp: snap.hp,
+        max_hp: snap.max_hp,
+        motivation: snap.motivation,
+        current_turn: snap.current_turn,
+        failure_rates: snap.failure_rates,
+        stat_deficit: planner::stat_deficits(current, stat_targets::targets(), snap.stat_caps),
+        bond_pressure: Some(snap.per_facility_bond_pressure),
+    }
+}
+
+/// Build the objective/CM scoring context from the active build profile + target
+/// course data. Missing course params degrade gracefully to the Rank objective.
+pub(super) fn scoring_context(snap: &memory_reader::CareerSnapshot) -> recommend::ScoringContext<'static> {
+    let profile = build_profile::active();
+    let course = course_data::course_params(profile.target_course_id);
+    let aptitudes = course
+        .map(|c| recommend::cm_aptitudes_for_course(&snap.aptitudes, c))
+        .unwrap_or_default();
+    recommend::ScoringContext {
+        objective: profile.objective,
+        stat_weights: profile.stat_weights,
+        course,
+        aptitudes,
+        strategy: profile.strategy,
+    }
+}
+
+pub(super) fn score_facilities(
+    snap: &memory_reader::CareerSnapshot,
+    ctx: &recommend::ScoringContext,
+) -> [recommend::FacilityScore; 5] {
     recommend::score_facilities(
         &recommend::Inputs {
             current: [snap.speed, snap.stamina, snap.power, snap.guts, snap.wiz],
             per_stat_gains: &snap.per_stat_gains,
-            caps,
+            caps: snap.stat_caps,
             targets: stat_targets::targets(),
             failure_rates: snap.failure_rates,
+            ctx: *ctx,
         },
         &recommend::params(),
     )

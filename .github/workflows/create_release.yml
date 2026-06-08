@@ -56,7 +56,6 @@ jobs:
           cargo build --target x86_64-pc-windows-msvc --target-dir build --release -p hachimi -p hachimi-training-tracker
           move build\x86_64-pc-windows-msvc\release\hachimi.dll build
           move build\x86_64-pc-windows-msvc\release\hachimi_training_tracker.dll build
-          copy plugins\training-tracker\assets\skill_grades.json build\skill_grades.json
         env:
           HACHIMI_IGNORE_DIRTY: "true"
 
@@ -79,7 +78,6 @@ jobs:
           # artifacts it embeds, then build it explicitly (-p) from the workspace.
           copy build\hachimi.dll apps\installer\
           copy build\hachimi_training_tracker.dll apps\installer\
-          copy build\skill_grades.json apps\installer\
           move ..\Cellar\build\x86_64-pc-windows-msvc\release\cellar.dll apps\installer\
           move FunnyHoney\FunnyHoney.exe apps\installer\
           cargo build --target x86_64-pc-windows-msvc --target-dir build --release -p hachimi_installer --features compress_bin,training_tracker
@@ -92,13 +90,11 @@ jobs:
           DLL_HASH=($(./b3sum.exe build/hachimi.dll | tr -d '\r'))
           EXE_HASH=($(./b3sum.exe build/hachimi_installer.exe | tr -d '\r'))
           TRACKER_HASH=($(./b3sum.exe build/hachimi_training_tracker.dll | tr -d '\r'))
-          GRADES_HASH=($(./b3sum.exe build/skill_grades.json | tr -d '\r'))
           cat <<EOF > build/blake3.json
           {
             "hachimi.dll": "$DLL_HASH",
             "hachimi_installer.exe": "$EXE_HASH",
-            "hachimi_training_tracker.dll": "$TRACKER_HASH",
-            "skill_grades.json": "$GRADES_HASH"
+            "hachimi_training_tracker.dll": "$TRACKER_HASH"
           }
           EOF
 
@@ -110,7 +106,6 @@ jobs:
             build/hachimi.dll
             build/hachimi_installer.exe
             build/hachimi_training_tracker.dll
-            build/skill_grades.json
 
       - name: Upload Windows binaries
         uses: actions/upload-artifact@v7
@@ -121,7 +116,6 @@ jobs:
             build/hachimi.dll
             build/hachimi_installer.exe
             build/hachimi_training_tracker.dll
-            build/skill_grades.json
 
   create-release:
     needs: [build-windows]

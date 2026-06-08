@@ -43,6 +43,7 @@ cc = "1.1"
 [features]
 compress_bin = ["dep:include-bytes-zstd"]
 net_install = ["dep:reqwest", "dep:bytes"]
-# Embeds hachimi_training_tracker.dll + skill_grades.json (must be in project root
-# at build time) and exposes the optional Training Tracker install toggle.
+# Embeds hachimi_training_tracker.dll (must be in project root at build time) and
+# exposes the optional Training Tracker install toggle. The plugin's data
+# resources are downloaded by the host at runtime, not embedded here.
 training_tracker = []

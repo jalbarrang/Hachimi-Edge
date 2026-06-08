@@ -4,27 +4,41 @@
 //! This module owns the persisted struct and the load/persist path. Each feature
 //! module keeps its own in-memory state and exposes a getter/setter; `config`
 //! bridges those to disk so there is a single source of truth for the file format:
-//! - [`crate::stat_targets`] — per-stat training targets
+//! - [`crate::build_profile`] — active build profile (objective, per-stat
+//!   targets, weights, course/strategy) + saved custom profiles
 //! - [`crate::tabs`] — enabled overlay tabs
 //! - [`crate::recommend`] — smart-recommendation tuning params
 //!
 //! Back-compat: every field is `#[serde(default)]`, so older configs (and configs
-//! written by older plugin versions) load fine with sensible defaults.
+//! written by older plugin versions) load fine with sensible defaults. The legacy
+//! flat `stat_targets` field is kept for one-way migration into the default
+//! profile's `per_stat_target`.
 
 use serde::{Deserialize, Serialize};
 
-use crate::{overlay_prefs, recommend, stat_targets, tabs};
+use crate::{build_profile, overlay_prefs, planner, recommend, tabs};
+use build_profile::BuildProfile;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct PersistedConfig {
+    /// Legacy per-stat targets; migrated into the active profile when no
+    /// `build_profile` is present (older configs).
     #[serde(default)]
     stat_targets: [i32; 5],
     #[serde(default = "default_enabled_tabs")]
     enabled_tabs: u8,
     #[serde(default)]
     recommend: recommend::RecommendParams,
+    #[serde(default)]
+    planner: planner::PlannerParams,
     #[serde(default = "overlay_prefs::default_zoom")]
     overlay_zoom: f32,
+    /// The active build profile (objective + targets + weights + course/strategy).
+    #[serde(default)]
+    build_profile: Option<BuildProfile>,
+    /// User-saved custom profiles.
+    #[serde(default)]
+    saved_profiles: Vec<BuildProfile>,
 }
 
 impl Default for PersistedConfig {
@@ -33,7 +47,10 @@ impl Default for PersistedConfig {
             stat_targets: [0; 5],
             enabled_tabs: default_enabled_tabs(),
             recommend: recommend::RecommendParams::default(),
+            planner: planner::PlannerParams::default(),
             overlay_zoom: overlay_prefs::default_zoom(),
+            build_profile: None,
+            saved_profiles: Vec::new(),
         }
     }
 }
@@ -64,14 +81,25 @@ pub fn load() {
         Err(_) => return,
     };
 
-    stat_targets::set_targets(cfg.stat_targets);
+    // Active profile: use the persisted one, else migrate the legacy flat targets
+    // into a fresh default profile (preserves Rank behaviour for old configs).
+    let active = cfg.build_profile.unwrap_or_else(|| BuildProfile {
+        per_stat_target: cfg.stat_targets,
+        ..BuildProfile::default()
+    });
+    build_profile::set_active(active);
+    build_profile::set_saved(cfg.saved_profiles);
     tabs::set_enabled_mask(cfg.enabled_tabs);
     recommend::set_params(cfg.recommend);
+    planner::set_params(cfg.planner);
     overlay_prefs::set_zoom(cfg.overlay_zoom);
+    let p = build_profile::active();
     hlog_info!(
         target: "training-tracker",
-        "config loaded: targets={:?} tabs={:#06b}",
-        stat_targets::targets(),
+        "config loaded: profile={:?} objective={:?} targets={:?} tabs={:#06b}",
+        p.name,
+        p.objective,
+        p.per_stat_target,
         tabs::enabled_mask()
     );
 }
@@ -79,11 +107,16 @@ pub fn load() {
 /// Gather the current state from every feature module and write it to disk.
 /// Call when the user commits a settings edit.
 pub fn persist() {
+    let active = build_profile::active();
     let cfg = PersistedConfig {
-        stat_targets: stat_targets::targets(),
+        // Mirror the active targets into the legacy field for forward-compat.
+        stat_targets: active.per_stat_target,
         enabled_tabs: tabs::enabled_mask(),
         recommend: recommend::params(),
+        planner: planner::params(),
         overlay_zoom: overlay_prefs::zoom(),
+        build_profile: Some(active),
+        saved_profiles: build_profile::saved(),
     };
     let Ok(bytes) = serde_json::to_vec_pretty(&cfg) else {
         return;

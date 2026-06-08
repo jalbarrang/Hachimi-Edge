@@ -72,6 +72,11 @@ pub struct CareerSnapshot {
     /// Power, Guts, Wisdom] delta. Drives the projected-評価点 recommendation.
     pub per_stat_gains: [[i32; 5]; 5],
 
+    /// Per-facility near-rainbow bond pressure `0..=1` from the supports present on
+    /// each facility this turn (`TrainingHorseList` bond values →
+    /// `planner::near_rainbow_pressure`). Feeds the multi-turn bond lookahead.
+    pub per_facility_bond_pressure: [f32; 5],
+
     /// Speed-slot training command id of the active scenario (e.g. 101 URA, 601
     /// Unity Cup, 1101 Trackblazer). Identifies the scenario for the rest-vs-race
     /// suggestion. `0` means unknown.
@@ -197,7 +202,7 @@ fn read_snapshot_inner() -> Option<CareerSnapshot> {
 
     // Step 10: Per-facility failure rate + stat-gain preview (live command info)
     hlog_trace!("snapshot: step 10 — command info");
-    let (failure_rates, stat_gains, per_stat_gains, scenario_command_base) =
+    let (failure_rates, stat_gains, per_stat_gains, per_facility_bond_pressure, scenario_command_base) =
         align_command_infos(&read_command_infos(wsmd));
 
     // Step 11: Active scenario id (logged) + command base (rest-vs-race suggestion)
@@ -230,11 +235,12 @@ fn read_snapshot_inner() -> Option<CareerSnapshot> {
         static CMD_LOGGED: AtomicBool = AtomicBool::new(false);
         if !CMD_LOGGED.swap(true, Ordering::Relaxed) {
             hlog_info!(
-                "Command info: scenario_id={} failure_rates={:?} stat_gains={:?} per_stat_gains={:?}",
+                "Command info: scenario_id={} failure_rates={:?} stat_gains={:?} per_stat_gains={:?} bond_pressure={:?}",
                 scenario_id,
                 failure_rates,
                 stat_gains,
-                per_stat_gains
+                per_stat_gains,
+                per_facility_bond_pressure
             );
         }
     }
@@ -266,6 +272,7 @@ fn read_snapshot_inner() -> Option<CareerSnapshot> {
         failure_rates,
         stat_gains,
         per_stat_gains,
+        per_facility_bond_pressure,
         scenario_command_base,
         scenario_id,
         // SAFETY: `chara` is a valid non-null IL2CPP object from the resolved chain.
@@ -277,26 +284,28 @@ fn read_snapshot_inner() -> Option<CareerSnapshot> {
 /// Map live command infos onto facility slots [Speed, Stamina, Power, Guts, Wisdom]
 /// by matching each `command_id` against the known command sets. Failure rates
 /// default to `-1` (unknown); stat gains default to `0`.
-/// Returns `(failure_rates, stat_gains, per_stat_gains, scenario_command_base)`.
-/// `scenario_command_base` is the Speed-slot command id (set base), identifying the
-/// active scenario; `0` if no Speed facility was found.
+/// Returns `(failure_rates, stat_gains, per_stat_gains, bond_pressure,
+/// scenario_command_base)`. `scenario_command_base` is the Speed-slot command id
+/// (set base), identifying the active scenario; `0` if no Speed facility was found.
 #[allow(clippy::type_complexity)]
-fn align_command_infos(infos: &[CommandInfo]) -> ([i32; 5], [i32; 5], [[i32; 5]; 5], i32) {
+fn align_command_infos(infos: &[CommandInfo]) -> ([i32; 5], [i32; 5], [[i32; 5]; 5], [f32; 5], i32) {
     let mut failure = [-1i32; 5];
     let mut gain = [0i32; 5];
     let mut per_stat = [[0i32; 5]; 5];
+    let mut bond = [0f32; 5];
     let mut base = 0;
     for info in infos {
         if let Some(idx) = facility_index_of(info.command_id) {
             failure[idx] = info.failure_rate;
             gain[idx] = info.stat_gain;
             per_stat[idx] = info.per_stat;
+            bond[idx] = info.bond_pressure;
             if idx == 0 {
                 base = info.command_id; // Speed-slot command id = scenario set base
             }
         }
     }
-    (failure, gain, per_stat, base)
+    (failure, gain, per_stat, bond, base)
 }
 
 /// Facility slot index (0..5) for a training `command_id`, searching all known sets.
@@ -458,20 +467,24 @@ mod tests {
                 failure_rate: 3,
                 stat_gain: 12,
                 per_stat: [10, 0, 2, 0, 0],
+                bond_pressure: 0.6,
             },
             CommandInfo {
                 command_id: 103, // Guts
                 failure_rate: 28,
                 stat_gain: 9,
                 per_stat: [0, 0, 3, 6, 0],
+                bond_pressure: 0.0,
             },
         ];
-        let (failure, gain, per_stat, base) = align_command_infos(&infos);
+        let (failure, gain, per_stat, bond, base) = align_command_infos(&infos);
         assert_eq!(failure, [3, -1, -1, 28, -1]);
         assert_eq!(gain, [12, 0, 0, 9, 0]);
         assert_eq!(per_stat[0], [10, 0, 2, 0, 0]);
         assert_eq!(per_stat[3], [0, 0, 3, 6, 0]);
         assert_eq!(per_stat[1], [0; 5]);
+        assert_eq!(bond[0], 0.6); // Speed facility's near-rainbow pressure
+        assert_eq!(bond[3], 0.0);
         assert_eq!(base, 101); // Speed-slot command id
     }
 
@@ -482,11 +495,13 @@ mod tests {
             failure_rate: 50,
             stat_gain: 20,
             per_stat: [4, 4, 4, 4, 4],
+            bond_pressure: 0.9,
         }];
-        let (failure, gain, per_stat, base) = align_command_infos(&infos);
+        let (failure, gain, per_stat, bond, base) = align_command_infos(&infos);
         assert_eq!(failure, [-1; 5]);
         assert_eq!(gain, [0; 5]);
         assert_eq!(per_stat, [[0; 5]; 5]);
+        assert_eq!(bond, [0.0; 5]); // unknown command → no bond mapping
         assert_eq!(base, 0); // no known facility → unknown base
     }
 }

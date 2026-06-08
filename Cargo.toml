@@ -12,6 +12,8 @@ members = [
     "tools/gametora-sync",
     "tools/fetch-master-db",
     "tools/skill-grades",
+    "tools/course-data",
+    "tools/tracker-data-manifest",
 ]
 # The installer is built explicitly (`-p hachimi_installer`) after its embedded
 # artifacts are staged. Keep it out of the default set so bare cargo
@@ -27,6 +29,8 @@ default-members = [
     "tools/gametora-sync",
     "tools/fetch-master-db",
     "tools/skill-grades",
+    "tools/course-data",
+    "tools/tracker-data-manifest",
 ]
 
 # Shared metadata inherited by members via `<field>.workspace = true`.

@@ -260,13 +260,30 @@ if ($HotSwap) {
     Write-Host "  hachimi_race_hud.dll  ->  hachimi_race_hud.dll"
 }
 
-# Skill-evaluation resource (read at runtime by the training-tracker eval engine).
+# Training-tracker data resources. At runtime the host downloads these into the
+# game data dir (<GameDir>\hachimi, next to config.json) via the hosted_data sync,
+# which is where the plugin's host_data_path lookup reads them. For local dev we
+# drop them straight into that data dir so they're found without a download (and a
+# local edit wins over the hosted copy).
+$DataDir = Join-Path $GameDir 'hachimi'
+if (-not (Test-Path -LiteralPath $DataDir -PathType Container)) {
+  New-Item -ItemType Directory -Path $DataDir -Force | Out-Null
+}
+
 $SkillGradesSrc = Join-Path $PSScriptRoot "..\plugins\training-tracker\assets\skill_grades.json"
 if (Test-Path -LiteralPath $SkillGradesSrc) {
-  Copy-Item -LiteralPath $SkillGradesSrc -Destination (Join-Path $GameDir "skill_grades.json") -Force
-  Write-Host "  skill_grades.json  ->  skill_grades.json"
+  Copy-Item -LiteralPath $SkillGradesSrc -Destination (Join-Path $DataDir "skill_grades.json") -Force
+  Write-Host "  skill_grades.json  ->  hachimi\skill_grades.json"
 } else {
   Write-Host "  (skill_grades.json missing; run: cargo run -p fetch-master-db; cargo run -p skill-grades)" -ForegroundColor Yellow
+}
+
+$CourseParamsSrc = Join-Path $PSScriptRoot "..\plugins\training-tracker\assets\course_params.json"
+if (Test-Path -LiteralPath $CourseParamsSrc) {
+  Copy-Item -LiteralPath $CourseParamsSrc -Destination (Join-Path $DataDir "course_params.json") -Force
+  Write-Host "  course_params.json  ->  hachimi\course_params.json"
+} else {
+  Write-Host "  (course_params.json missing; run: cargo run -p fetch-master-db; cargo run -p course-data)" -ForegroundColor Yellow
 }
 
 Write-Host ""

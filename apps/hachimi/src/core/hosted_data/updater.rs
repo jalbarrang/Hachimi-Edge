@@ -1,29 +1,33 @@
-//! GameTora data sync orchestration: hash-diff the hosted manifest against the
-//! local cache, download only changed snapshots, then persist the cache manifest.
+//! Hosted-data sync orchestration: hash-diff a [`DataSet`]'s hosted manifest
+//! against the local cache, download only changed snapshots, then persist the
+//! cache manifest. Generic over the set.
 
 use std::{
     fs,
     sync::{Arc, Mutex},
 };
 
-use rust_i18n::t;
-
 use crate::core::{gui::NotificationGuard, utils, Error, Gui, Hachimi};
 
 use super::{
-    cache::{is_safe_filename, CacheManifest, CACHE_FILENAME},
-    client::{self, DEFAULT_DATA_URL},
-    DATA_SUBDIR,
+    cache::{is_safe_filename, CacheManifest},
+    client, DataSet,
 };
 
-const LOG_TARGET: &str = "gametora_data";
-
-#[derive(Default)]
 pub struct Updater {
+    set: &'static DataSet,
     sync_mutex: Mutex<()>,
 }
 
 impl Updater {
+    /// An updater bound to a hosted [`DataSet`].
+    pub fn new(set: &'static DataSet) -> Self {
+        Self {
+            set,
+            sync_mutex: Mutex::new(()),
+        }
+    }
+
     /// Spawn a background sync. Safe to call repeatedly; concurrent runs are
     /// skipped via the internal mutex.
     ///
@@ -31,17 +35,18 @@ impl Updater {
     /// the GUI; the automatic launch sync passes `false` to stay silent unless it
     /// errors.
     pub fn sync(self: Arc<Self>, notify: bool) {
+        let log_target = self.set.log_target;
         std::thread::Builder::new()
-            .name("gametora_data_sync".into())
+            .name(format!("{log_target}_sync"))
             .spawn(move || {
                 if let Err(e) = self.sync_internal(notify) {
-                    warn!(target: LOG_TARGET, "GameTora data sync failed: {}", e);
+                    warn!(target: log_target, "data sync failed: {}", e);
                     if notify {
-                        Self::notify(&t!("notification.gametora_sync_failed", reason = e.to_string()));
+                        Self::notify(&(self.set.msg_failed)(&e.to_string()));
                     }
                 }
             })
-            .expect("Failed to spawn GameTora sync thread");
+            .expect("Failed to spawn hosted-data sync thread");
     }
 
     fn notify(message: &str) {
@@ -52,12 +57,10 @@ impl Updater {
 
     /// Persistent "syncing" indicator held while snapshots download; auto-closes
     /// when the returned guard drops (download finished, or errored out).
-    fn show_loading() -> Option<NotificationGuard> {
+    fn show_loading(&self) -> Option<NotificationGuard> {
+        let msg = (self.set.msg_syncing)();
         Gui::instance().map(|mutex| {
-            let id = mutex
-                .lock()
-                .expect("lock poisoned")
-                .show_persistent_notification(&t!("notification.gametora_syncing"));
+            let id = mutex.lock().expect("lock poisoned").show_persistent_notification(&msg);
             NotificationGuard(id)
         })
     }
@@ -67,17 +70,20 @@ impl Updater {
         let Ok(_guard) = self.sync_mutex.try_lock() else {
             return Ok(());
         };
+        let set = self.set;
+        let log_target = set.log_target;
 
         let hachimi = Hachimi::instance();
         let config = hachimi.config.load();
-        if config.disable_gametora_data {
-            debug!(target: LOG_TARGET, "GameTora data sync disabled by config");
+        if (set.is_disabled)(&config) {
+            debug!(target: log_target, "data sync disabled by config");
             return Ok(());
         }
-        let base = config.gametora_data_url.as_deref().unwrap_or(DEFAULT_DATA_URL);
+        let url_override = (set.url_override)(&config);
+        let base = url_override.as_deref().unwrap_or(set.default_url);
 
-        let data_dir = hachimi.get_data_path(DATA_SUBDIR);
-        let cache_path = data_dir.join(CACHE_FILENAME);
+        let data_dir = hachimi.get_data_path(set.subdir);
+        let cache_path = data_dir.join(set.cache_filename);
 
         let mut cache: CacheManifest = if fs::metadata(&cache_path).is_ok() {
             serde_json::from_str(&fs::read_to_string(&cache_path)?).unwrap_or_default()
@@ -85,14 +91,14 @@ impl Updater {
             CacheManifest::default()
         };
 
-        info!(target: LOG_TARGET, "Checking GameTora data manifest...");
+        info!(target: log_target, "Checking hosted-data manifest...");
         let manifest = client::load_manifest(base)?;
 
         // Decide which files need a (re)download from the hosted manifest.
         let mut pending = Vec::new();
         for (file, remote_hash) in manifest.files.iter() {
             if !is_safe_filename(file) {
-                warn!(target: LOG_TARGET, "Skipping unsafe filename '{}' from manifest", file);
+                warn!(target: log_target, "Skipping unsafe filename '{}' from manifest", file);
                 continue;
             }
             let out_path = data_dir.join(file);
@@ -104,31 +110,31 @@ impl Updater {
         }
 
         if pending.is_empty() {
-            info!(target: LOG_TARGET, "GameTora data already up to date");
+            info!(target: log_target, "hosted data already up to date");
             if notify {
-                Self::notify(&t!("notification.gametora_up_to_date"));
+                Self::notify(&(set.msg_up_to_date)());
             }
             return Ok(());
         }
 
         fs::create_dir_all(&data_dir)?;
-        info!(target: LOG_TARGET, "Syncing {} GameTora snapshot(s)...", pending.len());
+        info!(target: log_target, "Syncing {} snapshot(s)...", pending.len());
 
         let mut updated = 0usize;
         {
             // Loading indicator visible only while snapshots are downloading.
-            let _loading = Self::show_loading();
+            let _loading = self.show_loading();
             for (file, remote_hash) in pending {
                 match client::fetch_snapshot(base, &file) {
                     Ok(text) => {
                         fs::write(data_dir.join(&file), text)?;
                         cache.files.insert(file.clone(), remote_hash);
                         updated += 1;
-                        debug!(target: LOG_TARGET, "Wrote {}", file);
+                        debug!(target: log_target, "Wrote {}", file);
                     }
                     Err(e) => {
                         // Non-fatal: keep the old cache entry so this file is retried.
-                        warn!(target: LOG_TARGET, "Failed to fetch '{}': {}", file, e);
+                        warn!(target: log_target, "Failed to fetch '{}': {}", file, e);
                     }
                 }
             }
@@ -137,10 +143,10 @@ impl Updater {
         if updated > 0 {
             cache.synced_at = chrono::Utc::now().to_rfc3339();
             utils::write_json_file(&cache, &cache_path)?;
-            info!(target: LOG_TARGET, "GameTora data sync complete ({} updated)", updated);
+            info!(target: log_target, "hosted data sync complete ({} updated)", updated);
         }
         if notify {
-            Self::notify(&t!("notification.gametora_sync_complete", count = updated));
+            Self::notify(&(set.msg_complete)(updated));
         }
 
         Ok(())

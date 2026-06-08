@@ -19,7 +19,7 @@ mod template_filters;
 pub mod interceptor;
 pub use interceptor::Interceptor;
 
-pub mod gametora_data;
+pub mod hosted_data;
 pub mod http;
 mod ipc;
 pub mod log;

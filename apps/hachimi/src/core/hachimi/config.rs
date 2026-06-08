@@ -41,6 +41,13 @@ pub struct Config {
     /// Override the base URL the GameTora data catalog is downloaded from. `None`
     /// uses the repo's hosted copy. Dev/testing escape hatch.
     pub gametora_data_url: Option<String>,
+    /// Disable the training-tracker resource sync (`skill_grades.json` /
+    /// `course_params.json`) downloaded alongside the auto update check.
+    #[serde(default)]
+    pub disable_tracker_data: bool,
+    /// Override the base URL the training-tracker resources are downloaded from.
+    /// `None` uses the repo's hosted copy. Dev/testing escape hatch.
+    pub tracker_data_url: Option<String>,
     #[serde(default)]
     pub disable_translations: bool,
     #[serde(default = "Config::default_gui_scale")]

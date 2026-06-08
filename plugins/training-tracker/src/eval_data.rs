@@ -1,9 +1,12 @@
 //! Skill-evaluation resource: per-skill grade value + aptitude role + unique flag.
 //!
-//! Loaded once at runtime from `skill_grades.json` next to the plugin DLL (copied
-//! there by the deploy script). Generated offline by the `skill-grades` tool
-//! (`cargo run -p skill-grades`) from the game's master.mdb `grade_value` +
-//! UmaTools `affinity_role`. Fetch master.mdb first with `cargo run -p fetch-master-db`.
+//! Loaded once at runtime from `skill_grades.json`, which the host downloads into
+//! the game data dir (the `hosted_data` TRACKER sync); for dev it falls back to a
+//! copy next to the plugin DLL (placed by `deploy-windows.ps1`). Generated offline
+//! by the `skill-grades` tool (`cargo run -p skill-grades`) from the game's
+//! master.mdb `grade_value` + UmaTools `affinity_role` (fetch master.mdb first with
+//! `cargo run -p fetch-master-db`), then published under `data/` via
+//! `cargo run -p tracker-data-manifest`.
 //!
 //! Keeping the data in a sidecar file (not bundled in the DLL) lets it be updated
 //! per game version without rebuilding.
@@ -11,6 +14,7 @@
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
+use hachimi_plugin_sdk::Sdk;
 use serde::Deserialize;
 
 /// One skill's evaluation inputs.
@@ -34,8 +38,14 @@ impl SkillGrade {
 
 static TABLE: OnceLock<Option<HashMap<i32, SkillGrade>>> = OnceLock::new();
 
-/// Path to the resource file (next to the plugin DLL / game exe).
+/// Path to the resource file: prefer the host-downloaded copy in the game data
+/// dir; fall back to next to the plugin DLL / game exe (dev + back-compat).
 fn resource_path() -> std::path::PathBuf {
+    if let Some(p) = Sdk::try_get().and_then(|sdk| sdk.host_data_path("skill_grades.json")) {
+        if p.is_file() {
+            return p;
+        }
+    }
     std::env::current_exe()
         .ok()
         .and_then(|p| p.parent().map(|dir| dir.join("skill_grades.json")))

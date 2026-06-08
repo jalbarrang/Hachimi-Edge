@@ -10,9 +10,21 @@
 extern crate hachimi_plugin_abi;
 
 mod bond_progress;
+// Foundation module: presets/objective/saved-profile API is consumed by the CM
+// scorer (cm-scoring-refactor) and UI; stat_targets + config use the rest now.
+#[allow(dead_code)]
+mod build_profile;
 mod chara_effects;
 mod class_dump;
+// Foundation module: the public API is consumed by the CM-objective scorer
+// (cm-scoring-refactor) and UI; until then it is only exercised by its tests.
+#[allow(dead_code)]
+mod cm_model;
 mod config;
+// Foundation loader: consumed by the CM-objective scorer (cm-scoring-refactor)
+// and UI; until then only the lazy table machinery exists.
+#[allow(dead_code)]
+mod course_data;
 mod deck_bonuses;
 mod diagnostics;
 mod eval_data;
@@ -22,6 +34,7 @@ mod hooks;
 mod memory_reader;
 mod overlay_cache;
 mod overlay_prefs;
+mod planner;
 mod rank_table;
 mod recommend;
 mod shop_hooks;

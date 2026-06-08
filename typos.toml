@@ -40,6 +40,10 @@ compat = "compat"
 thr = "thr"   # threshold (training-tracker stats grid)
 mis = "mis"   # abbreviation in training-tracker rank table
 ue = "ue"     # game rank label (UE/UF/UG tiers)
+strat = "strat" # abbreviation for "strategy" (cm_model)
+
+# Spelling variants used intentionally (British English)
+uncatalogued = "uncatalogued"
 
 [default.extend-identifiers]
 # Specific identifiers that look like typos but aren't
