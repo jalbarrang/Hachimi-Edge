@@ -12,21 +12,10 @@
 
 use crate::build_profile;
 
-/// Stat order: [Speed, Stamina, Power, Guts, Wit].
-pub const LABELS: [&str; 5] = build_profile::STAT_LABELS;
-
-/// Upper bound for a target (matches the highest reachable stat cap).
-pub const MAX_TARGET: i32 = build_profile::MAX_TARGET;
-
 /// Current per-stat targets (`0` = use game cap) — the active profile's targets.
+/// Stat order: [Speed, Stamina, Power, Guts, Wit].
 pub fn targets() -> [i32; 5] {
     build_profile::per_stat_target()
-}
-
-/// Replace all targets (values are clamped to `0..=MAX_TARGET`) on the active
-/// profile.
-pub fn set_targets(new: [i32; 5]) {
-    build_profile::set_per_stat_target(new);
 }
 
 /// Effective warning threshold for a stat: the target when set, else the game cap.
@@ -51,13 +40,9 @@ mod tests {
     }
 
     #[test]
-    fn set_targets_clamps_via_active_profile() {
-        set_targets([5000, -10, 1200, 0, 600]);
-        let t = targets();
-        assert_eq!(t[0], MAX_TARGET); // clamped down
-        assert_eq!(t[1], 0); // clamped up from negative
-        assert_eq!(t[2], 1200);
-        assert_eq!(t[4], 600);
-        set_targets([0; 5]); // reset for other tests
+    fn targets_reflect_active_profile() {
+        build_profile::set_per_stat_target([1100, 700, 850, 250, 950]);
+        assert_eq!(targets(), [1100, 700, 850, 250, 950]);
+        build_profile::set_per_stat_target([0; 5]); // reset for other tests
     }
 }

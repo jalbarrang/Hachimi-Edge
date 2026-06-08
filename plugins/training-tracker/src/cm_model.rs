@@ -54,6 +54,26 @@ pub enum Strategy {
 }
 
 impl Strategy {
+    /// All running styles, in game order, for UI pickers.
+    pub const ALL: [Strategy; 5] = [
+        Strategy::FrontRunner,
+        Strategy::PaceChaser,
+        Strategy::LateSurger,
+        Strategy::EndCloser,
+        Strategy::Runaway,
+    ];
+
+    /// Short English label (with the JP romanization) for the UI.
+    pub fn label(self) -> &'static str {
+        match self {
+            Strategy::FrontRunner => "Front (nige)",
+            Strategy::PaceChaser => "Pace (senko)",
+            Strategy::LateSurger => "Late (sashi)",
+            Strategy::EndCloser => "End (oikomi)",
+            Strategy::Runaway => "Runaway (oonige)",
+        }
+    }
+
     /// 1-based discriminant matching uma-sim's `Strategy as usize`.
     pub fn discriminant(self) -> usize {
         match self {
@@ -229,6 +249,17 @@ pub fn last_spurt_speed(speed: f64, guts: f64, strategy: Strategy, distance_grad
 // Soft-cap / overcap and course set-status thresholds
 // ---------------------------------------------------------------------------
 
+/// Stat value at which the in-race soft cap kicks in (points above count half).
+pub const SOFT_CAP: i32 = 1200;
+
+/// Power "enough" knee centre for a course: longer / dirt courses want more Power
+/// before the marginal value tapers. Exposed so the UI can show a Power target.
+pub fn power_knee(course: &CourseParams) -> f64 {
+    POWER_KNEE_BASE
+        + if course.surface == Surface::Dirt { 100.0 } else { 0.0 }
+        + ((course.distance - 2000.0) / 400.0).clamp(-100.0, 200.0)
+}
+
 /// In-race effective stat value: points above 1200 count half (`adjust_overcap`).
 pub fn effective_in_race_value(stat: f64) -> f64 {
     if stat > 1200.0 {
@@ -382,9 +413,7 @@ pub fn stat_marginal_value(
             // accel ∝ (500·power)^0.5 ; derivative ∝ 0.5·sqrt(500)/sqrt(power).
             let d_accel = 0.5 * (500.0_f64).sqrt() / p_eff.sqrt() * strat * g_prof * d_prof;
             // Knee: longer / dirt courses want more power before tapering.
-            let knee = POWER_KNEE_BASE
-                + if course.surface == Surface::Dirt { 100.0 } else { 0.0 }
-                + ((course.distance - 2000.0) / 400.0).clamp(-100.0, 200.0);
+            let knee = power_knee(course);
             let knee_factor = 1.0 - logistic((power - knee) / 150.0) * 0.8;
             d_accel * POWER_ACCEL_TO_SPEED * SPEED_DERIV_UUTIL * knee_factor * overcap(power)
         }

@@ -1,16 +1,24 @@
 # Hachimi Training Tracker Plugin
 
-A [HachimiRedux](../../README.md) plugin that tracks how many times each training facility has been visited during a career run, displaying live counts in the in-game overlay.
+A [HachimiRedux](../../README.md) plugin that reads live career state from game
+memory (IL2CPP) and renders a training-decision overlay: per-facility stat gains,
+failure rates, a self-computed career evaluation (評価点), bonds, a skill shop
+advisor, and a **smart per-turn training recommendation**.
 
 ![Plugin Type: Hachimi Native Plugin](https://img.shields.io/badge/type-hachimi_plugin-blue)
 
 ## Features
 
-- **Live training counter** — Tracks Speed, Stamina, Power, Guts, and Wisdom facility visits
-- **In-game overlay** — Displays a color-coded table with visit counts and visual bars in Hachimi's menu
-- **Reset button** — Clear counts mid-run if needed
-- **Multi-scenario support** — Handles command IDs from URA, UAF, Onsen, and other career scenarios
-- **Auto-detection** — Attempts to find and hook the training method at runtime by name
+- **Live career snapshot** — Stats, caps, energy/mood, aptitudes, failure rates, and per-stat training gains read directly from game memory
+- **Smart recommendation** — Scores each facility per turn and flags the best (★), with a Rest/Race fallback when every option is too risky
+- **Selectable objective** — Optimize for career **Rank (評価点)**, **Champions Meeting race power (CM)**, or a **Hybrid** blend
+- **CM race model** — Threshold-aware marginal-value scoring (stamina survival floor, 1200 soft cap, power knee) for a chosen course + running style
+- **Build profiles & presets** — Curated CM presets plus a manual editor (per-stat targets + weights, course/strategy), saveable as custom profiles
+- **Multi-turn planning** — Optional lookahead layer valuing energy/rest, early bond-building, and late-career stat-maxing
+- **Self-computed evaluation** — Reproduces the 評価点 stat curve (validated against real careers)
+- **Bonds & skill shop** — Support-card bond/event-chain progress and a skill-purchase advisor
+- **Multi-scenario support** — Command IDs from URA, Unity Cup, Trackblazer, UAF, Onsen, and other scenarios
+- **Configurable overlay** — Toggle tabs, tune recommendation/planner knobs; settings persist to `training_config.json`
 
 ## Building
 

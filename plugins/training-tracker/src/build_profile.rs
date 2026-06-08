@@ -20,8 +20,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::cm_model::Strategy;
 
-/// Stat order: [Speed, Stamina, Power, Guts, Wit]. Re-exported via
-/// [`crate::stat_targets::LABELS`].
+/// Stat order: [Speed, Stamina, Power, Guts, Wit].
 pub const STAT_LABELS: [&str; 5] = ["Speed", "Stamina", "Power", "Guts", "Wit"];
 
 /// Upper bound for a per-stat target (matches the highest reachable stat cap).

@@ -44,30 +44,35 @@ pub(super) fn plan_context(snap: &memory_reader::CareerSnapshot) -> planner::Pla
     }
 }
 
-pub(super) fn score_facilities(snap: &memory_reader::CareerSnapshot) -> [recommend::FacilityScore; 5] {
-    let caps = snap.stat_caps;
-    // Build the objective/CM context from the active build profile + target course
-    // data. Missing course params degrade gracefully to the Rank objective.
+/// Build the objective/CM scoring context from the active build profile + target
+/// course data. Missing course params degrade gracefully to the Rank objective.
+pub(super) fn scoring_context(snap: &memory_reader::CareerSnapshot) -> recommend::ScoringContext<'static> {
     let profile = build_profile::active();
     let course = course_data::course_params(profile.target_course_id);
     let aptitudes = course
         .map(|c| recommend::cm_aptitudes_for_course(&snap.aptitudes, c))
         .unwrap_or_default();
-    let ctx = recommend::ScoringContext {
+    recommend::ScoringContext {
         objective: profile.objective,
         stat_weights: profile.stat_weights,
         course,
         aptitudes,
         strategy: profile.strategy,
-    };
+    }
+}
+
+pub(super) fn score_facilities(
+    snap: &memory_reader::CareerSnapshot,
+    ctx: &recommend::ScoringContext,
+) -> [recommend::FacilityScore; 5] {
     recommend::score_facilities(
         &recommend::Inputs {
             current: [snap.speed, snap.stamina, snap.power, snap.guts, snap.wiz],
             per_stat_gains: &snap.per_stat_gains,
-            caps,
+            caps: snap.stat_caps,
             targets: stat_targets::targets(),
             failure_rates: snap.failure_rates,
-            ctx,
+            ctx: *ctx,
         },
         &recommend::params(),
     )
