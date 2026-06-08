@@ -159,9 +159,11 @@ N-turn rollout, to stay within the render-thread budget.
 2. **Bond / rainbow lookahead** — training a support that is *near* the friendship
    (rainbow) threshold now pays off over future turns. Modelled as an
    early-career-weighted per-facility uplift (`near_rainbow_pressure`). The
-   per-facility pressure must be supplied by the caller; we do **not** yet read
-   per-facility support placement live, so production passes `None` and this term
-   degrades to greedy (the math + API are in place for when placement is wired).
+   per-facility pressure is read **live**: `memory_reader::command_info` walks each
+   facility's `TurnInfo.TrainingHorseList`, reads every present non-guest support's
+   bond gauge (`TrainingHorse.GetEvaluation().get_Value()`), maps each through
+   `near_rainbow_pressure`, and combines them as a soft-OR. It degrades to greedy
+   when no partner is near the threshold.
 3. **Career-phase weighting** — late in the career, facilities that close a
    distance-from-target gap are boosted (`stat_deficits`), shifting the plan from
    bond-building early to stat-maxing late.
@@ -216,9 +218,6 @@ unchanged across all objectives.
 
 ## Known limitations
 
-- **Bond placement not read live.** The bond/rainbow lookahead is implemented and
-  tested but inert in-game until per-facility support placement (training-partner
-  array) is read — a separate IL2CPP effort. Until then it degrades to greedy.
 - **SP excluded.** Skill points granted by training are not modelled directly (Wit
   still scores via its stat gains / no-soft-cap term). SP→skill→eval is indirect.
 - **Shallow lookahead.** The planner is a discounted closed-form heuristic, not a

@@ -29,8 +29,8 @@ pub(super) fn build_stats(snap: &memory_reader::CareerSnapshot) -> [StatRow; 5] 
 }
 
 /// Build the multi-turn planner context from the live snapshot + active targets.
-/// `bond_pressure` is left `None` (per-facility support placement is not read
-/// live), so the bond term degrades to greedy until that signal is wired.
+/// `bond_pressure` comes from each facility's present supports (their bond gauge
+/// vs the rainbow threshold), read live into the snapshot.
 pub(super) fn plan_context(snap: &memory_reader::CareerSnapshot) -> planner::PlannerContext {
     let current = [snap.speed, snap.stamina, snap.power, snap.guts, snap.wiz];
     planner::PlannerContext {
@@ -40,7 +40,7 @@ pub(super) fn plan_context(snap: &memory_reader::CareerSnapshot) -> planner::Pla
         current_turn: snap.current_turn,
         failure_rates: snap.failure_rates,
         stat_deficit: planner::stat_deficits(current, stat_targets::targets(), snap.stat_caps),
-        bond_pressure: None,
+        bond_pressure: Some(snap.per_facility_bond_pressure),
     }
 }
 

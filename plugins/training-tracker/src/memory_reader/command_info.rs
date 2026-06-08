@@ -21,7 +21,7 @@ use std::sync::Mutex;
 use hachimi_plugin_sdk::Sdk;
 
 use super::il2cpp::{
-    call_i32, call_obj, call_obj_with_i32, dict_try_get_obj, read_obscured_int_field, resolve_obj_method,
+    call_bool, call_i32, call_obj, call_obj_with_i32, dict_try_get_obj, read_obscured_int_field, resolve_obj_method,
 };
 
 /// `Gallop.SingleModeDefine.CommandType.Training`.
@@ -38,6 +38,11 @@ pub struct CommandInfo {
     pub stat_gain: i32,
     /// Per-stat gain [Speed, Stamina, Power, Guts, Wisdom].
     pub per_stat: [i32; 5],
+    /// Near-rainbow bond pressure `0..=1` from the supports present on this
+    /// facility this turn (soft-OR of each non-guest partner's
+    /// [`crate::planner::near_rainbow_pressure`]). Drives the multi-turn bond
+    /// lookahead; `0` when no partner is near the rainbow threshold.
+    pub bond_pressure: f32,
 }
 
 /// Read every training-facility command info for the current turn.
@@ -99,13 +104,69 @@ unsafe fn read_turn_info(ti: *mut c_void) -> CommandInfo {
         let bonus2 = read_param_dict(ti, "BonusParamIncDecInfoDic");
         let per_stat: [i32; 5] = std::array::from_fn(|s| main[s].0 + main[s].1 + bonus2[s].0 + bonus2[s].1);
         let stat_gain = per_stat.iter().sum();
+        let bond_pressure = read_partner_bond_pressure(ti);
         log_breakdown_on_change(command_id, &main, &bonus2);
         CommandInfo {
             command_id,
             failure_rate,
             stat_gain,
             per_stat,
+            bond_pressure,
         }
+    }
+}
+
+/// Near-rainbow bond pressure `0..=1` from a `TurnInfo`'s `TrainingHorseList`:
+/// each present non-guest support's bond value (`TrainingHorse.GetEvaluation()
+/// .get_Value()`) is mapped through [`crate::planner::near_rainbow_pressure`] and
+/// combined as a soft-OR `1 − ∏(1 − p_k)` (more near-rainbow supports ⇒ more
+/// future-turn value). `0` when the list is empty/unreadable (degrades to greedy).
+unsafe fn read_partner_bond_pressure(ti: *mut c_void) -> f32 {
+    // SAFETY: `ti` is a non-null IL2CPP TurnInfo; each call is null-guarded below.
+    unsafe {
+        let Some(m_list) = resolve_obj_method(ti, "get_TrainingHorseList", 0) else {
+            return 0.0;
+        };
+        let list = call_obj(ti, m_list);
+        if list.is_null() {
+            return 0.0;
+        }
+        let (Some(m_count), Some(m_item)) = (
+            resolve_obj_method(list, "get_Count", 0),
+            resolve_obj_method(list, "get_Item", 1),
+        ) else {
+            return 0.0;
+        };
+        let count = call_i32(list, m_count);
+        if !(0..=16).contains(&count) {
+            return 0.0;
+        }
+        let mut not_p = 1.0f32; // ∏(1 − p_k)
+        for i in 0..count {
+            let horse = call_obj_with_i32(list, m_item, i);
+            if horse.is_null() {
+                continue;
+            }
+            // Skip guest characters — they are not deck cards building toward rainbow.
+            if let Some(m_guest) = resolve_obj_method(horse, "get_IsGuest", 0) {
+                if call_bool(horse, m_guest) {
+                    continue;
+                }
+            }
+            let Some(m_eval) = resolve_obj_method(horse, "GetEvaluation", 0) else {
+                continue;
+            };
+            let eval = call_obj(horse, m_eval);
+            if eval.is_null() {
+                continue;
+            }
+            let Some(m_val) = resolve_obj_method(eval, "get_Value", 0) else {
+                continue;
+            };
+            let bond = call_i32(eval, m_val);
+            not_p *= 1.0 - crate::planner::near_rainbow_pressure(bond);
+        }
+        (1.0 - not_p).clamp(0.0, 1.0)
     }
 }
 

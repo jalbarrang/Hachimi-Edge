@@ -9,9 +9,10 @@
 //! 2. **Bond / rainbow lookahead** — training with a support that is *near* the
 //!    friendship (rainbow) threshold now pays off over future turns. Modelled as a
 //!    per-facility uplift, weighted toward the early career (front-load bonds). The
-//!    per-facility "near-rainbow pressure" must be supplied by the caller; when it
-//!    is unavailable (we do not read per-facility support placement live) the term
-//!    degrades to zero — i.e. back to greedy.
+//!    per-facility "near-rainbow pressure" is read live from each facility's
+//!    present supports (`memory_reader::command_info` walks the `TrainingHorseList`
+//!    bond gauges); it degrades to zero — back to greedy — when no partner is near
+//!    the threshold or the data is unavailable.
 //! 3. **Career-phase weighting** — late in the career, facilities that close a
 //!    distance-from-target gap ([`crate::build_profile`]) are boosted, shifting the
 //!    plan from bond-building early to stat-maxing late.
@@ -238,10 +239,8 @@ pub fn stat_deficits(current: [i32; 5], targets: [i32; 5], caps: [i32; 5]) -> [f
 /// bond approaches [`RAINBOW_BOND_THRESHOLD`] (closer ⇒ crosses sooner ⇒ more
 /// future-turn value), and is `0` once already rainbow (no further unlock). A
 /// helper for callers that *do* know per-facility support placement to build
-/// [`PlannerContext::bond_pressure`].
-// Consumed once per-facility support placement is read live (separate IL2CPP
-// effort, see deferred follow-up); the planner already accepts the result.
-#[allow(dead_code)]
+/// [`PlannerContext::bond_pressure`]. Consumed by `memory_reader::command_info`,
+/// which reads each facility's `TrainingHorseList` bond values live.
 #[must_use]
 pub fn near_rainbow_pressure(bond: i32) -> f32 {
     let b = bond.clamp(0, 100);
