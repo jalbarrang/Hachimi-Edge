@@ -2,10 +2,12 @@
 //! thresholds, used to parameterize the [`crate::cm_model`] survival/threshold
 //! math for a chosen target course.
 //!
-//! Loaded once at runtime from `course_params.json` next to the plugin DLL
-//! (copied there by the deploy script). Generated offline by the `course-data`
-//! tool (`cargo run -p course-data`) from master.mdb (`race_course_set` +
-//! `race_course_set_status`). Fetch master.mdb first with `fetch-master-db`.
+//! Loaded once at runtime from `course_params.json`, which the host downloads into
+//! the game data dir (the `hosted_data` TRACKER sync); for dev it falls back to a
+//! copy next to the plugin DLL (placed by `deploy-windows.ps1`). Generated offline
+//! by the `course-data` tool (`cargo run -p course-data`) from master.mdb
+//! (`race_course_set` + `race_course_set_status`; fetch master.mdb first with
+//! `fetch-master-db`), then published under `data/` via `tracker-data-manifest`.
 //!
 //! Keeping the data in a sidecar file (not bundled in the DLL) lets it be updated
 //! per game version without rebuilding. Mirrors [`crate::eval_data`].
@@ -13,12 +15,20 @@
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
+use hachimi_plugin_sdk::Sdk;
+
 use crate::cm_model::CourseParams;
 
 static TABLE: OnceLock<Option<HashMap<i32, CourseParams>>> = OnceLock::new();
 
-/// Path to the resource file (next to the plugin DLL / game exe).
+/// Path to the resource file: prefer the host-downloaded copy in the game data
+/// dir; fall back to next to the plugin DLL / game exe (dev + back-compat).
 fn resource_path() -> std::path::PathBuf {
+    if let Some(p) = Sdk::try_get().and_then(|sdk| sdk.host_data_path("course_params.json")) {
+        if p.is_file() {
+            return p;
+        }
+    }
     std::env::current_exe()
         .ok()
         .and_then(|p| p.parent().map(|dir| dir.join("course_params.json")))

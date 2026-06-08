@@ -49,7 +49,9 @@ impl Gui {
                 Hachimi::instance().updater.clone().check_for_updates(|_| {});
             }
             if widgets::secondary_button(ui, t!("menu.sync_gametora_data").into_owned()).clicked() {
-                Hachimi::instance().gametora_updater.clone().sync(true);
+                let hachimi = Hachimi::instance();
+                hachimi.gametora_updater.clone().sync(true);
+                hachimi.tracker_updater.clone().sync(true);
             }
         });
 

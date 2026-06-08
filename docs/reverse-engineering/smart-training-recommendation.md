@@ -135,11 +135,23 @@ legacy flat `stat_targets` field migrates into the default profile).
 The CM math needs per-course parameters (distance, surface, set-status stat
 thresholds). These are generated offline by `cargo run -p course-data` from
 master.mdb (`race_course_set` + `race_course_set_status`) into
-`assets/course_params.json` (107 courses), shipped as a sidecar next to the plugin
-DLL so it can be refreshed per game version without rebuilding. `course_data` loads
-it lazily and exposes `course_params(id)`, plus `course_label(id)` /
-`all_courses()` for the picker (racetrack name decoded from the `id / 100` track
-prefix: 101 Sapporo … 110 Kokura, 111 Ooi).
+`assets/course_params.json` (107 courses). `course_data` loads it lazily and
+exposes `course_params(id)`, plus `course_label(id)` / `all_courses()` for the
+picker (racetrack name decoded from the `id / 100` track prefix: 101 Sapporo …
+110 Kokura, 111 Ooi).
+
+### Data distribution (hosted download, not bundled)
+
+Neither `course_params.json` nor `skill_grades.json` is embedded in any binary or
+attached to a release. They are published in this repo under `data/` (regenerated
+locally with `cargo run -p tracker-data-manifest`, which also writes
+`data/manifest.json` = `filename -> blake3`) and **downloaded at runtime** by the
+host's `hosted_data` TRACKER sync into the game data dir — the same mechanism as
+the GameTora catalog. The plugin loaders (`course_data`, `eval_data`) resolve
+`host_data_path("<file>")` first, falling back to a copy next to the DLL for dev
+(`deploy-windows.ps1`). First launch downloads the files; because the loaders
+cache via `OnceLock`, a freshly-downloaded file is picked up on the next launch
+(consistent with the GameTora module).
 
 ---
 

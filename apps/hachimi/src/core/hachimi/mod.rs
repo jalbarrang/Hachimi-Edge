@@ -38,7 +38,7 @@ use crate::{
 
 use super::{
     game::{Game, Region},
-    gametora_data, ipc, template, template_filters, tl_repo, utils, Error, Interceptor,
+    hosted_data, ipc, template, template_filters, tl_repo, utils, Error, Interceptor,
 };
 
 pub const REPO_PATH: &str = "jalbarrang/hachimi-redux";
@@ -57,7 +57,10 @@ pub struct Hachimi {
     // Localized data
     pub localized_data: ArcSwap<LocalizedData>,
     pub tl_updater: Arc<tl_repo::Updater>,
-    pub gametora_updater: Arc<gametora_data::Updater>,
+    /// GameTora catalog snapshots sync.
+    pub gametora_updater: Arc<hosted_data::Updater>,
+    /// Training-tracker generated resources (skill_grades / course_params) sync.
+    pub tracker_updater: Arc<hosted_data::Updater>,
 
     // Character data
     pub chara_data: ArcSwap<CharacterData>,
@@ -149,7 +152,8 @@ impl Hachimi {
             // Don't load localized data initially since it might fail, logging the error is not possible here
             localized_data: ArcSwap::default(),
             tl_updater: Arc::default(),
-            gametora_updater: Arc::default(),
+            gametora_updater: Arc::new(hosted_data::Updater::new(&hosted_data::GAMETORA)),
+            tracker_updater: Arc::new(hosted_data::Updater::new(&hosted_data::TRACKER)),
 
             // Same with these
             chara_data: ArcSwap::default(),
@@ -360,10 +364,11 @@ impl Hachimi {
                 }
             });
         }
-        // Independent of the hachimi/translation update flow: refresh the GameTora
-        // data catalog (gated by its own config flag inside `sync`).
+        // Independent of the hachimi/translation update flow: refresh the hosted
+        // data sets (each gated by its own config flag inside `sync`).
         if !self.config.load().disable_auto_update_check {
             self.gametora_updater.clone().sync(false);
+            self.tracker_updater.clone().sync(false);
         }
     }
 }

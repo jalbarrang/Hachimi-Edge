@@ -1,23 +1,17 @@
 //! Hosted-data HTTP client: our published manifest + per-file snapshot fetch.
 //!
-//! Points at the repo's committed `data/gametora/` (served via raw GitHub, CDN-
-//! backed) rather than GameTora directly, so end users never hit GameTora. The
-//! upstream extraction runs in CI (`tools/gametora-sync`).
+//! Points at this repo's committed `data/` (served via raw GitHub, CDN-backed),
+//! generic over the base URL so any [`super::DataSet`] can be fetched.
 
 use fnv::FnvHashMap;
 use serde::Deserialize;
 
 use crate::core::{http, Error};
 
-/// Default hosted base URL (no trailing slash). Overridable via
-/// `config.gametora_data_url` for development/testing.
-pub(super) const DEFAULT_DATA_URL: &str =
-    "https://raw.githubusercontent.com/jalbarrang/hachimi-redux/main/data/gametora";
-
 const USER_AGENT: &str = concat!(
     "hachimi-redux/",
     env!("CARGO_PKG_VERSION"),
-    " (+https://github.com/jalbarrang/hachimi-redux; gametora-data)"
+    " (+https://github.com/jalbarrang/hachimi-redux; hosted-data)"
 );
 
 /// Our published manifest (`manifest.json`): `filename -> content hash`.

@@ -1,0 +1,8 @@
+{
+  "generated_at": "2026-06-08T05:24:32.746121300+00:00",
+  "source": "training-tracker assets (master.mdb)",
+  "files": {
+    "course_params.json": "b592b2b485d6912ebb6e274bbf5ac21bd865cc9e1bf4718d801a481f09e6f272",
+    "skill_grades.json": "a1e12d0137c4ece2b8f6d355e9538a303607b279e9254a0af6c442548abf1517"
+  }
+}

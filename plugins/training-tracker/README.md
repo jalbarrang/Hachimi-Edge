@@ -42,6 +42,12 @@ cargo build --release
    }
    ```
 
+The plugin's data resources (`skill_grades.json` for the evaluation estimate,
+`course_params.json` for the CM model) are **not** bundled with the DLL: the host
+downloads them into the game data dir on launch (the `hosted_data` sync, like the
+GameTora catalog) from the repo's published `data/`. For local development,
+`scripts/deploy-windows.ps1` drops them next to the DLL as a fallback.
+
 ## How It Works
 
 1. On plugin init, the UI section is registered with Hachimi's menu system

@@ -19,7 +19,7 @@ The installer supports both GUI and CLI/Unattended mode. To start in GUI mode, j
     - `--prompt-for-game-exit`: When enabled, the installer will display a dialog prompting the user to close the game if it is running. The dialog will continue to display until the user closes the game, or cancel the install process.
     - `--pre-install`: Also run pre-install checks. Ignored when uninstalling.
     - `--post-install`: Also run post-install tasks. Ignored when uninstalling.
-    - `--with-training-tracker`: Also install the bundled Training Tracker plugin (drops `hachimi_training_tracker.dll` + `skill_grades.json` and enables it in `config.json`). Requires a build with the `training_tracker` feature. Ignored when uninstalling; uninstall always removes the plugin.
+    - `--with-training-tracker`: Also install the bundled Training Tracker plugin (drops `hachimi_training_tracker.dll` and enables it in `config.json`). Its data resources (`skill_grades.json` / `course_params.json`) are **not** bundled — the host downloads them into the game data dir on launch. Requires a build with the `training_tracker` feature. Ignored when uninstalling; uninstall always removes the plugin.
     - `--launch-game`: Launch the game after the operation finishes successfully.
     - `--`: Arguments separator; any arguments put after it will be passed onto the game when using `--launch-game`.
 
@@ -27,8 +27,9 @@ In GUI mode an **"Install Training Tracker plugin"** checkbox (ticked by default
 
 # Building
 Put `hachimi.dll` in the root directory, build as any other rust application. For the
-Training Tracker feature, also place `hachimi_training_tracker.dll` and `skill_grades.json`
-in the root directory.
+Training Tracker feature, also place `hachimi_training_tracker.dll` in the root directory.
+(The plugin's `skill_grades.json` / `course_params.json` are no longer embedded — they are
+downloaded by the host at runtime, like the GameTora data.)
 
 - **MSRV:** v1.77
 - Features:

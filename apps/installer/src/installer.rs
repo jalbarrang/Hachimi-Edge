@@ -34,7 +34,6 @@ pub const GLOBAL_STEAM_ID: u32 = 3224770;
 pub const JP_STEAM_ID: u32 = 3564400;
 
 pub const TRACKING_TRACKER_DLL: &str = "hachimi_training_tracker.dll";
-pub const SKILL_GRADES_JSON: &str = "skill_grades.json";
 
 const DEVOVERRIDE_KEY: &str = r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options";
 
@@ -467,7 +466,7 @@ impl Installer {
     // ── Training Tracker plugin (optional component) ──
 
     /// Path to `config.json` (`<game_dir>/hachimi/config.json`), matching the host's
-    /// data-dir layout. The plugin DLL + `skill_grades.json` live in the game root.
+    /// data-dir layout. The plugin DLL lives in the game root.
     fn get_config_path(&self) -> Option<PathBuf> {
         Some(self.install_dir.as_ref()?.join("hachimi").join("config.json"))
     }
@@ -476,39 +475,29 @@ impl Installer {
         Some(self.install_dir.as_ref()?.join(TRACKING_TRACKER_DLL))
     }
 
-    fn get_skill_grades_path(&self) -> Option<PathBuf> {
-        Some(self.install_dir.as_ref()?.join(SKILL_GRADES_JSON))
-    }
-
-    /// Install the Training Tracker plugin: drop the DLL + `skill_grades.json` into the
-    /// game root and add the DLL to `windows.load_libraries` in `config.json`.
+    /// Install the Training Tracker plugin: drop the DLL into the game root and add
+    /// it to `windows.load_libraries` in `config.json`. The plugin's data resources
+    /// (`skill_grades.json` / `course_params.json`) are **not** bundled here — the
+    /// host downloads them into the game data dir on launch (see the `hosted_data`
+    /// TRACKER sync), the same as the GameTora catalog.
     #[cfg(feature = "training_tracker")]
     pub fn install_training_tracker(&self) -> Result<(), Error> {
         let dll_path = self.get_tracker_dll_path().ok_or(Error::NoInstallDir)?;
-        let grades_path = self.get_skill_grades_path().ok_or(Error::NoInstallDir)?;
 
         #[cfg(feature = "compress_bin")]
-        {
-            std::fs::write(&dll_path, include_bytes_zstd!("hachimi_training_tracker.dll", 19))?;
-            std::fs::write(&grades_path, include_bytes_zstd!("skill_grades.json", 19))?;
-        }
+        std::fs::write(&dll_path, include_bytes_zstd!("hachimi_training_tracker.dll", 19))?;
         #[cfg(not(feature = "compress_bin"))]
-        {
-            std::fs::write(&dll_path, include_bytes!("../hachimi_training_tracker.dll").as_slice())?;
-            std::fs::write(&grades_path, include_bytes!("../skill_grades.json").as_slice())?;
-        }
+        std::fs::write(&dll_path, include_bytes!("../hachimi_training_tracker.dll").as_slice())?;
 
         self.set_plugin_enabled(TRACKING_TRACKER_DLL, true)
     }
 
-    /// Remove the Training Tracker plugin: delete its files and strip the
-    /// `load_libraries` entry. Missing files are ignored.
+    /// Remove the Training Tracker plugin: delete its DLL and strip the
+    /// `load_libraries` entry. Missing files are ignored. The host-downloaded data
+    /// resources live in the game data dir and are left as harmless cache.
     pub fn uninstall_training_tracker(&self) -> Result<(), Error> {
         if let Some(dll_path) = self.get_tracker_dll_path() {
             _ = std::fs::remove_file(dll_path);
-        }
-        if let Some(grades_path) = self.get_skill_grades_path() {
-            _ = std::fs::remove_file(grades_path);
         }
         self.set_plugin_enabled(TRACKING_TRACKER_DLL, false)
     }
