@@ -21,7 +21,28 @@ Or share them and ruin it for the dozens of Hachimi users. It's up to you.
 Do what you must, but we would respectfully request that you try to label the game as "UM:PD" or "The Honse Game" instead of the actual name of the game, to avoid search engine parsing.
 
 # ⚠️ Incompatible with upstream Hachimi plugins
-This fork ships its own native plugin API (host API v9). **Plugins built for upstream Hachimi will not load with HachimiRedux**, and the training tracker plugin distributed here will not load on upstream Hachimi. Only use the DLLs built from this repository together. Mixing builds can fail to load or crash the game.
+This fork ships its own native plugin API (host API v9). **Plugins built for upstream Hachimi are not compatible with HachimiRedux**, and the training tracker plugin distributed here will not load on upstream Hachimi. Prefer DLLs built from this repository, and use them together. Mixing builds can fail to load or crash the game.
+
+## Legacy plugin compatibility (opt-in, limited)
+Manifest-less, legacy-ABI plugins (e.g. upstream Hachimi data-dumpers) can be loaded through an **opt-in compatibility path**. List the DLL under a `legacy_libraries` allowlist in `config.json`, in addition to `load_libraries`:
+
+```json
+{
+  "windows": {
+    "load_libraries": ["some_legacy_plugin.dll"],
+    "legacy_libraries": ["some_legacy_plugin.dll"]
+  }
+}
+```
+
+A legacy plugin only needs to export `hachimi_init`; the host skips its usual manifest/ABI check and loads it on trust. This support is **limited and unsupported**:
+
+- The plugin must rely **only on the stable vtable prefix** of the host API. Anything beyond it is undefined behaviour and can crash the game.
+- The host **cannot validate, track, or unload** a legacy plugin or its IL2CPP hooks. The DLL stays mapped for the lifetime of the process.
+- A warning is logged whenever a plugin loads via this path.
+- Entries in `legacy_libraries` must also appear in `load_libraries`.
+
+When in doubt, rebuild the plugin against this repository (host API v9) instead of relying on the legacy path.
 
 # Features
 - **High quality translations:** Hachimi comes with advanced translation features that help translations feel more natural (plural forms, ordinal numbers, etc.) and prevent introducing jank to the UI. It also supports translating most in-game components; no manual assets patching needed!
