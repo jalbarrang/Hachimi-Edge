@@ -23,6 +23,12 @@ pub(super) fn draw(
         ui.small("\u{26a0} target/cap reached — further training wasted");
     }
 
+    // `Off` hides the whole scoring + recommendation system (no suggestion, no
+    // CM status) — the cap warning above is factual stat state, so it stays.
+    if sctx.objective == Objective::Off {
+        return;
+    }
+
     let race_encouraged = recommend::scenario_encourages_racing(snap.scenario_command_base);
     let objective = recommend::effective_objective(sctx);
     let fallback = recommend::cm_fallback_active(sctx);
@@ -63,9 +69,10 @@ fn objective_tag(objective: Objective, fallback: bool) -> &'static str {
         "(Rank — no CM course)"
     } else {
         match objective {
-            Objective::Rank => "(Rank)",
             Objective::Cm => "(CM)",
-            Objective::Hybrid(_) => "(Hybrid)",
+            // `Off` never reaches here (the footer returns early); Rank is the
+            // default caption.
+            Objective::Off | Objective::Rank => "(Rank)",
         }
     }
 }
@@ -76,15 +83,21 @@ fn draw_cm_status(ui: &mut egui::Ui, snap: &memory_reader::CareerSnapshot, sctx:
     let Some(course) = sctx.course else {
         return;
     };
-    let need = cm_model::stamina_survival_threshold(
+    let cond = sctx.ground_condition;
+    let need = cm_model::effective_stamina_need(
         course,
         sctx.strategy,
         snap.guts.max(1) as f64,
         snap.speed.max(1) as f64,
         sctx.aptitudes.distance_grade,
+        cond,
+        sctx.recovery_heal_bp,
     )
     .round() as i32;
-    let knee = cm_model::power_knee(course).round() as i32;
+    // Raise the displayed power knee by the (negative) ground power penalty, so
+    // the target reflects the chosen track condition / surface.
+    let knee =
+        (cm_model::power_knee(course) - cm_model::ground_power_modifier(course.surface, cond) as f64).round() as i32;
 
     let green = egui::Color32::from_rgb(120, 220, 120);
     let red = egui::Color32::from_rgb(235, 120, 120);
@@ -99,9 +112,10 @@ fn draw_cm_status(ui: &mut egui::Ui, snap: &memory_reader::CareerSnapshot, sctx:
         };
         ui.colored_label(sc, format!("Stamina {}/{} {}", snap.stamina, need, smark));
         ui.label("\u{2022}");
-        // Speed toward the soft cap.
-        let speed_col = if snap.speed >= cm_model::SOFT_CAP { green } else { amber };
-        ui.colored_label(speed_col, format!("Speed {}/{}", snap.speed, cm_model::SOFT_CAP));
+        // Speed toward the soft cap (raised by the ground speed penalty on heavy).
+        let speed_cap = cm_model::SOFT_CAP - cm_model::ground_speed_modifier(course.surface, cond);
+        let speed_col = if snap.speed >= speed_cap { green } else { amber };
+        ui.colored_label(speed_col, format!("Speed {}/{}", snap.speed, speed_cap));
         ui.label("\u{2022}");
         // Power toward the knee.
         let power_col = if snap.power >= knee { green } else { amber };

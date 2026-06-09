@@ -58,6 +58,8 @@ pub(super) fn scoring_context(snap: &memory_reader::CareerSnapshot) -> recommend
         course,
         aptitudes,
         strategy: profile.strategy,
+        ground_condition: profile.ground_condition,
+        recovery_heal_bp: crate::gametora_data::recovery_heal_bp_total(&profile.recovery_skill_ids) as f64,
     }
 }
 
@@ -83,6 +85,7 @@ pub(super) fn draw(
     snap: &memory_reader::CareerSnapshot,
     stats: &[StatRow; 5],
     rec: &[recommend::FacilityScore; 5],
+    show_scores: bool,
 ) -> bool {
     let mut any_capped = false;
     egui::Grid::new("tt_stats")
@@ -146,19 +149,23 @@ pub(super) fn draw(
             }
             ui.end_row();
 
-            ui.strong("Score");
-            for fs in rec {
-                if fs.known {
-                    if fs.is_best {
-                        ui.colored_label(egui::Color32::from_rgb(120, 220, 120), format!("\u{2605}{}", fs.score));
+            // The Score row is the recommendation surface; hidden when the
+            // objective is `Off`.
+            if show_scores {
+                ui.strong("Score");
+                for fs in rec {
+                    if fs.known {
+                        if fs.is_best {
+                            ui.colored_label(egui::Color32::from_rgb(120, 220, 120), format!("\u{2605}{}", fs.score));
+                        } else {
+                            ui.weak(fs.score.to_string());
+                        }
                     } else {
-                        ui.weak(fs.score.to_string());
+                        ui.weak("—");
                     }
-                } else {
-                    ui.weak("—");
                 }
+                ui.end_row();
             }
-            ui.end_row();
         });
     any_capped
 }

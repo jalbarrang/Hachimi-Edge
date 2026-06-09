@@ -979,6 +979,7 @@ version = "0.2.0"
 dependencies = [
  "hachimi-plugin-abi",
  "hachimi-plugin-sdk",
+ "png 0.17.16",
  "serde",
  "serde_json",
 ]

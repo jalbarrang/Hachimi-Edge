@@ -71,11 +71,15 @@ pub fn course_params(course_id: i32) -> Option<&'static CourseParams> {
     table()?.get(&course_id)
 }
 
-/// Racetrack display name from a course id's track prefix (`id / 100`). The JRA
-/// tracks are numbered 101..110 in their canonical order, with 111 a local (NAR)
-/// dirt track. Falls back to `Track NNN` for anything unexpected.
+/// Racetrack display name from a course id's track prefix (`id / 100`).
 fn racetrack_name(course_id: i32) -> String {
-    let track = course_id / 100;
+    track_name(course_id / 100)
+}
+
+/// Racetrack display name from a track id (`course_id / 100`). The JRA tracks are
+/// numbered 101..110 in their canonical order, with 111 a local (NAR) dirt
+/// track. Falls back to `Track NNN` for anything unexpected.
+pub fn track_name(track: i32) -> String {
     let name = match track {
         101 => "Sapporo",
         102 => "Hakodate",
@@ -107,6 +111,27 @@ pub fn course_label(course_id: i32) -> Option<String> {
         c.distance as i32,
         surface
     ))
+}
+
+/// Courses grouped by track id (`course_id / 100`), each track's list sorted by
+/// distance then id. Drives the cascading Track → Course picker. Empty when the
+/// resource is unavailable. Returns a `BTreeMap` so tracks iterate in id order.
+pub fn courses_by_track() -> std::collections::BTreeMap<i32, Vec<(i32, String)>> {
+    let mut map: std::collections::BTreeMap<i32, Vec<(i32, String)>> = std::collections::BTreeMap::new();
+    let Some(table) = table() else {
+        return map;
+    };
+    for &id in table.keys() {
+        let label = course_label(id).unwrap_or_else(|| format!("#{id}"));
+        map.entry(id / 100).or_default().push((id, label));
+    }
+    for courses in map.values_mut() {
+        courses.sort_by(|&(a, _), &(b, _)| {
+            let (da, db) = (table[&a].distance as i32, table[&b].distance as i32);
+            da.cmp(&db).then(a.cmp(&b))
+        });
+    }
+    map
 }
 
 /// All known `(course_id, label)` pairs, sorted by distance then track, for the
@@ -167,6 +192,13 @@ mod tests {
         assert_eq!(racetrack_name(10604), "Tokyo"); // 106 → Tokyo
         assert_eq!(racetrack_name(11101), "Ooi"); // 111 → Ooi (local dirt)
         assert_eq!(racetrack_name(99901), "Track 999"); // unknown → fallback
+    }
+
+    #[test]
+    fn track_name_decodes_track_id() {
+        assert_eq!(track_name(106), "Tokyo");
+        assert_eq!(track_name(109), "Hanshin");
+        assert_eq!(track_name(999), "Track 999");
     }
 
     /// The generated resource asset, if present, must parse cleanly.

@@ -9,6 +9,7 @@ use crate::class_dump;
 use crate::cm_model::{self, Strategy};
 use crate::config;
 use crate::course_data;
+use crate::gametora_data;
 use crate::memory_reader;
 use crate::overlay_cache;
 use crate::planner;
@@ -221,15 +222,12 @@ fn rec_row(
     ui.end_row();
 }
 
-/// Buffer for the "save profile as" name field (persists across frames).
-static SAVE_NAME: std::sync::Mutex<String> = std::sync::Mutex::new(String::new());
-
 /// Human label for an objective.
 fn objective_label(obj: Objective) -> &'static str {
     match obj {
+        Objective::Off => "Off",
         Objective::Rank => "Rank (評価点)",
         Objective::Cm => "CM (race power)",
-        Objective::Hybrid(_) => "Hybrid",
     }
 }
 
@@ -247,62 +245,100 @@ fn draw_build_profile(ui: &mut egui::Ui) {
     let mut changed = false;
     let mut commit = false;
 
-    // --- Objective selector (Rank | CM | Hybrid + blend) ---
-    egui::ComboBox::from_label("Objective")
-        .selected_text(objective_label(prof.objective))
-        .show_ui(ui, |ui| {
-            picked |= ui
-                .selectable_value(&mut prof.objective, Objective::Rank, objective_label(Objective::Rank))
-                .changed();
-            picked |= ui
-                .selectable_value(&mut prof.objective, Objective::Cm, objective_label(Objective::Cm))
-                .changed();
-            let is_hybrid = matches!(prof.objective, Objective::Hybrid(_));
-            if ui.selectable_label(is_hybrid, "Hybrid").clicked() && !is_hybrid {
-                prof.objective = Objective::Hybrid(0.5);
-                picked = true;
-            }
-        });
-    if let Objective::Hybrid(w) = prof.objective {
-        let mut wv = w;
-        let resp = ui.add(egui::Slider::new(&mut wv, 0.0..=1.0).text("CM blend (0 Rank … 1 CM)"));
-        if resp.changed() {
-            prof.objective = Objective::Hybrid(wv);
-            changed = true;
+    // --- Objective / strategy / race course on one aligned grid ---
+    let grouped = course_data::courses_by_track();
+    let first_track = grouped.keys().next().copied();
+    // Track is derived from the chosen course (fallback to the first track).
+    let mut track = if prof.target_course_id > 0 {
+        prof.target_course_id / 100
+    } else {
+        first_track.unwrap_or(0)
+    };
+    if let Some(ft) = first_track {
+        if !grouped.contains_key(&track) {
+            track = ft;
         }
-        commit |= resp.drag_stopped() || resp.lost_focus();
     }
-
-    // --- CM target: course + strategy (only meaningful when objective uses CM) ---
-    let courses = course_data::all_courses();
-    let course_text = if prof.target_course_id > 0 {
-        course_data::course_label(prof.target_course_id).unwrap_or_else(|| format!("#{}", prof.target_course_id))
+    let course_desc = if prof.target_course_id > 0 {
+        course_data::course_label(prof.target_course_id).unwrap_or_else(|| "— none —".to_owned())
     } else {
         "— none —".to_owned()
     };
-    if courses.is_empty() {
-        ui.small("\u{26a0} course data unavailable (run the course-data tool / deploy assets)");
-    } else {
-        egui::ComboBox::from_label("CM course")
-            .selected_text(course_text)
-            .height(320.0)
-            .show_ui(ui, |ui| {
-                picked |= ui.selectable_value(&mut prof.target_course_id, 0, "— none —").changed();
-                for (id, label) in &courses {
-                    picked |= ui.selectable_value(&mut prof.target_course_id, *id, label).changed();
-                }
-            });
-    }
-    egui::ComboBox::from_label("CM strategy")
-        .selected_text(prof.strategy.label())
-        .show_ui(ui, |ui| {
-            for s in Strategy::ALL {
-                picked |= ui.selectable_value(&mut prof.strategy, s, s.label()).changed();
+
+    egui::Grid::new("tt_profile_controls")
+        .num_columns(4)
+        .spacing([8.0, 6.0])
+        .show(ui, |ui| {
+            // Row 1: objective + running style.
+            ui.label("Objective");
+            egui::ComboBox::from_id_salt("tt_objective")
+                .width(150.0)
+                .selected_text(objective_label(prof.objective))
+                .show_ui(ui, |ui| {
+                    for obj in [Objective::Off, Objective::Rank, Objective::Cm] {
+                        picked |= ui
+                            .selectable_value(&mut prof.objective, obj, objective_label(obj))
+                            .changed();
+                    }
+                });
+            ui.label("Strategy");
+            egui::ComboBox::from_id_salt("tt_strategy")
+                .width(150.0)
+                .selected_text(prof.strategy.label())
+                .show_ui(ui, |ui| {
+                    for s in Strategy::ALL {
+                        picked |= ui.selectable_value(&mut prof.strategy, s, s.label()).changed();
+                    }
+                });
+            ui.end_row();
+
+            // Row 2: track + course + ground (only when course data is loaded).
+            if grouped.is_empty() {
+                ui.label("Track");
+                ui.weak("\u{26a0} course data unavailable (run the course-data tool / deploy assets)");
+                ui.end_row();
+            } else {
+                ui.label("Track");
+                egui::ComboBox::from_id_salt("tt_track")
+                    .width(150.0)
+                    .selected_text(course_data::track_name(track))
+                    .show_ui(ui, |ui| {
+                        for &t in grouped.keys() {
+                            if ui.selectable_label(t == track, course_data::track_name(t)).clicked() && t != track {
+                                if let Some(first) = grouped.get(&t).and_then(|v| v.first()) {
+                                    prof.target_course_id = first.0;
+                                    picked = true;
+                                }
+                            }
+                        }
+                    });
+                egui::ComboBox::from_id_salt("tt_course")
+                    .width(190.0)
+                    .height(320.0)
+                    .selected_text(course_desc)
+                    .show_ui(ui, |ui| {
+                        for (id, label) in grouped.get(&track).into_iter().flatten() {
+                            picked |= ui.selectable_value(&mut prof.target_course_id, *id, label).changed();
+                        }
+                    });
+                ui.horizontal(|ui| {
+                    ui.label("Ground");
+                    egui::ComboBox::from_id_salt("tt_ground")
+                        .width(110.0)
+                        .selected_text(prof.ground_condition.label())
+                        .show_ui(ui, |ui| {
+                            for c in cm_model::GroundCondition::ALL {
+                                picked |= ui.selectable_value(&mut prof.ground_condition, c, c.label()).changed();
+                            }
+                        });
+                });
+                ui.end_row();
             }
         });
 
-    // --- Survival advisory (live, when a CM course is set) ---
-    if prof.objective != Objective::Rank {
+    // --- Recovery skills + survival advisory (only under the CM objective) ---
+    if prof.objective == Objective::Cm {
+        draw_recovery_picker(ui, &mut prof, &mut picked);
         draw_survival_advisory(ui, &prof);
     }
 
@@ -349,9 +385,62 @@ fn draw_build_profile(ui: &mut egui::Ui) {
     if commit || picked {
         config::persist();
     }
+}
 
-    ui.add_space(6.0);
-    draw_profile_presets(ui);
+/// Persistent text filter for the recovery-skill picker.
+static RECOVERY_FILTER: std::sync::Mutex<String> = std::sync::Mutex::new(String::new());
+
+/// Searchable multi-select of the recovery skills the player plans to run. Their
+/// summed heal (basis points of max HP) lowers the stamina the recommender
+/// expects you to train (see `cm_model::effective_stamina_need`).
+fn draw_recovery_picker(ui: &mut egui::Ui, prof: &mut build_profile::BuildProfile, picked: &mut bool) {
+    let skills = gametora_data::recovery_skills();
+    if skills.is_empty() {
+        return; // catalog unavailable — advisory still works with 0 recovery
+    }
+    let count = prof.recovery_skill_ids.len();
+    egui::CollapsingHeader::new(format!("\u{1fa79} Planned recoveries ({count})"))
+        .id_salt("tt_recovery_picker")
+        .show(ui, |ui| {
+            let mut filter = RECOVERY_FILTER.lock().map(|g| g.clone()).unwrap_or_default();
+            if ui
+                .add(
+                    egui::TextEdit::singleline(&mut filter)
+                        .hint_text("filter by name")
+                        .desired_width(220.0),
+                )
+                .changed()
+            {
+                if let Ok(mut g) = RECOVERY_FILTER.lock() {
+                    *g = filter.clone();
+                }
+            }
+            let needle = filter.trim().to_lowercase();
+            egui::ScrollArea::vertical().max_height(170.0).show(ui, |ui| {
+                for rs in &skills {
+                    if !needle.is_empty() && !rs.name.to_lowercase().contains(&needle) {
+                        continue;
+                    }
+                    let mut on = prof.recovery_skill_ids.contains(&rs.id);
+                    let label = format!(
+                        "{} \u{2014} {:.1}% ({} bp)",
+                        rs.name,
+                        rs.heal_bp as f32 / 100.0,
+                        rs.heal_bp
+                    );
+                    if ui.checkbox(&mut on, label).changed() {
+                        if on {
+                            if !prof.recovery_skill_ids.contains(&rs.id) {
+                                prof.recovery_skill_ids.push(rs.id);
+                            }
+                        } else {
+                            prof.recovery_skill_ids.retain(|&id| id != rs.id);
+                        }
+                        *picked = true;
+                    }
+                }
+            });
+        });
 }
 
 /// Live stamina/speed/power advisory from the `cm_model` survival math, using the
@@ -362,76 +451,44 @@ fn draw_survival_advisory(ui: &mut egui::Ui, prof: &build_profile::BuildProfile)
         return;
     };
     let snap = overlay_cache::snapshot().filter(|s| s.is_playing);
-    let speed = snap
-        .as_ref()
-        .map(|s| s.speed)
-        .filter(|&v| v > 0)
-        .unwrap_or(prof.per_stat_target[0].max(1)) as f64;
-    let guts = snap
-        .as_ref()
-        .map(|s| s.guts)
-        .filter(|&v| v > 0)
-        .unwrap_or(prof.per_stat_target[3].max(1)) as f64;
+    // Prefer the build's *target* speed/guts so the requirement reflects the
+    // intended end-state (and visibly drops as the Guts target rises) rather than
+    // the career-start worst case; fall back to the live stat, then to 1.
+    let stat_for = |idx: usize, live: Option<i32>| -> f64 {
+        let target = prof.per_stat_target[idx];
+        if target > 0 {
+            target as f64
+        } else {
+            live.filter(|&v| v > 0).unwrap_or(1) as f64
+        }
+    };
+    let speed = stat_for(0, snap.as_ref().map(|s| s.speed));
+    let guts = stat_for(3, snap.as_ref().map(|s| s.guts));
     let apt = snap
         .as_ref()
         .map(|s| recommend::cm_aptitudes_for_course(&s.aptitudes, course))
         .unwrap_or_default();
-    let need = cm_model::stamina_survival_threshold(course, prof.strategy, guts, speed, apt.distance_grade);
-    let knee = cm_model::power_knee(course);
+    let cond = prof.ground_condition;
+    let heal_bp = gametora_data::recovery_heal_bp_total(&prof.recovery_skill_ids) as f64;
+    let raw = cm_model::stamina_survival_threshold(course, prof.strategy, guts, speed, apt.distance_grade, cond);
+    let need = cm_model::effective_stamina_need(course, prof.strategy, guts, speed, apt.distance_grade, cond, heal_bp);
+    // Soft/heavy/dirt lowers the effective speed/power, so the *raw* targets the
+    // player should aim for shift up by the (negative) ground penalty.
+    let speed_cap = cm_model::SOFT_CAP - cm_model::ground_speed_modifier(course.surface, cond);
+    let knee = cm_model::power_knee(course) - cm_model::ground_power_modifier(course.surface, cond) as f64;
+    let saved = (raw - need).round() as i32;
+    let recovery_note = if saved > 0 {
+        format!(" (−{saved} from {} recoveries)", prof.recovery_skill_ids.len())
+    } else {
+        String::new()
+    };
     ui.small(format!(
-        "\u{1f3c1} Stamina ≈ {} for max spurt + rush buffer • Speed soft cap {} • Power knee ≈ {}",
+        "\u{1f3c1} Stamina need ≈ {}{} (max spurt + rush buffer; lower with Guts) • Speed soft cap {} • Power knee ≈ {}",
         need.round() as i32,
-        cm_model::SOFT_CAP,
+        recovery_note,
+        speed_cap,
         knee.round() as i32,
     ));
-}
-
-/// Preset chooser + saved-profile load + save-as control.
-fn draw_profile_presets(ui: &mut egui::Ui) {
-    ui.small("Presets");
-    ui.horizontal_wrapped(|ui| {
-        for preset in build_profile::presets() {
-            if ui.small_button(&preset.name).on_hover_text(&preset.notes).clicked() {
-                build_profile::set_active(preset);
-                config::persist();
-            }
-        }
-    });
-
-    let saved = build_profile::saved();
-    if !saved.is_empty() {
-        ui.small("Saved");
-        ui.horizontal_wrapped(|ui| {
-            for p in &saved {
-                if ui.small_button(&p.name).clicked() {
-                    build_profile::set_active(p.clone());
-                    config::persist();
-                }
-            }
-        });
-    }
-
-    ui.horizontal(|ui| {
-        let mut name = SAVE_NAME.lock().map(|g| g.clone()).unwrap_or_default();
-        let resp = ui.add(
-            egui::TextEdit::singleline(&mut name)
-                .hint_text("profile name")
-                .desired_width(140.0),
-        );
-        if resp.changed() {
-            if let Ok(mut g) = SAVE_NAME.lock() {
-                *g = name.clone();
-            }
-        }
-        let trimmed = name.trim().to_owned();
-        if ui
-            .add_enabled(!trimmed.is_empty(), egui::Button::new("Save / rename"))
-            .clicked()
-        {
-            build_profile::save_active_as(&trimmed);
-            config::persist();
-        }
-    });
 }
 
 /// Multi-turn planner knobs (energy / bonds / career-phase lookahead).

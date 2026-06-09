@@ -317,6 +317,80 @@ pub fn skill(id: i64) -> Option<&'static Skill> {
     catalog().skills.get(&id)
 }
 
+/// A positive-recovery skill the player can plan to run: heal in **basis points**
+/// of max HP (the game's native unit; `cm_model` converts it to a stamina relief).
+#[derive(Debug, Clone)]
+pub struct RecoverySkill {
+    pub id: i64,
+    pub name: String,
+    pub heal_bp: i32,
+}
+
+/// Largest positive `type == 9` (recovery) effect value (basis points) in a raw
+/// `condition_groups` array, or `0` if none. Drains (negative values) are ignored.
+fn max_recovery_bp(groups: &Value) -> i32 {
+    let mut best = 0;
+    if let Some(arr) = groups.as_array() {
+        for g in arr {
+            let Some(effects) = g.get("effects").and_then(|e| e.as_array()) else {
+                continue;
+            };
+            for e in effects {
+                if e.get("type").and_then(serde_json::Value::as_i64) == Some(9) {
+                    if let Some(v) = e.get("value").and_then(serde_json::Value::as_i64) {
+                        best = best.max(v as i32);
+                    }
+                }
+            }
+        }
+    }
+    best
+}
+
+/// Heal basis points for one skill, checking the JP top-level and the Global
+/// (`loc.en`) condition groups, taking the larger.
+fn skill_recovery_bp(s: &Skill) -> i32 {
+    let top = max_recovery_bp(&s.condition_groups);
+    let en = s
+        .loc
+        .get("en")
+        .and_then(|en| en.get("condition_groups"))
+        .map(max_recovery_bp)
+        .unwrap_or(0);
+    top.max(en)
+}
+
+/// All positive-recovery skills, sorted by heal (desc) then name. Empty when the
+/// catalog is unavailable.
+#[must_use]
+pub fn recovery_skills() -> Vec<RecoverySkill> {
+    let mut out: Vec<RecoverySkill> = catalog()
+        .skills
+        .values()
+        .filter_map(|s| {
+            let heal_bp = skill_recovery_bp(s);
+            if heal_bp <= 0 {
+                return None;
+            }
+            let name = s.name_en.clone().or_else(|| s.jpname.clone())?;
+            Some(RecoverySkill {
+                id: s.id,
+                name,
+                heal_bp,
+            })
+        })
+        .collect();
+    out.sort_by(|a, b| b.heal_bp.cmp(&a.heal_bp).then_with(|| a.name.cmp(&b.name)));
+    out
+}
+
+/// Total heal basis points for a set of skill ids (unknown / non-recovery ids
+/// contribute 0).
+#[must_use]
+pub fn recovery_heal_bp_total(ids: &[i64]) -> i32 {
+    ids.iter().filter_map(|id| skill(*id)).map(skill_recovery_bp).sum()
+}
+
 /// Max event-chain / outing steps for a support card (the `Y` in `X/Y`).
 ///
 /// - Stat cards (speed/stamina/power/guts/intelligence): rarity formula R=0/SR=2/SSR=3
@@ -386,4 +460,36 @@ pub fn training_events(kind: EventKind) -> Option<Value> {
 #[must_use]
 pub fn raw_dict(file: &str) -> Option<Value> {
     load_file(file)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse(s: &str) -> Value {
+        serde_json::from_str(s).expect("valid test json")
+    }
+
+    #[test]
+    fn max_recovery_bp_reads_type9_value() {
+        // "Corner Recovery ○" shape: a recovery effect (type 9) worth 150 bp.
+        let groups = parse(r#"[{ "condition": "phase==1&corner!=0", "effects": [ { "type": 9, "value": 150 } ] }]"#);
+        assert_eq!(max_recovery_bp(&groups), 150);
+    }
+
+    #[test]
+    fn max_recovery_bp_ignores_non_recovery_and_drains() {
+        let groups = parse(
+            r#"[{ "effects": [ { "type": 1, "value": 9999 }, { "type": 9, "value": -300 } ] }, { "effects": [ { "type": 9, "value": 550 } ] }]"#,
+        );
+        // Negative (drain) ignored; non-recovery type ignored; takes the max positive.
+        assert_eq!(max_recovery_bp(&groups), 550);
+    }
+
+    #[test]
+    fn max_recovery_bp_zero_when_absent() {
+        let groups = parse(r#"[{ "effects": [ { "type": 2, "value": 100 } ] }]"#);
+        assert_eq!(max_recovery_bp(&groups), 0);
+        assert_eq!(max_recovery_bp(&serde_json::Value::Null), 0);
+    }
 }

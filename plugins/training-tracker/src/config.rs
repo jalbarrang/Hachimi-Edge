@@ -36,8 +36,9 @@ struct PersistedConfig {
     /// The active build profile (objective + targets + weights + course/strategy).
     #[serde(default)]
     build_profile: Option<BuildProfile>,
-    /// User-saved custom profiles.
-    #[serde(default)]
+    /// Legacy user-saved custom profiles. The save/load UI was removed; the field
+    /// is kept (ignored) so older config files still deserialize cleanly.
+    #[serde(default, skip_serializing)]
     saved_profiles: Vec<BuildProfile>,
 }
 
@@ -88,7 +89,7 @@ pub fn load() {
         ..BuildProfile::default()
     });
     build_profile::set_active(active);
-    build_profile::set_saved(cfg.saved_profiles);
+    let _ = cfg.saved_profiles; // legacy field; save/load UI removed
     tabs::set_enabled_mask(cfg.enabled_tabs);
     recommend::set_params(cfg.recommend);
     planner::set_params(cfg.planner);
@@ -116,7 +117,7 @@ pub fn persist() {
         planner: planner::params(),
         overlay_zoom: overlay_prefs::zoom(),
         build_profile: Some(active),
-        saved_profiles: build_profile::saved(),
+        saved_profiles: Vec::new(),
     };
     let Ok(bytes) = serde_json::to_vec_pretty(&cfg) else {
         return;

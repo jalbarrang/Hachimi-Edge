@@ -14,6 +14,10 @@ use crate::memory_reader;
 
 mod bonds;
 mod constants;
+// Race-condition icon toggles (weather/season/time). Currently hidden from the
+// UI per product decision; kept dormant so it can be re-enabled cheaply.
+#[allow(dead_code)]
+mod icons;
 mod menu;
 mod overlay;
 mod scenario;

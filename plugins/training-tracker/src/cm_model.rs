@@ -37,6 +37,74 @@ pub enum Surface {
     Dirt,
 }
 
+/// Track (baba) condition. Discriminants match the game / uma-sim convention
+/// (Firm = 1 … Heavy = 4) so the ground-modifier tables index directly. `Firm`
+/// is the neutral baseline (zero penalty) and the default for planning.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum GroundCondition {
+    /// 良 — firm/baseline: no penalty.
+    #[default]
+    Firm,
+    /// 稍重 — good.
+    Good,
+    /// 重 — soft.
+    Soft,
+    /// 不良 — heavy: largest penalty.
+    Heavy,
+}
+
+impl GroundCondition {
+    /// All conditions, in game order, for UI pickers.
+    pub const ALL: [GroundCondition; 4] = [
+        GroundCondition::Firm,
+        GroundCondition::Good,
+        GroundCondition::Soft,
+        GroundCondition::Heavy,
+    ];
+
+    /// Short English label for the UI.
+    pub fn label(self) -> &'static str {
+        match self {
+            GroundCondition::Firm => "Firm",
+            GroundCondition::Good => "Good",
+            GroundCondition::Soft => "Soft",
+            GroundCondition::Heavy => "Heavy",
+        }
+    }
+
+    /// 1-based index (Firm = 1 … Heavy = 4) into the ground-modifier tables.
+    fn index(self) -> usize {
+        match self {
+            GroundCondition::Firm => 1,
+            GroundCondition::Good => 2,
+            GroundCondition::Soft => 3,
+            GroundCondition::Heavy => 4,
+        }
+    }
+}
+
+/// Ground (surface × condition) **flat speed penalty** applied to the effective
+/// in-race stat (port of uma-sim `GROUND_SPEED_MODIFIER`). Outer index is
+/// `surface as usize` (0 = Turf, 1 = Dirt); inner index is the condition's
+/// 1-based index (column 0 unused). Only Heavy penalizes speed (−50, both
+/// surfaces).
+const GROUND_SPEED_MODIFIER: [[i32; 5]; 2] = [[0, 0, 0, 0, -50], [0, 0, 0, 0, -50]];
+
+/// Ground (surface × condition) **flat power penalty** (port of uma-sim
+/// `GROUND_POWER_MODIFIER`). Same indexing as [`GROUND_SPEED_MODIFIER`]. Dirt is
+/// power-hungry even on firm ground.
+const GROUND_POWER_MODIFIER: [[i32; 5]; 2] = [[0, 0, 0, -50, -50], [0, -100, -50, -100, -100]];
+
+/// Flat speed penalty (≤ 0) for a surface and ground condition.
+pub fn ground_speed_modifier(surface: Surface, condition: GroundCondition) -> i32 {
+    GROUND_SPEED_MODIFIER[surface as usize][condition.index()]
+}
+
+/// Flat power penalty (≤ 0) for a surface and ground condition.
+pub fn ground_power_modifier(surface: Surface, condition: GroundCondition) -> i32 {
+    GROUND_POWER_MODIFIER[surface as usize][condition.index()]
+}
+
 /// Running style. Discriminant follows the game / uma-sim convention
 /// (FrontRunner = 1 … Runaway = 5) so HP-coefficient lookups index directly.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -63,14 +131,14 @@ impl Strategy {
         Strategy::Runaway,
     ];
 
-    /// Short English label (with the JP romanization) for the UI.
+    /// Short English label for the UI (no JP romanization).
     pub fn label(self) -> &'static str {
         match self {
-            Strategy::FrontRunner => "Front (nige)",
-            Strategy::PaceChaser => "Pace (senko)",
-            Strategy::LateSurger => "Late (sashi)",
-            Strategy::EndCloser => "End (oikomi)",
-            Strategy::Runaway => "Runaway (oonige)",
+            Strategy::FrontRunner => "Front",
+            Strategy::PaceChaser => "Pace",
+            Strategy::LateSurger => "Late",
+            Strategy::EndCloser => "End",
+            Strategy::Runaway => "Runaway",
         }
     }
 
@@ -299,6 +367,41 @@ pub fn rush_buffer_stamina(distance: f64) -> f64 {
     45.0 + t * (180.0 - 45.0)
 }
 
+/// Stamina headroom freed up by recovery skills totalling `heal_bp` **basis
+/// points** of max HP, given a `base_stamina` to size max HP against.
+///
+/// Game formula (uma-sim `calculate_equivalent_stamina`): a heal of `bp` basis
+/// points restores `(bp/10000)·maxHP` HP, and one stamina point buys
+/// `0.8·hp_coef` HP of max, so the heal is worth `actual / (0.8·hp_coef)`
+/// stamina. With `maxHP = 0.8·hp_coef·stamina + distance`, this simplifies to
+/// `(bp/10000)·(stamina + distance/(0.8·hp_coef))`. Recovery skills carry
+/// different `bp` values (tiers 35…950), so the caller sums the player's planned
+/// set. Proc randomness is ignored — this is the deliberate plan.
+pub fn recovery_stamina_relief(heal_bp: f64, course: &CourseParams, strategy: Strategy, base_stamina: f64) -> f64 {
+    if heal_bp <= 0.0 {
+        return 0.0;
+    }
+    (heal_bp / 10000.0) * (base_stamina.max(0.0) + course.distance / (0.8 * strategy.hp_coef()))
+}
+
+/// The stamina the player actually needs to **train**, given a plan to run
+/// recovery skills totalling `recovery_heal_bp` basis points: the survival floor
+/// minus the recovery headroom (sized against the floor itself), never dropping
+/// below the rush buffer (so it never implies "no stamina").
+pub fn effective_stamina_need(
+    course: &CourseParams,
+    strategy: Strategy,
+    guts: f64,
+    speed: f64,
+    distance_grade: i32,
+    condition: GroundCondition,
+    recovery_heal_bp: f64,
+) -> f64 {
+    let floor = stamina_survival_threshold(course, strategy, guts, speed, distance_grade, condition);
+    let relief = recovery_stamina_relief(recovery_heal_bp, course, strategy, floor);
+    (floor - relief).max(rush_buffer_stamina(course.distance))
+}
+
 /// Stamina needed to sustain a **full max last-spurt** for this course/strategy,
 /// including the rush buffer. This is the dominant CM non-linearity: below it the
 /// trainee gasses out and cannot spurt; above it, extra stamina is mostly wasted.
@@ -315,14 +418,19 @@ pub fn stamina_survival_threshold(
     guts: f64,
     speed: f64,
     distance_grade: i32,
+    condition: GroundCondition,
 ) -> f64 {
     let distance = course.distance;
     let bs = base_speed(distance);
     let ground = ground_consumption_coef(course.surface);
     let g_mod = guts_modifier(guts);
 
+    // Soft/heavy ground lowers effective speed, so the trainee runs (and burns)
+    // a little slower; use the condition-adjusted speed for the spurt estimate.
+    let eff_speed = (speed + ground_speed_modifier(course.surface, condition) as f64).max(1.0);
+
     let mid_speed = mid_target_speed(strategy, bs);
-    let spurt_speed = last_spurt_speed(speed, guts, strategy, distance_grade, bs);
+    let spurt_speed = last_spurt_speed(eff_speed, guts, strategy, distance_grade, bs);
 
     // Non-spurt portion: start → 2/3 of the course at mid target speed (Guts off).
     let nonspurt_len = distance * 2.0 / 3.0;
@@ -350,8 +458,13 @@ const SPEED_DERIV_UUTIL: f64 = 1000.0; // m/s → uutil
 const STAMINA_UNLOCK_UUTIL: f64 = 9.0;
 /// Smoothing width (stamina points) of the survival knee.
 const STAMINA_KNEE_WIDTH: f64 = 120.0;
-/// Converts a power-driven acceleration gain into an approximate m/s-equivalent.
-const POWER_ACCEL_TO_SPEED: f64 = 0.9;
+/// Converts a power-driven acceleration *derivative* into an approximate
+/// m/s-equivalent. This folds in the game's small acceleration coefficient
+/// (≈0.0006) that the Speed branch carries as its `0.002` term — without it the
+/// raw `0.5·√500/√power` derivative (~0.8) is ~190× the Speed per-point value and
+/// makes Power dominate every facility. Calibrated so `mv_power` at low power
+/// (~200) is a touch above `mv_speed`, tapering to ~0 past the course knee.
+const POWER_ACCEL_TO_SPEED: f64 = 0.01;
 /// Power "enough" knee center before the surface/distance adjustment.
 const POWER_KNEE_BASE: f64 = 900.0;
 /// Gentle, never-zero Wit value (skill-proc consistency; no soft cap).
@@ -374,10 +487,18 @@ pub fn stat_marginal_value(
     course: &CourseParams,
     strategy: Strategy,
     apt: Aptitudes,
+    condition: GroundCondition,
+    recovery_heal_bp: f64,
 ) -> f64 {
-    let speed = current[StatKind::Speed.index()] as f64;
+    // Soft/heavy ground (and dirt) applies a flat penalty to the effective
+    // in-race speed/power, so a given target needs more *raw* stat to reach the
+    // same curve position (soft cap / power knee shift up). The marginal
+    // derivative is unchanged; only where we sit on the curve moves.
+    let speed =
+        (current[StatKind::Speed.index()] as f64 + ground_speed_modifier(course.surface, condition) as f64).max(1.0);
     let stamina = current[StatKind::Stamina.index()] as f64;
-    let power = current[StatKind::Power.index()] as f64;
+    let power =
+        (current[StatKind::Power.index()] as f64 + ground_power_modifier(course.surface, condition) as f64).max(1.0);
     let guts = current[StatKind::Guts.index()] as f64;
     let wit = current[StatKind::Wit.index()] as f64;
 
@@ -396,7 +517,12 @@ pub fn stat_marginal_value(
         StatKind::Stamina => {
             // High below the survival floor, ~0 above (smooth knee). Crossing the
             // floor unlocks the full spurt, so deficient stamina dominates.
-            let floor = stamina_survival_threshold(course, strategy, guts, speed, apt.distance_grade);
+            // `speed` is already condition-adjusted above, so pass `Firm` here to
+            // avoid applying the ground speed penalty twice. Planned recovery
+            // skills lower the floor we actually need to train toward.
+            let base =
+                stamina_survival_threshold(course, strategy, guts, speed, apt.distance_grade, GroundCondition::Firm);
+            let floor = base - recovery_stamina_relief(recovery_heal_bp, course, strategy, base);
             let deficit = floor - stamina;
             STAMINA_UNLOCK_UUTIL
                 * SPEED_DERIV_UUTIL
@@ -418,12 +544,40 @@ pub fn stat_marginal_value(
             d_accel * POWER_ACCEL_TO_SPEED * SPEED_DERIV_UUTIL * knee_factor * overcap(power)
         }
         StatKind::Guts => {
-            // Minor: last-spurt term + HP saving. Small bump for short / front.
+            // Baseline: minor last-spurt + HP saving. Small bump for short / front.
             let g_eff = guts.max(1.0);
             let short = if course.distance <= 1600.0 { 1.4 } else { 1.0 };
             let front = matches!(strategy, Strategy::FrontRunner | Strategy::Runaway);
             let style = if front { 1.3 } else { 1.0 };
-            GUTS_UUTIL * short * style / g_eff.sqrt() * 10.0 * overcap(guts)
+            let baseline = GUTS_UUTIL * short * style / g_eff.sqrt() * 10.0 * overcap(guts);
+
+            // Stamina coupling: Guts lowers spurt HP burn, so it shrinks the
+            // survival floor. When stamina is *below* that floor, an extra Guts
+            // point is worth the stamina it frees up — valued in the same unit as
+            // stamina-below-floor. Vanishes once stamina clears the floor (no
+            // double-count). `speed` is already condition-adjusted ⇒ pass `Firm`.
+            // Planned recovery skills lower the floor (so Guts matters less once
+            // they cover the gap); the relief is sized against each base floor.
+            let base =
+                stamina_survival_threshold(course, strategy, guts, speed, apt.distance_grade, GroundCondition::Firm);
+            let base_next = stamina_survival_threshold(
+                course,
+                strategy,
+                guts + 1.0,
+                speed,
+                apt.distance_grade,
+                GroundCondition::Firm,
+            );
+            let floor = base - recovery_stamina_relief(recovery_heal_bp, course, strategy, base);
+            let floor_next = base_next - recovery_stamina_relief(recovery_heal_bp, course, strategy, base_next);
+            let stamina_saved_per_guts = (floor - floor_next).max(0.0);
+            let relief = STAMINA_UNLOCK_UUTIL
+                * SPEED_DERIV_UUTIL
+                * 0.001
+                * stamina_saved_per_guts
+                * logistic((floor - stamina) / STAMINA_KNEE_WIDTH);
+
+            baseline + relief
         }
         StatKind::Wit => {
             // Gentle, diminishing, never zero (no soft cap per uma.guide). Style
@@ -505,8 +659,8 @@ mod tests {
     fn survival_threshold_grows_with_distance() {
         let short = course(1600.0, Surface::Turf, vec![]);
         let long = course(2400.0, Surface::Turf, vec![]);
-        let t_short = stamina_survival_threshold(&short, Strategy::LateSurger, 400.0, 1000.0, 7);
-        let t_long = stamina_survival_threshold(&long, Strategy::LateSurger, 400.0, 1000.0, 7);
+        let t_short = stamina_survival_threshold(&short, Strategy::LateSurger, 400.0, 1000.0, 7, GroundCondition::Firm);
+        let t_long = stamina_survival_threshold(&long, Strategy::LateSurger, 400.0, 1000.0, 7, GroundCondition::Firm);
         assert!(
             t_long > t_short,
             "longer course needs more stamina ({t_short} -> {t_long})"
@@ -518,9 +672,9 @@ mod tests {
     #[test]
     fn survival_threshold_lower_for_better_hp_strategy() {
         let c = course(2400.0, Surface::Turf, vec![]);
-        let sashi = stamina_survival_threshold(&c, Strategy::LateSurger, 400.0, 1000.0, 7); // coef 1.0
-        let senko = stamina_survival_threshold(&c, Strategy::PaceChaser, 400.0, 1000.0, 7); // coef 0.89
-                                                                                            // Worse conversion (senko) needs MORE stamina for the same HP.
+        let sashi = stamina_survival_threshold(&c, Strategy::LateSurger, 400.0, 1000.0, 7, GroundCondition::Firm); // coef 1.0
+        let senko = stamina_survival_threshold(&c, Strategy::PaceChaser, 400.0, 1000.0, 7, GroundCondition::Firm); // coef 0.89
+                                                                                                                   // Worse conversion (senko) needs MORE stamina for the same HP.
         assert!(senko > sashi);
     }
 
@@ -538,6 +692,8 @@ mod tests {
                 distance_grade: 7,
                 surface_grade: 7,
             },
+            GroundCondition::Firm,
+            0.0,
         );
         let above = stat_marginal_value(
             StatKind::Speed,
@@ -548,6 +704,8 @@ mod tests {
                 distance_grade: 7,
                 surface_grade: 7,
             },
+            GroundCondition::Firm,
+            0.0,
         );
         assert!(
             below > above,
@@ -562,7 +720,7 @@ mod tests {
             distance_grade: 7,
             surface_grade: 7,
         };
-        let floor = stamina_survival_threshold(&c, Strategy::LateSurger, 400.0, 1100.0, 7);
+        let floor = stamina_survival_threshold(&c, Strategy::LateSurger, 400.0, 1100.0, 7, GroundCondition::Firm);
         let low_stam = (floor - 250.0).max(50.0) as i32;
         let high_stam = (floor + 350.0) as i32;
         let deficient = stat_marginal_value(
@@ -571,6 +729,8 @@ mod tests {
             &c,
             Strategy::LateSurger,
             apt,
+            GroundCondition::Firm,
+            0.0,
         );
         let satisfied = stat_marginal_value(
             StatKind::Stamina,
@@ -578,6 +738,8 @@ mod tests {
             &c,
             Strategy::LateSurger,
             apt,
+            GroundCondition::Firm,
+            0.0,
         );
         assert!(
             deficient > satisfied * 3.0,
@@ -598,6 +760,8 @@ mod tests {
             &c,
             Strategy::PaceChaser,
             apt,
+            GroundCondition::Firm,
+            0.0,
         );
         let high = stat_marginal_value(
             StatKind::Power,
@@ -605,6 +769,8 @@ mod tests {
             &c,
             Strategy::PaceChaser,
             apt,
+            GroundCondition::Firm,
+            0.0,
         );
         assert!(low > high, "power value should taper past the knee ({low} vs {high})");
     }
@@ -616,13 +782,23 @@ mod tests {
             distance_grade: 7,
             surface_grade: 7,
         };
-        let mid = stat_marginal_value(StatKind::Wit, [1100, 700, 800, 400, 800], &c, Strategy::PaceChaser, apt);
+        let mid = stat_marginal_value(
+            StatKind::Wit,
+            [1100, 700, 800, 400, 800],
+            &c,
+            Strategy::PaceChaser,
+            apt,
+            GroundCondition::Firm,
+            0.0,
+        );
         let high = stat_marginal_value(
             StatKind::Wit,
             [1100, 700, 800, 400, 1400],
             &c,
             Strategy::PaceChaser,
             apt,
+            GroundCondition::Firm,
+            0.0,
         );
         assert!(mid > 0.0 && high > 0.0, "wit always has positive value");
         assert!(mid > high, "wit has diminishing (not zero) returns");
@@ -635,10 +811,250 @@ mod tests {
             distance_grade: 7,
             surface_grade: 7,
         };
-        let cur = [1000, 500, 800, 400, 600];
-        let guts = stat_marginal_value(StatKind::Guts, cur, &c, Strategy::LateSurger, apt);
-        let speed = stat_marginal_value(StatKind::Speed, cur, &c, Strategy::LateSurger, apt);
+        // Stamina kept well above the survival floor so it is NOT the bottleneck;
+        // then Guts is the minor stat it should normally be (vs Speed).
+        let cur = [1000, 1800, 800, 400, 600];
+        let guts = stat_marginal_value(
+            StatKind::Guts,
+            cur,
+            &c,
+            Strategy::LateSurger,
+            apt,
+            GroundCondition::Firm,
+            0.0,
+        );
+        let speed = stat_marginal_value(
+            StatKind::Speed,
+            cur,
+            &c,
+            Strategy::LateSurger,
+            apt,
+            GroundCondition::Firm,
+            0.0,
+        );
         assert!(guts > 0.0);
         assert!(guts < speed, "guts should be a minor stat vs speed ({guts} vs {speed})");
+    }
+
+    // ---- ground condition ----
+
+    #[test]
+    fn ground_modifiers_match_reference_tables() {
+        // Speed only penalized on Heavy (both surfaces).
+        assert_eq!(ground_speed_modifier(Surface::Turf, GroundCondition::Firm), 0);
+        assert_eq!(ground_speed_modifier(Surface::Turf, GroundCondition::Heavy), -50);
+        assert_eq!(ground_speed_modifier(Surface::Dirt, GroundCondition::Heavy), -50);
+        // Power: turf soft/heavy -50; dirt is power-hungry even on firm.
+        assert_eq!(ground_power_modifier(Surface::Turf, GroundCondition::Soft), -50);
+        assert_eq!(ground_power_modifier(Surface::Dirt, GroundCondition::Firm), -100);
+        assert_eq!(ground_power_modifier(Surface::Dirt, GroundCondition::Good), -50);
+    }
+
+    #[test]
+    fn heavy_ground_raises_power_value_for_a_given_raw_stat() {
+        // On heavy ground the effective power is lower, so a fixed raw power sits
+        // earlier on the knee curve => a marginal point is worth more. (Turf: Firm
+        // power penalty 0 vs Heavy -50.)
+        let c = course(2000.0, Surface::Turf, vec![]);
+        let apt = Aptitudes {
+            distance_grade: 7,
+            surface_grade: 7,
+        };
+        let cur = [1100, 700, 900, 400, 600];
+        let firm = stat_marginal_value(
+            StatKind::Power,
+            cur,
+            &c,
+            Strategy::PaceChaser,
+            apt,
+            GroundCondition::Firm,
+            0.0,
+        );
+        let heavy = stat_marginal_value(
+            StatKind::Power,
+            cur,
+            &c,
+            Strategy::PaceChaser,
+            apt,
+            GroundCondition::Heavy,
+            0.0,
+        );
+        assert!(
+            heavy > firm,
+            "heavy ground should make raw power more valuable ({heavy} vs {firm})"
+        );
+    }
+
+    #[test]
+    fn heavy_ground_shifts_speed_soft_cap_up() {
+        // Effective speed is -50 on heavy, so a raw speed just past 1200 still
+        // sits below the in-race soft cap => it keeps the higher marginal value.
+        let c = course(2000.0, Surface::Turf, vec![]);
+        let apt = Aptitudes {
+            distance_grade: 7,
+            surface_grade: 7,
+        };
+        let cur = [1230, 700, 800, 400, 600];
+        let firm = stat_marginal_value(
+            StatKind::Speed,
+            cur,
+            &c,
+            Strategy::PaceChaser,
+            apt,
+            GroundCondition::Firm,
+            0.0,
+        );
+        let heavy = stat_marginal_value(
+            StatKind::Speed,
+            cur,
+            &c,
+            Strategy::PaceChaser,
+            apt,
+            GroundCondition::Heavy,
+            0.0,
+        );
+        assert!(
+            heavy > firm,
+            "heavy ground should push the speed soft cap higher ({heavy} vs {firm})"
+        );
+    }
+
+    // ---- marginal-value cross-stat magnitude (scale sanity) ----
+
+    #[test]
+    fn power_marginal_is_same_order_as_speed() {
+        // Regression guard: Power once mis-scaled to ~190x Speed (missing the
+        // acceleration coefficient), which made it dominate every facility.
+        let c = course(2000.0, Surface::Turf, vec![]);
+        let apt = Aptitudes {
+            distance_grade: 8,
+            surface_grade: 8,
+        };
+        let cur = [155, 144, 197, 92, 127];
+        let speed = stat_marginal_value(
+            StatKind::Speed,
+            cur,
+            &c,
+            Strategy::LateSurger,
+            apt,
+            GroundCondition::Firm,
+            0.0,
+        );
+        let power = stat_marginal_value(
+            StatKind::Power,
+            cur,
+            &c,
+            Strategy::LateSurger,
+            apt,
+            GroundCondition::Firm,
+            0.0,
+        );
+        assert!(speed > 0.0 && power > 0.0);
+        assert!(
+            power < 5.0 * speed,
+            "power must be the same order as speed, not dominate ({power} vs {speed})"
+        );
+    }
+
+    #[test]
+    fn guts_gains_value_when_stamina_starved_on_long_course() {
+        // Guts lowers the survival floor, so on a long course where stamina is
+        // far below the floor an extra Guts point should be worth noticeably
+        // more than when stamina is comfortably above the floor.
+        // 2000m so the "satisfied" stamina is genuinely above the floor.
+        let c = course(2000.0, Surface::Turf, vec![]);
+        let apt = Aptitudes {
+            distance_grade: 8,
+            surface_grade: 8,
+        };
+        let starved = stat_marginal_value(
+            StatKind::Guts,
+            [1100, 300, 800, 400, 600],
+            &c,
+            Strategy::LateSurger,
+            apt,
+            GroundCondition::Firm,
+            0.0,
+        );
+        let satisfied = stat_marginal_value(
+            StatKind::Guts,
+            [1100, 1300, 800, 400, 600],
+            &c,
+            Strategy::LateSurger,
+            apt,
+            GroundCondition::Firm,
+            0.0,
+        );
+        assert!(
+            starved > satisfied * 1.5,
+            "guts should be worth more when stamina-starved ({starved} vs {satisfied})"
+        );
+    }
+
+    // ---- recovery relief ----
+
+    #[test]
+    fn recovery_relief_matches_game_formula() {
+        // (bp/10000)*(stamina + distance/(0.8*hp_coef)). LateSurger coef 1.0,
+        // 2400m, base stamina 1000, 600 bp => 0.06*(1000 + 2400/0.8) = 0.06*4000 = 240.
+        let c = course(2400.0, Surface::Turf, vec![]);
+        let relief = recovery_stamina_relief(600.0, &c, Strategy::LateSurger, 1000.0);
+        assert!((relief - 240.0).abs() < 1e-6, "got {relief}");
+        assert_eq!(recovery_stamina_relief(0.0, &c, Strategy::LateSurger, 1000.0), 0.0);
+    }
+
+    #[test]
+    fn effective_need_decreases_with_recovery_and_floors_at_rush_buffer() {
+        let c = course(2400.0, Surface::Turf, vec![]);
+        let none = effective_stamina_need(&c, Strategy::LateSurger, 400.0, 1000.0, 7, GroundCondition::Firm, 0.0);
+        let some = effective_stamina_need(&c, Strategy::LateSurger, 400.0, 1000.0, 7, GroundCondition::Firm, 600.0);
+        let lots = effective_stamina_need(
+            &c,
+            Strategy::LateSurger,
+            400.0,
+            1000.0,
+            7,
+            GroundCondition::Firm,
+            99999.0,
+        );
+        assert!(some < none, "recovery should lower the need ({some} vs {none})");
+        assert!(
+            lots >= rush_buffer_stamina(c.distance) - 1e-6,
+            "never below the rush buffer"
+        );
+    }
+
+    #[test]
+    fn recovery_lowers_stamina_marginal_value() {
+        // With enough recovery to clear the floor, an extra stamina point is
+        // worth much less than with no recovery (the floor is covered).
+        let c = course(2400.0, Surface::Turf, vec![]);
+        let apt = Aptitudes {
+            distance_grade: 7,
+            surface_grade: 7,
+        };
+        let cur = [1100, 700, 800, 400, 600];
+        let no_rec = stat_marginal_value(
+            StatKind::Stamina,
+            cur,
+            &c,
+            Strategy::LateSurger,
+            apt,
+            GroundCondition::Firm,
+            0.0,
+        );
+        let big_rec = stat_marginal_value(
+            StatKind::Stamina,
+            cur,
+            &c,
+            Strategy::LateSurger,
+            apt,
+            GroundCondition::Firm,
+            4000.0,
+        );
+        assert!(
+            big_rec < no_rec,
+            "recovery should de-value stamina ({big_rec} vs {no_rec})"
+        );
     }
 }

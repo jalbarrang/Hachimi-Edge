@@ -35,6 +35,10 @@ mod memory_reader;
 mod overlay_cache;
 mod overlay_prefs;
 mod planner;
+// Weather/Season/TimeOfDay race context. The selectors are hidden from the UI
+// for now; the enums + profile fields persist so they can be surfaced later.
+#[allow(dead_code)]
+mod race_context;
 mod rank_table;
 mod recommend;
 mod shop_hooks;

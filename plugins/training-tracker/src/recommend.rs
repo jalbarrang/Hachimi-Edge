@@ -25,7 +25,7 @@ use std::sync::Mutex;
 use serde::{Deserialize, Serialize};
 
 use crate::build_profile::Objective;
-use crate::cm_model::{self, Aptitudes, CourseParams, StatKind, Strategy, Surface};
+use crate::cm_model::{self, Aptitudes, CourseParams, GroundCondition, StatKind, Strategy, Surface};
 use crate::evaluation::{self, stat_score};
 use crate::stat_targets;
 
@@ -193,11 +193,13 @@ pub struct Inputs<'a> {
 /// Normalization factor converting summed CM marginal value (uutil, from
 /// [`cm_model::stat_marginal_value`]) into 評価点-equivalent points. This keeps a
 /// single comparable unit across objectives so (a) the failure/risk EV model —
-/// which is denominated in eval points — applies uniformly, and (b) the Hybrid
-/// blend of CM and Rank is meaningful. Rough heuristic (a typical good facility
-/// yields ~15 uutil ≈ ~55 eval pts ⇒ ~4×), tunable later; the scoring tests
-/// assert *shape*, not this magnitude.
-const CM_EVAL_SCALE: f64 = 4.0;
+/// denominated in eval points — applies uniformly, and (b) CM and Rank facility
+/// scores land in the same readable band (tens–low-hundreds), so switching the
+/// objective does not change the magnitude wildly. CM marginal value is ~flat
+/// across stats while the Rank curve is cheap-early / expensive-mid, so they can
+/// only be *comparable*, not identical, at every stat. Scoring tests assert shape
+/// + a magnitude band, not this exact value.
+const CM_EVAL_SCALE: f64 = 1.0;
 
 /// Stat slots in canonical order [Speed, Stamina, Power, Guts, Wit], for indexing
 /// CM marginal value by a facility's per-stat gain slot.
@@ -215,7 +217,7 @@ const STAT_KINDS: [StatKind; 5] = [
 /// rides along inside [`Inputs`] cheaply.
 #[derive(Clone, Copy)]
 pub struct ScoringContext<'a> {
-    /// Which objective to optimize (`Rank` | `Cm` | `Hybrid`).
+    /// Which objective to optimize (`Off` | `Rank` | `Cm`).
     pub objective: Objective,
     /// Per-stat weights from the active profile (CM only; Rank ignores them).
     pub stat_weights: [f32; 5],
@@ -226,6 +228,12 @@ pub struct ScoringContext<'a> {
     pub aptitudes: Aptitudes,
     /// Intended running style for the target CM race.
     pub strategy: Strategy,
+    /// Track (baba) condition for the target CM race (affects effective
+    /// speed/power, hence the stat targets). `Firm` is the neutral baseline.
+    pub ground_condition: GroundCondition,
+    /// Total heal (basis points of max HP) of the player's planned recovery
+    /// skills; lowers the stamina the scorer expects (see `cm_model`).
+    pub recovery_heal_bp: f64,
 }
 
 impl Default for ScoringContext<'_> {
@@ -238,18 +246,22 @@ impl Default for ScoringContext<'_> {
             course: None,
             aptitudes: Aptitudes::default(),
             strategy: Strategy::LateSurger,
+            ground_condition: GroundCondition::Firm,
+            recovery_heal_bp: 0.0,
         }
     }
 }
 
-/// The objective actually used for scoring, after graceful degradation: a CM or
-/// Hybrid objective falls back to Rank when no target-course params are available
-/// (so the scorer never needs course data it does not have).
+/// The objective actually used for scoring, after graceful degradation: a CM
+/// objective falls back to Rank when no target-course params are available (so
+/// the scorer never needs course data it does not have). `Off` is preserved (no
+/// fallback) — it means "show nothing".
 #[must_use]
 pub fn effective_objective(ctx: &ScoringContext) -> Objective {
     match ctx.objective {
-        other if ctx.course.is_some() => other,
-        _ => Objective::Rank,
+        Objective::Off => Objective::Off,
+        Objective::Cm if ctx.course.is_none() => Objective::Rank,
+        other => other,
     }
 }
 
@@ -352,20 +364,16 @@ fn facility_score(
 /// - `Cm` → Σ [`cm_model::stat_marginal_value`] over the facility's per-stat gains
 ///   (capped at the manual target/cap ceiling), weighted by `stat_weights`, scaled
 ///   into eval-equivalent units.
-/// - `Hybrid(b)` → `b·CM + (1−b)·Rank`, both already in the same eval-equivalent
-///   unit so the blend is meaningful.
+/// - `Off` → `0` (the UI hides scores under this objective, so the value is
+///   immaterial; we never claim one facility beats another).
 ///
 /// Falls back to Rank when CM is requested but no course is available
 /// ([`effective_objective`]).
 fn objective_delta(current: [i32; 5], gains: [i32; 5], caps: [i32; 5], targets: [i32; 5], ctx: &ScoringContext) -> f64 {
-    let rank = || projected_eval_delta(current, gains, caps, targets) as f64;
     match effective_objective(ctx) {
-        Objective::Rank => rank(),
+        Objective::Off => 0.0,
+        Objective::Rank => projected_eval_delta(current, gains, caps, targets) as f64,
         Objective::Cm => cm_eval_delta(current, gains, caps, targets, ctx),
-        Objective::Hybrid(b) => {
-            let b = b.clamp(0.0, 1.0) as f64;
-            b * cm_eval_delta(current, gains, caps, targets, ctx) + (1.0 - b) * rank()
-        }
     }
 }
 
@@ -391,7 +399,15 @@ fn cm_eval_delta(current: [i32; 5], gains: [i32; 5], caps: [i32; 5], targets: [i
         if useful == 0 {
             continue;
         }
-        let mv = cm_model::stat_marginal_value(STAT_KINDS[s], current, course, ctx.strategy, ctx.aptitudes);
+        let mv = cm_model::stat_marginal_value(
+            STAT_KINDS[s],
+            current,
+            course,
+            ctx.strategy,
+            ctx.aptitudes,
+            ctx.ground_condition,
+            ctx.recovery_heal_bp,
+        );
         total += mv * useful as f64 * ctx.stat_weights[s] as f64;
     }
     total * CM_EVAL_SCALE
@@ -464,6 +480,8 @@ mod tests {
                 surface_grade: 7,
             },
             strategy: Strategy::LateSurger,
+            ground_condition: GroundCondition::Firm,
+            recovery_heal_bp: 0.0,
         }
     }
 
@@ -640,7 +658,8 @@ mod tests {
     fn cm_stamina_dominates_below_survival_floor() {
         let c = course(2400.0, Surface::Turf, vec![]);
         let ctx = cm_ctx(&c, [1.0; 5]);
-        let floor = cm_model::stamina_survival_threshold(&c, Strategy::LateSurger, 400.0, 1100.0, 7);
+        let floor =
+            cm_model::stamina_survival_threshold(&c, Strategy::LateSurger, 400.0, 1100.0, 7, GroundCondition::Firm);
         let low = (floor - 250.0).max(50.0) as i32;
         let high = (floor + 350.0) as i32;
         let below = cm_eval_delta([1100, low, 800, 400, 600], [0, 20, 0, 0, 0], [0; 5], [0; 5], &ctx);
@@ -704,36 +723,33 @@ mod tests {
     }
 
     #[test]
-    fn hybrid_blends_between_rank_and_cm() {
+    fn off_objective_scores_zero() {
         let c = course(2000.0, Surface::Turf, vec![]);
         let cur = [800, 600, 600, 400, 600];
         let gains = [20, 0, 0, 0, 0];
         let base = cm_ctx(&c, [1.0; 5]);
+        // CM scores something positive...
         let cm = objective_delta(cur, gains, [0; 5], [0; 5], &base);
-        let rank = objective_delta(
+        assert!(cm > 0.0);
+        // ...but Off always scores zero (scoring is hidden under this objective).
+        let off = objective_delta(
             cur,
             gains,
             [0; 5],
             [0; 5],
             &ScoringContext {
-                objective: Objective::Rank,
+                objective: Objective::Off,
                 ..base
             },
         );
-        let hyb = objective_delta(
-            cur,
-            gains,
-            [0; 5],
-            [0; 5],
-            &ScoringContext {
-                objective: Objective::Hybrid(0.5),
+        assert_eq!(off, 0.0);
+        assert_eq!(
+            effective_objective(&ScoringContext {
+                objective: Objective::Off,
                 ..base
-            },
+            }),
+            Objective::Off
         );
-        let lo = rank.min(cm);
-        let hi = rank.max(cm);
-        assert!(hyb >= lo - 1e-9 && hyb <= hi + 1e-9, "hybrid lies between rank and cm");
-        assert!((hyb - 0.5 * (rank + cm)).abs() < 1e-6, "0.5 blend is the midpoint");
     }
 
     #[test]
@@ -771,5 +787,33 @@ mod tests {
         let b = cm_aptitudes_for_course(&apt, &dirt_long);
         assert_eq!(b.distance_grade, 4, "3000m → long grade");
         assert_eq!(b.surface_grade, 3, "dirt grade");
+    }
+
+    #[test]
+    fn cm_speed_facility_is_comparable_to_rank() {
+        // After recalibration, a Speed-only facility under CM should land in the
+        // same ballpark as the Rank objective (objectives are interchangeable),
+        // not orders of magnitude apart.
+        let c = course(2000.0, Surface::Turf, vec![]);
+        let cur = [800, 600, 600, 400, 600];
+        let gains = [18, 0, 0, 0, 0];
+        let base = cm_ctx(&c, [1.0; 5]);
+        let cm = objective_delta(cur, gains, [0; 5], [0; 5], &base);
+        let rank = objective_delta(
+            cur,
+            gains,
+            [0; 5],
+            [0; 5],
+            &ScoringContext {
+                objective: Objective::Rank,
+                ..base
+            },
+        );
+        assert!(cm > 0.0 && rank > 0.0);
+        let ratio = cm / rank;
+        assert!(
+            (0.3..=3.0).contains(&ratio),
+            "CM and Rank should be comparable in magnitude (cm {cm}, rank {rank}, ratio {ratio})"
+        );
     }
 }
