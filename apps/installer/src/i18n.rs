@@ -9,7 +9,7 @@ pub use rust_i18n::t;
 
 // (locale code, match prefix, display label). `init_locale` returns the first
 // entry whose prefix is a prefix of the user's Windows locale, so order matters:
-// region-specific variants must precede their language catch-alls. es-ES (Spain)
+// region-specific variants must precede their language fallbacks. es-ES (Spain)
 // is matched specifically; every other Spanish locale (es-CL, es-MX, es-AR, …)
 // falls through to es-419 (Latin American Spanish). Likewise pt-BR before pt-PT.
 pub const SUPPORTED_LOCALES: &[(&str, &str, &str)] = &[
