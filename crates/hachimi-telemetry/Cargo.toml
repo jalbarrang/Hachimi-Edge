@@ -1,0 +1,47 @@
+[package]
+name = "hachimi-telemetry"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "Shared protobuf telemetry emitter (HTTP webhook) for Hachimi plugins"
+
+[lib]
+name = "hachimi_telemetry"
+
+# ============================================================================
+# Lint Configuration — mirrors core crate policy
+# CI runs `clippy -- -D warnings` so all warns become errors in pipeline.
+# ============================================================================
+[lints.rust]
+unsafe_op_in_unsafe_fn = "warn"
+improper_ctypes = "warn"
+improper_ctypes_definitions = "warn"
+non_ascii_idents = "deny"
+unnecessary_transmutes = "allow"
+
+[lints.clippy]
+correctness = { level = "deny", priority = -1 }
+suspicious = { level = "warn", priority = -1 }
+style = { level = "warn", priority = -1 }
+complexity = { level = "warn", priority = -1 }
+perf = { level = "warn", priority = -1 }
+
+# Explicitly allow
+module_name_repetitions = "allow"
+too_many_arguments = "allow"
+wildcard_imports = "allow"
+cast_lossless = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+doc_markdown = "allow"
+
+[dependencies]
+prost = "0.13"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[build-dependencies]
+prost-build = "0.13"
+protox = "0.7"
