@@ -23,8 +23,17 @@ pub enum Language {
     #[serde(rename = "es")]
     Spanish,
 
+    #[serde(rename = "es-419")]
+    LatamSpanish,
+
     #[serde(rename = "pt-br")]
     BPortuguese,
+
+    #[serde(rename = "pt-pt")]
+    EPortuguese,
+
+    #[serde(rename = "fr")]
+    French,
 
     #[serde(rename = "fil")]
     Filipino,
@@ -41,10 +50,16 @@ impl Default for Language {
             Self::Vietnamese
         } else if locale.starts_with("id") {
             Self::Indonesian
-        } else if locale.starts_with("es") {
+        } else if locale.starts_with("es-es") {
             Self::Spanish
+        } else if locale.starts_with("es") {
+            Self::LatamSpanish
         } else if locale.starts_with("pt-br") {
             Self::BPortuguese
+        } else if locale.starts_with("pt") {
+            Self::EPortuguese
+        } else if locale.starts_with("fr") {
+            Self::French
         } else if locale.starts_with("fil") {
             Self::Filipino
         } else {
@@ -61,7 +76,10 @@ impl Language {
         Self::Vietnamese.choice(),
         Self::Indonesian.choice(),
         Self::Spanish.choice(),
+        Self::LatamSpanish.choice(),
         Self::BPortuguese.choice(),
+        Self::EPortuguese.choice(),
+        Self::French.choice(),
         Self::Filipino.choice(),
     ];
 
@@ -77,7 +95,10 @@ impl Language {
             Language::Vietnamese => "vi",
             Language::Indonesian => "id",
             Language::Spanish => "es",
+            Language::LatamSpanish => "es-419",
             Language::BPortuguese => "pt-br",
+            Language::EPortuguese => "pt-pt",
+            Language::French => "fr",
             Language::Filipino => "fil",
         }
     }
@@ -89,8 +110,11 @@ impl Language {
             Language::SChinese => "简体中文",
             Language::Vietnamese => "Tiếng Việt",
             Language::Indonesian => "Bahasa Indonesia",
-            Language::Spanish => "Español (ES)",
+            Language::Spanish => "Español (España)",
+            Language::LatamSpanish => "Español (Latinoamérica)",
             Language::BPortuguese => "Português (Brasil)",
+            Language::EPortuguese => "Português (Portugal)",
+            Language::French => "Français",
             Language::Filipino => "Filipino",
         }
     }

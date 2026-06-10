@@ -36,6 +36,7 @@ menu:
   open_config_editor: "\uf040 打开配置编辑器"
   reload_config: "\uf021 重新加载配置"
   open_first_time_setup: "\uf135 打开初始化设置"
+  save_diagnostics: "\uf02d 保存诊断报告"
   graphics_heading: "\uf03e 图形设置"
   fps_label: "帧率限制"
   vsync_label: "垂直同步"
@@ -53,6 +54,8 @@ menu:
 notification:
   saved_localize_dump: "已保存到 localize_dump.json"
   config_reloaded: "配置已重新加载"
+  diagnostics_saved: "诊断报告已保存到 %{path}"
+  diagnostics_failed: "保存诊断报告失败：%{error}"
   config_saved: "配置已保存"
   localized_data_reloaded: "本地化数据已重新加载"
   checking_for_tl_updates: "正在检查翻译更新..."
@@ -88,6 +91,9 @@ first_time_setup:
     
     如果您选择了翻译仓库，系统将执行更新检查，
     并提示您下载新的翻译数据。
+  tips_heading: "须知"
+  menu_key_tip: "随时按 %{open_key_str} 即可打开 HachimiRedux 菜单。"
+  conflicts_tip: "请只使用 HachimiRedux。如果游戏崩溃或行为异常，请从游戏文件夹中删除其他游戏 Mod、覆盖层或 DLL 注入器（例如 version.dll / winhttp.dll / dxgi.dll 代理，或其他覆盖层 DLL）。只有从 HachimiRedux 构建的插件才应放入 load_libraries。"
 
 about:
   title: "关于"

@@ -1,0 +1,286 @@
+hachimi: "HachimiRedux"
+
+windows:
+  menu_open_key: "Flecha derecha"
+
+splash_sub: "\uf015 Presiona %{open_key_str} para abrir el menú."
+loading_label: "Cargando..."
+search_filter: "Escribe para buscar..."
+open: "Abrir"
+cancel: "Cancelar"
+save: "Guardar"
+done: "Listo"
+next: "Siguiente"
+previous: "Anterior"
+yes: "Sí"
+no: "No"
+ok: "OK"
+retry: "Reintentar"
+default: "Por defecto"
+off: "Desactivado"
+on: "Activado"
+enable: "Activar"
+info: "Info"
+warning: "Advertencia"
+confirm_dialog_title: "Confirmar"
+soft_restart_confirm_content: "¿Seguro que quieres reiniciar el juego en caliente?"
+
+translations:
+  settings_heading: "\uf013 Opciones de traducción"
+
+menu:
+  check_for_updates: "\uf0aa Buscar actualizaciones"
+  sync_gametora_data: "\uf0aa Sincronizar archivos de datos"
+  fps_text: "FPS: %{fps}"
+  close_menu: "\uf00d Cerrar menú"
+  stats_heading: "\uf022 Estadísticas"
+  localize_dict_entries: "entradas de localize_dict: %{count}"
+  hashed_dict_entries: "entradas de hashed_dict: %{count}"
+  config_heading: "\uf0ad Configuración"
+  open_config_editor: "\uf040 Abrir editor de configuración"
+  reload_config: "\uf021 Recargar configuración"
+  open_first_time_setup: "\uf135 Abrir configuración inicial"
+  save_diagnostics: "\uf02d Guardar informe de diagnóstico"
+  graphics_heading: "\uf03e Gráficos"
+  fps_label: "FPS"
+  vsync_label: "VSync"
+  stay_on_top: "Mantener al frente"
+  translation_heading: "\uf02d Traducción"
+  reload_localized_data: "\uf021 Recargar datos localizados"
+  tl_check_for_updates: "\uf0aa Buscar actualizaciones de traducción"
+  tl_check_for_updates_pedantic: "\uf0aa Buscar actualizaciones de traducción (estricto)"
+  dump_localize_dict: "Exportar localize dict"
+  danger_zone_heading: "\uf071 Zona de peligro"
+  danger_zone_warning: "¡Estas opciones podrían tener efectos no deseados en el juego. Úsalas con cuidado!"
+  soft_restart: "\uf021 Reinicio en caliente"
+  toggle_game_ui: "\uf06e Alternar interfaz del juego"
+  discord_rpc: "Discord RPC"
+
+notification:
+  saved_localize_dump: "Guardado en localize_dump.json"
+  config_reloaded: "Configuración recargada."
+  diagnostics_saved: "Informe de diagnóstico guardado en %{path}"
+  diagnostics_failed: "No se pudo guardar el informe de diagnóstico: %{error}"
+  config_saved: "Configuración guardada."
+  config_error: "La configuración se corrompió. Usando los valores por defecto..."
+  localized_data_reloaded: "Datos localizados recargados."
+  checking_for_tl_updates: "Buscando actualizaciones de traducción..."
+  no_tl_updates: "No hay actualizaciones de traducción disponibles."
+  update_failed: "Falló la actualización: %{reason}"
+  update_completed: "Actualización completada."
+  errors_during_update: "Ocurrieron %{count} errores durante la actualización. Revisa los registros para más información."
+  checking_for_updates: "Buscando actualizaciones..."
+  no_updates: "No hay actualizaciones disponibles."
+  gametora_syncing: "Sincronizando datos de GameTora..."
+  gametora_up_to_date: "Los datos de GameTora están al día."
+  gametora_sync_complete: "Datos de GameTora sincronizados (%{count} actualizados)."
+  gametora_sync_failed: "Falló la sincronización de los datos de GameTora: %{reason}"
+  tracker_data_name: "Datos de entrenamiento"
+  data_syncing: "Sincronizando %{name}..."
+  data_up_to_date: "%{name} está al día."
+  data_sync_complete: "%{name} sincronizado (%{count} actualizados)."
+  data_sync_failed: "Falló la sincronización de %{name}: %{reason}"
+  press_to_set_menu_key: "Presiona una tecla en la ventana del juego para definir el atajo de abrir el menú."
+  menu_open_key_set: "Atajo de abrir el menú definido en %{key}"
+  ipc_softreset_exec: "Reinicio en caliente remoto por IPC ejecutado"
+  atlas_workaround_reset: "Archivos Atlas modificados: solución alternativa desactivada."
+
+first_time_setup:
+  title: "Configuración inicial"
+  welcome_heading: "Bienvenido"
+  welcome_content: >-
+    ¡Hachimi se instaló! Esto te guiará por el proceso de configuración inicial.
+    Si no te interesan las funciones de traducción, puedes omitirlo cerrando esta ventana.
+
+
+    AVISO: Hachimi es un proyecto impulsado por la comunidad. Todas las traducciones fueron hechas por distintos colaboradores de la comunidad.
+    No está desarrollado ni respaldado por Cygames, Inc., y viola los términos de servicio del juego. Al continuar,
+    aceptas que lo usarás bajo tu propio riesgo.
+  translation_repo_heading: "Repositorio de traducción"
+  select_translation_repo: "Selecciona un repositorio de traducción:"
+  no_compatible_repo: "Ningún repositorio de traducción es compatible con esta versión del juego."
+  skip_translation: "Omitir traducciones."
+  complete_heading: "¡Todo listo!"
+  complete_content: >-
+    Haz clic en Listo para guardar la configuración.
+    Si elegiste un repositorio de traducción, se buscará una actualización,
+    que te pedirá descargar los nuevos datos de traducción.
+  tips_heading: "Bueno saberlo"
+  menu_key_tip: "Presiona %{open_key_str} en cualquier momento para abrir el menú de HachimiRedux."
+  conflicts_tip: >-
+    Usa solo HachimiRedux. Si el juego se cae o se comporta raro, elimina otros mods,
+    overlays o inyectores de DLL (por ejemplo, proxies version.dll / winhttp.dll / dxgi.dll,
+    u otras DLL de overlay) de la carpeta del juego. Solo los plugins compilados desde
+    HachimiRedux deben ir en load_libraries.
+
+about:
+  title: "Acerca de"
+  copyright: "© 2024-%{year} LeadRDRK, kairusds and contributors"
+  view_license: "Ver licencia"
+  open_website: "Abrir sitio web"
+  view_source_code: "Ver código fuente"
+
+license:
+  title: "Licencia"
+  gpl_v3_only_notice: "GPL-3.0-only License Text"
+  ofl_fonts_header: "Este software incluye las siguientes tipografías bajo la licencia SIL Open Font 1.1:"
+  font_inter: "Inter: Copyright 2020 The Inter Project Authors (https://github.com/rsms/inter)"
+  font_font_awesome: "Font Awesome Version 4.7.0: Copyright Dave Gandy (https://fontawesome.com) 2016. All rights reserved."
+  ofl_notice: "SIL OFL 1.1 License Text"
+  font_alibaba_header: "Alibaba PuHuiTi 3.0"
+  font_alibaba_body: "Copyright (c) 2020-2023 Alibaba (China) Co., Ltd. All rights reserved."
+
+tl_updater:
+  title: "Actualizando..."
+  warning: "Las traducciones no funcionarán mientras la actualización esté en curso"
+
+config_editor:
+  title: "Editor de configuración"
+  general_tab: "\uf013 General"
+  graphics_tab: "\uf03e Gráficos"
+  gameplay_tab: "\uf11b Jugabilidad"
+  language: "Idioma"
+  restore_defaults: "Restaurar valores por defecto"
+  revert: "Revertir"
+  disable_overlay: "Desactivar overlay (GUI)"
+  disable_overlay_warning: >-
+    Esta opción desactivará el overlay de Hachimi después de reiniciar el juego,
+    lo que significa que NO podrás acceder al editor de configuración tras esto.
+    Si no fue intencional, cierra esta ventana y DESACTIVA la opción.
+  ipv4_only: "ureq solo IPv4"
+  meta_index_url: "URL Meta de traducciones"
+  debug_mode: "Modo de depuración"
+  enable_file_logging: "Activar registro en archivo"
+  apply_atlas_workaround: "Aplicar solución alternativa Atlas TL"
+  translator_mode: "Modo traductor"
+  skip_first_time_setup: "Omitir configuración inicial"
+  lazy_translation_updates: "Actualizaciones de traducción diferidas"
+  disable_auto_update_check: "Desactivar la búsqueda automática de actualizaciones"
+  disable_translations: "Desactivar traducciones"
+  enable_ipc: "Activar IPC"
+  ipc_listen_all: "IPC escucha en todas las interfaces"
+  auto_translate_stories: "Traducir historias automáticamente"
+  auto_tl_warning: >-
+    Nota: Esta función no trabaja por sí sola; requiere una configuración externa.
+    Activar esta opción requiere un servidor de traducción compatible instalado en
+    tu computador o un servicio en la nube que exponga una API como
+    py3translationServer o Sugoi Toolkit. Sin un servidor en ejecución, no
+    habrá traducción adicional y la jugabilidad puede verse afectada.
+    Deja esta opción desactivada si no tienes un servidor de traducción
+    disponible.
+  auto_translate_ui: "Traducir interfaz automáticamente (PODRÍA ROMPER LAS UI)"
+  target_fps: "FPS objetivo"
+  virtual_resolution_multiplier: "Multiplicador de resolución virtual"
+  ui_scale: "Escala de la interfaz"
+  gui_scale: "Escala del overlay"
+  gui_landscape_ratio: "Proporción de escala del overlay en horizontal"
+  ui_animation_scale: "Escala de animación de la interfaz"
+  graphics_quality: "Calidad gráfica"
+  vsync: "VSync"
+  auto_full_screen: "Pantalla completa automática"
+  full_screen_mode: "Modo de pantalla completa"
+  full_screen_mode_exclusive: "Exclusivo"
+  full_screen_mode_borderless: "Sin bordes"
+  block_minimize_in_full_screen: "Bloquear minimizar en pantalla completa"
+  resolution_scaling: "Escalado de resolución"
+  resolution_scaling_default: "Por defecto (1080p)"
+  resolution_scaling_ssize: "Ajustar al tamaño de la pantalla"
+  resolution_scaling_wsize: "Ajustar al tamaño de la ventana"
+  window_always_on_top: "Ventana siempre al frente"
+  story_choice_auto_select_delay: "Retraso de selección automática de opciones de historia"
+  story_text_speed_multiplier: "Multiplicador de velocidad del texto de historia"
+  force_allow_dynamic_camera: "Forzar permitir cámara dinámica"
+  live_theater_allow_same_chara: "Live theater: permitir el mismo personaje"
+  physics_update_mode: "Modo de actualización de la física"
+  disable_skill_name_translation: "Desactivar la traducción de nombres de habilidades"
+  hide_ingame_ui_hotkey: "Atajo para ocultar la interfaz en el juego"
+  hide_ingame_ui_hotkey_info: >-
+    Esta opción permite una tecla de atajo para alternar la interfaz en el juego.
+    Por defecto es la tecla Insert y se puede configurar en la interfaz o en la config.
+  discord_rpc: "Discord RPC"
+  menu_open_key: "Atajo para abrir el menú"
+  menu_open_key_set: "Presiona para definir"
+  msaa: "MSAA"
+  render_scale: "Escala de renderizado"
+  aniso_level: "Filtrado anisotrópico"
+  live_vocals_swap: "Cambio de voces Live"
+  live_vocals_swap_character_n: "Personaje %{index}"
+  skill_info_dialog: "Cuadro de info de habilidad personalizado"
+  homescreen_bgseason: "Temporada del fondo de la pantalla de inicio"
+  shadow_resolution: "Resolución de sombras"
+
+theme_editor:
+  title: "Editor de tema de la interfaz"
+  ui_accent_color: "Color de acento"
+  ui_window_fill: "Color de fondo de la ventana"
+  ui_panel_fill: "Color de fondo del panel"
+  ui_extreme_bg_color: "Fondo de los campos de entrada"
+  ui_text_color: "Color del texto"
+  ui_window_rounding: "Esquinas redondeadas"
+
+tl_update_dialog:
+  title: "Nueva actualización disponible"
+  content: "Hay una nueva actualización de traducción disponible (%{size}). ¿Quieres descargarla?"
+  content_zip_warning: "Hay una nueva actualización de traducción disponible (%{changed_size}). Esta actualización descargará el archivo completo (%{download_size}) en su lugar."
+
+update_prompt_dialog:
+  title: "Nueva actualización disponible"
+  content: |
+    Hay una nueva actualización de Hachimi disponible (%{version}). ¿Quieres instalarla?
+    El juego se reiniciará para aplicar la actualización.
+
+updating_dialog:
+  title: "Actualizando"
+  content: "Descargando la actualización, el juego se reiniciará en breve..."
+
+steam_overlay_conflict_dialog:
+  title: "Aviso"
+  content: >-
+    Las compras podrían no funcionar con el overlay de Hachimi activado. Si el overlay de Steam ya
+    apareció para que hicieras una compra, ignora este mensaje y presiona No. Si no funcionó, presiona Sí
+    para desactivar temporalmente el overlay de Hachimi. Cerrará el juego, y la próxima vez que inicie,
+    el overlay de Hachimi estará desactivado y podrás hacer una compra. Después, puedes reiniciar
+    el juego de nuevo para volver a activar el overlay de Hachimi.
+key_names:
+  left: "Flecha izquierda"
+  right: "Flecha derecha"
+  up: "Flecha arriba"
+  down: "Flecha abajo"
+  insert: "Insert"
+  delete: "Suprimir"
+  home: "Inicio"
+  end: "Fin"
+  page_up: "Re Pág"
+  page_down: "Av Pág"
+  escape: "Escape"
+  tab: "Tab"
+  enter: "Enter"
+  space: "Espacio"
+  backspace: "Retroceso"
+  clear: "Borrar"
+  pause: "Pausa"
+  caps_lock: "Bloq Mayús"
+  scroll_lock: "Bloq Despl"
+  num_lock: "Bloq Num"
+  print_screen: "Impr Pant"
+  left_win: "Windows izquierda"
+  right_win: "Windows derecha"
+  apps: "Menú"
+  alt: "Alt"
+  ctrl: "Ctrl"
+  shift: "Shift"
+  numpad_0: "Teclado num. 0"
+  numpad_1: "Teclado num. 1"
+  numpad_2: "Teclado num. 2"
+  numpad_3: "Teclado num. 3"
+  numpad_4: "Teclado num. 4"
+  numpad_5: "Teclado num. 5"
+  numpad_6: "Teclado num. 6"
+  numpad_7: "Teclado num. 7"
+  numpad_8: "Teclado num. 8"
+  numpad_9: "Teclado num. 9"
+  numpad_add: "Teclado num. +"
+  numpad_subtract: "Teclado num. -"
+  numpad_multiply: "Teclado num. *"
+  numpad_divide: "Teclado num. /"
+  numpad_decimal: "Teclado num. ."

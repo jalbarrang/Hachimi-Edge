@@ -7,10 +7,20 @@ rust_i18n::i18n!("locales", fallback = "en-US");
 
 pub use rust_i18n::t;
 
+// (locale code, match prefix, display label). `init_locale` returns the first
+// entry whose prefix is a prefix of the user's Windows locale, so order matters:
+// region-specific variants must precede their language catch-alls. es-ES (Spain)
+// is matched specifically; every other Spanish locale (es-CL, es-MX, es-AR, …)
+// falls through to es-419 (Latin American Spanish). Likewise pt-BR before pt-PT.
 pub const SUPPORTED_LOCALES: &[(&str, &str, &str)] = &[
     ("en-US", "en-US", "English"),
     ("zh-CN", "zh-CN", "简体中文"),
     ("zh-TW", "zh-TW", "繁體中文"),
+    ("es-ES", "es-ES", "Español (España)"),
+    ("es-419", "es", "Español (Latinoamérica)"),
+    ("fr-FR", "fr", "Français"),
+    ("pt-BR", "pt-BR", "Português (Brasil)"),
+    ("pt-PT", "pt", "Português (Portugal)"),
 ];
 
 pub static CURRENT_LOCALE: Lazy<std::sync::Mutex<String>> = Lazy::new(|| std::sync::Mutex::new(String::new()));

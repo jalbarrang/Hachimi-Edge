@@ -11,6 +11,7 @@ gui:
   warning_no_dir:       "未能偵測到遊戲的安裝位置。\n請手動選擇。"
   warning_multi-installation:        "偵測到多個 Hachimi 安裝！\n請解除安裝其中一個，否則遊戲將無法正常運作。"
   warning_no_backup: "未能備份遊戲EXE，解除安裝時請謹慎操作。"
+  warning_conflicts: "在遊戲資料夾中發現了其他遊戲 Mod / DLL 注入器：\n\n%{files}\n\n疊加使用注入器通常會導致遊戲當機。為獲得最佳效果，請只保留 HachimiRedux 並移除上述檔案。本次安裝將繼續進行。"
   error:                "錯誤"
   already_installed:    "Hachimi 已經以 %{dll} 的形式安裝"
   replace_confirm:      "要替換 %{dll} 嗎？"
@@ -37,6 +38,7 @@ installer:
 cli:
   game_running: "遊戲正在執行中。請先關閉遊戲後再按確定繼續安裝。"
   installer_title: "Hachimi 安裝程式"
+  logs_collected: "診斷資訊已收集到：\n%{path}\n\n請將該資料夾分享給支援人員。"
   failed_determine_target: "無法判斷目標類型。請確認路徑正確，或明確指定目標名稱。"
 
 util:

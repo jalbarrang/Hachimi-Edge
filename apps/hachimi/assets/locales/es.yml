@@ -36,6 +36,7 @@ menu:
   open_config_editor: "\uf040 Editor de configuración"
   reload_config: "\uf021 Recargar configuración"
   open_first_time_setup: "\uf135 Abrir instalación inicial"
+  save_diagnostics: "\uf02d Guardar informe de diagnóstico"
   graphics_heading: "\uf03e Gráficos"
   fps_label: "FPS"
   vsync_label: "VSync"
@@ -54,6 +55,8 @@ menu:
 notification:
   saved_localize_dump: "Exportado en localize_dump.json"
   config_reloaded: "Configuración recargada."
+  diagnostics_saved: "Informe de diagnóstico guardado en %{path}"
+  diagnostics_failed: "No se pudo guardar el informe de diagnóstico: %{error}"
   config_saved: "Configuración guardada."
   localized_data_reloaded: "Localización recargada."
   checking_for_tl_updates: "Buscando actualizaciones de traducción..."
@@ -91,6 +94,9 @@ first_time_setup:
     Se ha ajustado el repositorio de traducción. Cuando pulses en Listo, se guardará
     la configuración y seguido se hará una búsqueda de actualizaciones que te
     preguntará para descargar los datos de traducción disponibles.
+  tips_heading: "Bueno saberlo"
+  menu_key_tip: "Pulsa %{open_key_str} en cualquier momento para abrir el menú de HachimiRedux."
+  conflicts_tip: "Usa solo HachimiRedux. Si el juego se cierra o se comporta de forma extraña, elimina otros mods, overlays o inyectores de DLL (por ejemplo, proxies version.dll / winhttp.dll / dxgi.dll, u otras DLL de overlay) de la carpeta del juego. Solo los plugins compilados desde HachimiRedux deben ir en load_libraries."
 
 about:
   title: "Acerca de"

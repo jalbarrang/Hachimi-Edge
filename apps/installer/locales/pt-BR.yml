@@ -1,0 +1,53 @@
+gui:
+  title:                "Instalador do Hachimi"
+  install:              "Instalar"
+  uninstall:            "Desinstalar"
+  browse:               "Procurar..."
+  installed:            "Instalado: %{ver}"
+  packaged_ver:         "Versão incluída: %{ver}"
+  install_location:     "Local de instalação:"
+  target:               "Versão do jogo:"
+  warning:              "Aviso"
+  warning_no_dir:       "Não foi possível detectar o local de instalação do jogo.\nSelecione-o manualmente."
+  warning_multi-installation: "Várias instalações do Hachimi detectadas!\nDesinstale uma delas, caso contrário o jogo não vai funcionar corretamente."
+  warning_no_backup:    "Não foi possível fazer backup do EXE do jogo.\nTenha cuidado ao desinstalar."
+  warning_conflicts:    "Outros mods de jogo / injetores de DLL foram encontrados na pasta do jogo:\n\n%{files}\n\nEmpilhar injetores costuma travar o jogo. Para melhores resultados, mantenha apenas o HachimiRedux e remova os arquivos acima. A instalação vai continuar mesmo assim."
+  error:                "Erro"
+  already_installed:    "O Hachimi já está instalado como %{dll}"
+  replace_confirm:      "Substituir %{dll}?"
+  delete_confirm:       "Excluir %{dll}?"
+  delete_data_dir:      "Você também quer excluir o diretório de dados do Hachimi?"
+  msg_install_ok:       "Instalação concluída."
+  msg_install_fail:     "%{err}"
+  msg_uninstall:        "Excluir %{dll}?"
+  msg_language:         "Idioma"
+  training_tracker:     "Instalar o plugin Training Tracker"
+  lang_en:              "English"
+  lang_zh-CN:           "简体中文"
+  lang_zh-TW:           "繁體中文"
+
+installer:
+  dotlocal_not_enabled: "O redirecionamento de DLL DotLocal não está ativado. Ele é necessário para o destino de instalação especificado.\nDeseja ativá-lo?"
+  install:              "Instalar"
+  restart_to_apply:     "Reinicie o computador para aplicar as alterações."
+  dll_redirection_enabled: "Redirecionamento de DLL ativado"
+  failed_open_ifeo:     "Falha ao abrir a chave de registro IFEO: %{error}"
+  failed_enable_dotlocal: "Falha ao ativar o redirecionamento de DLL: %{error}"
+  warning:              "Aviso"
+
+cli:
+  game_running:         "O jogo está em execução. Feche o jogo e pressione OK para instalar."
+  installer_title:      "Instalador do Hachimi"
+  logs_collected:       "Diagnósticos coletados em:\n%{path}\n\nCompartilhe essa pasta com o suporte."
+  failed_determine_target: "Não foi possível determinar o tipo de destino. Verifique se o caminho está correto ou especifique um nome de destino explicitamente."
+
+util:
+  select_folder:        "Selecione uma pasta"
+
+error:
+  no_install_dir:       "Nenhum local de instalação especificado"
+  cannot_find_target:   "Não foi possível encontrar a DLL de destino no local de instalação especificado"
+  io_error:             "Erro de E/S: %{error}"
+  registry_value_error: "Erro de valor de registro: %{error}"
+  failed_to_restore:    "Falha ao restaurar o backup. Talvez seja necessário verificar os arquivos do jogo."
+  config_write_failed:  "Falha ao gravar config.json para o plugin Training Tracker."
