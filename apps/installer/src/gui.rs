@@ -413,6 +413,26 @@ unsafe extern "system" fn dlg_proc(dialog: HWND, message: u32, wparam: WPARAM, l
                             return 0;
                         }
                     }
+                    // Offer to remove another Hachimi install sitting in the game
+                    // folder (e.g. loaded via a version.dll/winhttp.dll proxy).
+                    // Running two Hachimi installs at once is a known crash cause.
+                    let other_hachimi = installer.find_other_hachimi();
+                    if !other_hachimi.is_empty() {
+                        let files = other_hachimi
+                            .iter()
+                            .filter_map(|p| p.file_name().and_then(|n| n.to_str()))
+                            .collect::<Vec<_>>()
+                            .join("\n");
+                        let res = MessageBoxW(
+                            dialog,
+                            &HSTRING::from(t!("gui.other_hachimi_found", files = files)),
+                            &HSTRING::from(t!("gui.warning")),
+                            MB_ICONWARNING | MB_YESNO,
+                        );
+                        if res == IDYES {
+                            installer.remove_files(&other_hachimi);
+                        }
+                    }
                     // Warn about other mods / DLL injectors in the game folder
                     // (stacking injectors is the top cause of launch crashes).
                     let conflicts = installer.scan_conflicts();

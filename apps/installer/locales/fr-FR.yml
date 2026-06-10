@@ -12,6 +12,7 @@ gui:
   warning_multi-installation: "Plusieurs installations de Hachimi détectées !\nVeuillez en désinstaller une, sinon le jeu ne fonctionnera pas correctement."
   warning_no_backup:    "Échec de la sauvegarde de l'EXE du jeu.\nSoyez prudent lors de la désinstallation."
   warning_conflicts:    "D'autres mods de jeu / injecteurs de DLL ont été trouvés dans le dossier du jeu :\n\n%{files}\n\nEmpiler des injecteurs fait souvent planter le jeu. Pour de meilleurs résultats, ne gardez que HachimiRedux et supprimez les fichiers ci-dessus. L'installation va continuer malgré tout."
+  other_hachimi_found: "Une autre installation de Hachimi a été trouvée dans le dossier du jeu :\n\n%{files}\n\nUtiliser deux installations de Hachimi à la fois fait planter le jeu. Voulez-vous supprimer le(s) fichier(s) ci-dessus maintenant ?\n\n(Oui = supprimer, Non = conserver)"
   error:                "Erreur"
   already_installed:    "Hachimi est déjà installé en tant que %{dll}"
   replace_confirm:      "Remplacer %{dll} ?"

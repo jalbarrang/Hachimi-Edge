@@ -613,6 +613,61 @@ impl Installer {
         out
     }
 
+    /// Read the PE `ProductName` of an arbitrary file, if it is a PE with version
+    /// info. Returns `None` for non-PE files or files without version info.
+    fn product_name_at(&self, path: &Path) -> Option<String> {
+        let map = pelite::FileMap::open(path).ok()?;
+        let version_info = utils::read_pe_version_info(map.as_ref())?;
+        version_info.value(Self::LANG_NEUTRAL_UNICODE, "ProductName")
+    }
+
+    /// Scan the install directory root for **other** Hachimi DLLs: files whose PE
+    /// `ProductName` is "Hachimi" that are not the DLL we manage at the current
+    /// target (and not our Training Tracker plugin). These are previous/parallel
+    /// Hachimi installs — often loaded via a proxy DLL such as `version.dll` /
+    /// `winhttp.dll` — and running two Hachimi installs at once is a known crash
+    /// cause. Only "Hachimi"-branded files are returned; third-party overlays are
+    /// deliberately left untouched. Returns the matching paths (sorted).
+    pub fn find_other_hachimi(&self) -> Vec<PathBuf> {
+        let Some(dir) = self.install_dir.as_ref() else {
+            return Vec::new();
+        };
+        let managed = self.get_current_target_path();
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return Vec::new();
+        };
+        let mut out = Vec::new();
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !path.is_file() {
+                continue;
+            }
+            let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+                continue;
+            };
+            if !name.to_ascii_lowercase().ends_with(".dll") {
+                continue;
+            }
+            // Never flag the DLL we manage or our own plugin.
+            if name.eq_ignore_ascii_case(self.target.dll_name()) || name.eq_ignore_ascii_case(TRACKING_TRACKER_DLL) {
+                continue;
+            }
+            if managed.as_ref().is_some_and(|m| *m == path) {
+                continue;
+            }
+            if self.product_name_at(&path).as_deref() == Some("Hachimi") {
+                out.push(path);
+            }
+        }
+        out.sort_unstable();
+        out
+    }
+
+    /// Best-effort delete the given files. Returns how many were removed.
+    pub fn remove_files(&self, paths: &[PathBuf]) -> usize {
+        paths.iter().filter(|p| std::fs::remove_file(p).is_ok()).count()
+    }
+
     /// Gather support diagnostics into `%TEMP%\hachimi_diagnostics`: a copy of
     /// `config.json` and `hachimi.log` (if present) plus a `README.txt` that
     /// records the detected conflicts and where the game's own `Player.log` lives.

@@ -12,6 +12,7 @@ gui:
   warning_multi-installation: "检测到多个 Hachimi 安装！\n请卸载其中一个，否则游戏将无法正常运行。"
   warning_no_backup: "未能备份游戏EXE，卸载时请谨慎操作。"
   warning_conflicts: "在游戏文件夹中发现了其他游戏 Mod / DLL 注入器：\n\n%{files}\n\n叠加使用注入器通常会导致游戏崩溃。为获得最佳效果，请只保留 HachimiRedux 并删除上述文件。本次安装将继续进行。"
+  other_hachimi_found: "在游戏文件夹中发现了另一个 Hachimi 安装：\n\n%{files}\n\n同时运行两个 Hachimi 安装会导致游戏崩溃。是否现在删除上述文件？\n\n（是 = 删除，否 = 保留）"
   error:                "错误"
   already_installed:    "Hachimi 已作为 %{dll} 安装"
   replace_confirm:      "要替换 %{dll} 吗？"

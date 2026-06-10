@@ -6,7 +6,8 @@ use windows::{
     Win32::UI::{
         Shell::ShellExecuteW,
         WindowsAndMessaging::{
-            MessageBoxW, IDCANCEL, MB_ICONERROR, MB_ICONINFORMATION, MB_ICONWARNING, MB_OK, MB_OKCANCEL, SW_NORMAL,
+            MessageBoxW, IDCANCEL, IDYES, MB_ICONERROR, MB_ICONINFORMATION, MB_ICONWARNING, MB_OK, MB_OKCANCEL,
+            MB_YESNO, SW_NORMAL,
         },
     },
 };
@@ -174,6 +175,27 @@ pub fn run() -> Result<bool, installer::Error> {
         let installer = Installer::custom(args.install_dir, explicit_target, args.target);
         let res = match command {
             Command::Install => {
+                // Offer to remove another Hachimi install in the game folder
+                // (running two at once is a known crash cause).
+                let other_hachimi = installer.find_other_hachimi();
+                if !other_hachimi.is_empty() {
+                    let files = other_hachimi
+                        .iter()
+                        .filter_map(|p| p.file_name().and_then(|n| n.to_str()))
+                        .collect::<Vec<_>>()
+                        .join("\n");
+                    let res = unsafe {
+                        MessageBoxW(
+                            None,
+                            &HSTRING::from(t!("gui.other_hachimi_found", files = files)),
+                            w!("Hachimi Installer"),
+                            MB_ICONWARNING | MB_YESNO,
+                        )
+                    };
+                    if res == IDYES {
+                        installer.remove_files(&other_hachimi);
+                    }
+                }
                 let conflicts = installer.scan_conflicts();
                 if !conflicts.is_empty() {
                     unsafe {
