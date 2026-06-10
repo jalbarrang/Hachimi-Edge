@@ -9,6 +9,9 @@ committed to this repo, and downloaded by clients from the repo's raw GitHub URL
 > commits it; every client pulls the committed copy (CDN-backed by GitHub/Fastly).
 > This avoids a distributed load spike on GameTora from thousands of plugin installs.
 
+> See [updating-game-data.md](updating-game-data.md) for the full step-by-step
+> refresh process (master.mdb-derived assets + GameTora catalogs).
+
 ## Flow
 
 ```
