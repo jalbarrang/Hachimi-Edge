@@ -156,7 +156,7 @@ IPC did not respond at $IpcUrl
             if (-not $locked -or $i -eq $maxAttempts) {
                 if ($locked -and -not $HotSwap) {
                     Write-Error @"
-Cannot overwrite $Dest — the plugin DLL is locked by the running game.
+Cannot overwrite $Dest - the plugin DLL is locked by the running game.
 
 Use -HotSwap to unload the plugin via IPC, copy, and reload:
   .\scripts\deploy-windows.ps1 -PluginOnly -HotSwap -Build
@@ -294,7 +294,7 @@ if ($PluginOnly -and -not $HotSwap) {
     Write-Host "If the game is already running, use -HotSwap or About -> Danger Zone -> Reload plugins." -ForegroundColor Cyan
 } elseif ($HotSwap) {
     Write-Host ""
-    Write-Host "Plugin hot-swapped via IPC — do not also click Reload plugins." -ForegroundColor Green
+    Write-Host "Plugin hot-swapped via IPC - do not also click Reload plugins." -ForegroundColor Green
 }
 Write-Host ""
 Write-Host "Launch the game yourself to verify (this script does not start the game)." -ForegroundColor DarkGray

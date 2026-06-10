@@ -27,91 +27,68 @@ pub(super) fn cap_level(value: i32, cap: i32) -> CapLevel {
     }
 }
 
-/// Color for a single stat value, keyed off the real in-game (data-mined)
-/// rank thresholds. Letter ranks G→SS+ span values 1..=1200 (Table 1 colors);
-/// above 1200 stats keep ranking on the U ladder UG..US9 (1201..=2000, Table 2
-/// family colors). Stats never reach the `L*` ranks — those only exist on the
-/// overall evaluation badge. Letter `+`/`-` subranks share their base color.
+/// Color for a single stat value, keyed off the real in-game rank thresholds,
+/// sampled from the game's official rank sprite. Letter ranks G→SS+ span values
+/// 1..=1200 (primary palette); above 1200 stats keep ranking on the U ladder
+/// UG..US9 (1201..=2000). Since a single number can't be two-tone like the
+/// evaluation badge, U-ladder stats recycle the primary palette by their base
+/// letter (UG→G, UF→F, …, US→S). Stats never reach the `L*` ranks — those only
+/// exist on the overall evaluation badge. Letter `+`/`-` subranks share their
+/// base color.
 pub(super) fn stat_rank_color(value: i32) -> egui::Color32 {
-    let (r, g, b) = if value >= 1901 {
-        (255, 0, 0) // US - red
-    } else if value >= 1801 {
-        (255, 215, 0) // UA - gold
-    } else if value >= 1701 {
-        (47, 79, 79) // UB - dark slate gray
-    } else if value >= 1601 {
-        (169, 169, 169) // UC - dark gray
-    } else if value >= 1501 {
-        (50, 205, 50) // UD - lime green
-    } else if value >= 1401 {
-        (30, 144, 255) // UE - dodger blue
-    } else if value >= 1301 {
-        (255, 20, 147) // UF - deep pink
-    } else if value >= 1201 {
-        (255, 105, 180) // UG - hot pink
-    } else if value >= 1100 {
-        (255, 215, 0) // SS / SS+ - bright gold
-    } else if value >= 1000 {
-        (255, 140, 0) // S / S+ - dark orange
-    } else if value >= 800 {
-        (0, 255, 0) // A / A+ - bright green
-    } else if value >= 600 {
-        (0, 206, 209) // B / B+ - dark turquoise
-    } else if value >= 400 {
-        (30, 144, 255) // C / C+ - dodger blue
-    } else if value >= 300 {
-        (147, 112, 219) // D / D+ - medium purple
-    } else if value >= 200 {
-        (186, 85, 211) // E / E+ - medium orchid
-    } else if value >= 100 {
-        (160, 82, 45) // F / F+ - sienna
-    } else {
-        (128, 128, 128) // G / G+ - gray
+    // U-ladder stats (>1200) reuse the primary letter palette via the
+    // equivalent base letter, keeping a single source of truth.
+    let letter = match value {
+        v if v >= 1901 => "S",  // US
+        v if v >= 1801 => "A",  // UA
+        v if v >= 1701 => "B",  // UB
+        v if v >= 1601 => "C",  // UC
+        v if v >= 1501 => "D",  // UD
+        v if v >= 1401 => "E",  // UE
+        v if v >= 1301 => "F",  // UF
+        v if v >= 1201 => "G",  // UG
+        v if v >= 1100 => "SS", // SS / SS+
+        v if v >= 1000 => "S",  // S / S+
+        v if v >= 800 => "A",   // A / A+
+        v if v >= 600 => "B",   // B / B+
+        v if v >= 400 => "C",   // C / C+
+        v if v >= 300 => "D",   // D / D+
+        v if v >= 200 => "E",   // E / E+
+        v if v >= 100 => "F",   // F / F+
+        _ => "G",               // G / G+
     };
-    egui::Color32::from_rgb(r, g, b)
+    rank_letter_color(letter)
 }
 
-/// Table 1 color for a base letter rank (`G`,`F`,`E`,`D`,`C`,`B`,`A`,`S`,`SS`).
-/// Used for the stat ladder's letter tier and as the "base letter" color in the
-/// two-tone evaluation badge. Unknown letters fall back to gray.
+/// Primary-palette color for a base letter rank
+/// (`G`,`F`,`E`,`D`,`C`,`B`,`A`,`S`,`SS`), sampled from the game's rank sprite
+/// and tuned for legibility on the dark overlay. Used for the stat ladder's
+/// letter tier and as the "base letter" color in the two-tone evaluation badge.
+/// Unknown letters fall back to gray.
 pub fn rank_letter_color(letter: &str) -> egui::Color32 {
     let (r, g, b) = match letter {
-        "SS" => (255, 215, 0),  // bright gold
-        "S" => (255, 140, 0),   // dark orange
-        "A" => (0, 255, 0),     // bright green
-        "B" => (0, 206, 209),   // dark turquoise
-        "C" => (30, 144, 255),  // dodger blue
-        "D" => (147, 112, 219), // medium purple
-        "E" => (186, 85, 211),  // medium orchid
-        "F" => (160, 82, 45),   // sienna
-        _ => (128, 128, 128),   // G / unknown - gray
+        "SS" => (255, 220, 120), // light gold
+        "S" => (250, 195, 70),   // gold
+        "A" => (250, 140, 55),   // orange
+        "B" => (245, 105, 150),  // rose
+        "C" => (110, 205, 80),   // green
+        "D" => (60, 150, 225),   // azure blue
+        "E" => (210, 110, 215),  // magenta / orchid
+        "F" => (165, 135, 225),  // violet
+        _ => (150, 150, 150),    // G / unknown - gray
     };
     egui::Color32::from_rgb(r, g, b)
 }
 
-/// Table 2 color for a `U*`/`L*` rank family (first two chars of the label,
-/// e.g. `UG`, `LF`). Returns `None` for non-prefixed ranks. Used as the prefix
-/// (`U`/`L`) color in the two-tone evaluation badge.
+/// Flat color for a `U*`/`L*` rank family prefix (first char of the label).
+/// Returns `None` for non-prefixed ranks. The in-game `U`/`L` icons use a
+/// special gradient; for now we use a single flat color per prefix. Only the
+/// `U`/`L` glyph itself is tinted — the trailing base letter keeps its primary
+/// color (see `rank_badge_segments`).
 pub fn rank_family_color(family: &str) -> Option<egui::Color32> {
-    let (r, g, b) = match family {
-        // Upper ranks (also used for stat values 1201..=2000).
-        "UG" => (255, 105, 180), // hot pink
-        "UF" => (255, 20, 147),  // deep pink
-        "UE" => (30, 144, 255),  // dodger blue
-        "UD" => (50, 205, 50),   // lime green
-        "UC" => (169, 169, 169), // dark gray
-        "UB" => (47, 79, 79),    // dark slate gray
-        "UA" => (255, 215, 0),   // gold
-        "US" => (255, 0, 0),     // red
-        // Legend ranks (evaluation badge only).
-        "LG" => (128, 0, 128),   // purple
-        "LF" => (0, 206, 208),   // dark turquoise
-        "LE" => (255, 165, 0),   // orange
-        "LD" => (144, 238, 144), // light green
-        "LC" => (192, 192, 192), // silver
-        "LB" => (139, 69, 19),   // saddle brown
-        "LA" => (0, 0, 139),     // dark blue
-        "LS" => (0, 100, 0),     // dark green
+    let (r, g, b) = match family.as_bytes().first() {
+        Some(b'U') => (90, 245, 244),  // cyan
+        Some(b'L') => (191, 241, 213), // mint green
         _ => return None,
     };
     Some(egui::Color32::from_rgb(r, g, b))
@@ -120,10 +97,11 @@ pub fn rank_family_color(family: &str) -> Option<egui::Color32> {
 /// Decompose an evaluation rank label into colored segments for two-tone
 /// rendering.
 ///
-/// - `G`..`SS+` (no prefix): one segment, the whole label in its Table 1
+/// - `G`..`SS+` (no prefix): one segment, the whole label in its primary
 ///   base-letter color.
 /// - `U*`/`L*` (e.g. `UG3`, `LF12`): two segments — the prefix char (`U`/`L`)
-///   in its Table 2 family color, then the remainder in the base-letter color.
+///   in its flat family color, then the remainder in the primary base-letter
+///   color.
 pub fn rank_badge_segments(label: &str) -> Vec<(String, egui::Color32)> {
     let bytes = label.as_bytes();
     if matches!(bytes.first(), Some(b'U') | Some(b'L')) && label.len() >= 2 {
@@ -212,23 +190,25 @@ mod tests {
 
     #[test]
     fn stat_rank_color_thresholds() {
-        assert_eq!(stat_rank_color(0), egui::Color32::from_rgb(128, 128, 128)); // G
-        assert_eq!(stat_rank_color(99), egui::Color32::from_rgb(128, 128, 128)); // G+
-        assert_eq!(stat_rank_color(100), egui::Color32::from_rgb(160, 82, 45)); // F
-        assert_eq!(stat_rank_color(199), egui::Color32::from_rgb(160, 82, 45)); // F+
-        assert_eq!(stat_rank_color(200), egui::Color32::from_rgb(186, 85, 211)); // E
-        assert_eq!(stat_rank_color(300), egui::Color32::from_rgb(147, 112, 219)); // D
-        assert_eq!(stat_rank_color(400), egui::Color32::from_rgb(30, 144, 255)); // C
-        assert_eq!(stat_rank_color(599), egui::Color32::from_rgb(30, 144, 255)); // C+
-        assert_eq!(stat_rank_color(600), egui::Color32::from_rgb(0, 206, 209)); // B
-        assert_eq!(stat_rank_color(800), egui::Color32::from_rgb(0, 255, 0)); // A
-        assert_eq!(stat_rank_color(1000), egui::Color32::from_rgb(255, 140, 0)); // S
-        assert_eq!(stat_rank_color(1100), egui::Color32::from_rgb(255, 215, 0)); // SS
-        assert_eq!(stat_rank_color(1200), egui::Color32::from_rgb(255, 215, 0)); // SS+
-        assert_eq!(stat_rank_color(1201), egui::Color32::from_rgb(255, 105, 180)); // UG
-        assert_eq!(stat_rank_color(1401), egui::Color32::from_rgb(30, 144, 255)); // UE
-        assert_eq!(stat_rank_color(1901), egui::Color32::from_rgb(255, 0, 0)); // US
-        assert_eq!(stat_rank_color(2000), egui::Color32::from_rgb(255, 0, 0)); // US9
+        assert_eq!(stat_rank_color(0), egui::Color32::from_rgb(150, 150, 150)); // G
+        assert_eq!(stat_rank_color(99), egui::Color32::from_rgb(150, 150, 150)); // G+
+        assert_eq!(stat_rank_color(100), egui::Color32::from_rgb(165, 135, 225)); // F
+        assert_eq!(stat_rank_color(199), egui::Color32::from_rgb(165, 135, 225)); // F+
+        assert_eq!(stat_rank_color(200), egui::Color32::from_rgb(210, 110, 215)); // E
+        assert_eq!(stat_rank_color(300), egui::Color32::from_rgb(60, 150, 225)); // D
+        assert_eq!(stat_rank_color(400), egui::Color32::from_rgb(110, 205, 80)); // C
+        assert_eq!(stat_rank_color(599), egui::Color32::from_rgb(110, 205, 80)); // C+
+        assert_eq!(stat_rank_color(600), egui::Color32::from_rgb(245, 105, 150)); // B
+        assert_eq!(stat_rank_color(800), egui::Color32::from_rgb(250, 140, 55)); // A
+        assert_eq!(stat_rank_color(1000), egui::Color32::from_rgb(250, 195, 70)); // S
+        assert_eq!(stat_rank_color(1100), egui::Color32::from_rgb(255, 220, 120)); // SS
+        assert_eq!(stat_rank_color(1200), egui::Color32::from_rgb(255, 220, 120)); // SS+
+                                                                                   // U-ladder stats recycle the primary palette by base letter.
+        assert_eq!(stat_rank_color(1201), egui::Color32::from_rgb(150, 150, 150)); // UG -> G
+        assert_eq!(stat_rank_color(1401), egui::Color32::from_rgb(210, 110, 215)); // UE -> E
+        assert_eq!(stat_rank_color(1901), egui::Color32::from_rgb(250, 195, 70)); // US -> S
+        assert_eq!(stat_rank_color(2000), egui::Color32::from_rgb(250, 195, 70));
+        // US9 -> S
     }
 
     #[test]
@@ -236,27 +216,27 @@ mod tests {
         // Non-prefixed: single segment in the base-letter color.
         let g = rank_badge_segments("G");
         assert_eq!(g.len(), 1);
-        assert_eq!(g[0], ("G".to_string(), egui::Color32::from_rgb(128, 128, 128)));
+        assert_eq!(g[0], ("G".to_string(), egui::Color32::from_rgb(150, 150, 150)));
 
         let cp = rank_badge_segments("C+");
         assert_eq!(cp.len(), 1);
-        assert_eq!(cp[0].1, egui::Color32::from_rgb(30, 144, 255)); // C base color
+        assert_eq!(cp[0].1, egui::Color32::from_rgb(110, 205, 80)); // C base color
 
         let ssp = rank_badge_segments("SS+");
         assert_eq!(ssp.len(), 1);
-        assert_eq!(ssp[0].1, egui::Color32::from_rgb(255, 215, 0)); // SS base color
+        assert_eq!(ssp[0].1, egui::Color32::from_rgb(255, 220, 120)); // SS base color
 
-        // U-rank: prefix in family color, remainder in base-letter color.
+        // U-rank: prefix in flat family color, remainder in primary base color.
         let ug3 = rank_badge_segments("UG3");
         assert_eq!(ug3.len(), 2);
-        assert_eq!(ug3[0], ("U".to_string(), egui::Color32::from_rgb(255, 105, 180)));
-        assert_eq!(ug3[1], ("G3".to_string(), egui::Color32::from_rgb(128, 128, 128)));
+        assert_eq!(ug3[0], ("U".to_string(), egui::Color32::from_rgb(90, 245, 244)));
+        assert_eq!(ug3[1], ("G3".to_string(), egui::Color32::from_rgb(150, 150, 150)));
 
         // L-rank with multi-digit sub-level.
         let lf12 = rank_badge_segments("LF12");
         assert_eq!(lf12.len(), 2);
-        assert_eq!(lf12[0], ("L".to_string(), egui::Color32::from_rgb(0, 206, 208)));
-        assert_eq!(lf12[1], ("F12".to_string(), egui::Color32::from_rgb(160, 82, 45)));
+        assert_eq!(lf12[0], ("L".to_string(), egui::Color32::from_rgb(191, 241, 213)));
+        assert_eq!(lf12[1], ("F12".to_string(), egui::Color32::from_rgb(165, 135, 225)));
     }
 
     #[test]
