@@ -102,7 +102,7 @@ pub fn scan_dir(dir: &Path) -> Vec<DetectedConflict> {
         return Vec::new();
     };
     let names = entries
-        .filter_map(|e| e.ok())
+        .filter_map(Result::ok)
         .filter_map(|e| e.file_name().into_string().ok());
     classify_conflicts(names)
 }
@@ -148,6 +148,7 @@ pub fn conflict_summary(conflicts: &[DetectedConflict]) -> Option<String> {
 }
 
 #[cfg(test)]
+#[allow(clippy::disallowed_methods)]
 mod tests {
     use super::*;
 
