@@ -15,6 +15,7 @@ extern "C" fn on_shutdown(event_id: u32, _data: *const c_void, _userdata: *mut c
     }
     let _ = panic::catch_unwind(AssertUnwindSafe(|| {
         crate::capture::uninstall();
+        hachimi_telemetry::shutdown();
         hlog_info!(target: "race-hud", "Shutdown: hooks removed, state cleared");
     }));
 }

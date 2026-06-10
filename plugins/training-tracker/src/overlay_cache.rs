@@ -128,6 +128,17 @@ extern "C" fn refresh_cache_cb() {
         EVAL_DIAG_LOGGED.store(false, AtomicOrdering::Relaxed);
     }
 
+    // Side-channel telemetry (no-op when disabled). Publish before moving the
+    // freshly-read data into CACHE.
+    crate::telemetry::publish(
+        snapshot.as_ref(),
+        &skills,
+        &evaluations,
+        &skill_shop,
+        skill_points,
+        &support_ids,
+    );
+
     if let Ok(mut guard) = CACHE.lock() {
         guard.snapshot = snapshot;
         guard.skills = skills;

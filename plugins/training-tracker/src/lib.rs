@@ -46,6 +46,7 @@ mod skill_shop;
 mod skill_shop_prefs;
 mod stat_targets;
 mod tabs;
+mod telemetry;
 mod ui;
 
 use hachimi_plugin_sdk::{hachimi_plugin, Sdk};
@@ -62,6 +63,8 @@ fn init(sdk: &Sdk) -> Result<(), &'static str> {
     );
 
     config::load();
+    // Side-channel telemetry (default disabled via hachimi/telemetry.json).
+    hachimi_telemetry::init(sdk.host_data_path("telemetry.json"));
     ui::register_ui();
 
     // Warm the GameTora catalog off-thread (a 2MB+ parse) so it's ready for

@@ -116,6 +116,12 @@ pub fn set_decoded(
     names: Vec<String>,
     mine: Vec<bool>,
 ) {
+    // Side-channel telemetry: publish the full decoded race one-shot (no-op when
+    // disabled). Done before moving the data into the locked state.
+    if let Some(d) = decoded.as_ref() {
+        crate::telemetry::publish_full(d, &names, &mine);
+    }
+
     let mut state = cell().lock().expect("race-hud state lock poisoned");
     state.signature = Some((race_info_addr, simdata_len));
     state.live = None;
@@ -222,6 +228,9 @@ pub fn sample_live(elapsed: f32) {
     for (i, row) in rows.iter_mut().enumerate() {
         row.rank = (i + 1) as u8;
     }
+
+    // Side-channel telemetry: publish the live frame (no-op when disabled).
+    crate::telemetry::publish_live(elapsed, &rows);
 
     let frame_count = state.frames.len();
     state.live = Some(LiveSnapshot {

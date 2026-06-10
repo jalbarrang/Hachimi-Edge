@@ -981,6 +981,7 @@ dependencies = [
  "flate2",
  "hachimi-plugin-abi",
  "hachimi-plugin-sdk",
+ "hachimi-telemetry",
  "serde",
  "serde_json",
 ]
@@ -1002,6 +1003,7 @@ version = "0.2.0"
 dependencies = [
  "hachimi-plugin-abi",
  "hachimi-plugin-sdk",
+ "hachimi-telemetry",
  "png 0.17.16",
  "serde",
  "serde_json",

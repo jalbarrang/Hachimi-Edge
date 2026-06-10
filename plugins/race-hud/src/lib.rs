@@ -13,6 +13,7 @@ mod capture;
 mod settings;
 mod sim;
 mod state;
+mod telemetry;
 mod tick;
 mod ui;
 
@@ -30,6 +31,8 @@ fn init(sdk: &Sdk) -> Result<(), &'static str> {
 
     state::init();
     settings::load();
+    // Side-channel telemetry (default disabled via hachimi/telemetry.json).
+    hachimi_telemetry::init(sdk.host_data_path("telemetry.json"));
     ui::register_ui();
 
     if !tick::subscribe_events() {
