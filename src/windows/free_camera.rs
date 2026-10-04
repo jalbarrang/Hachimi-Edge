@@ -703,6 +703,10 @@ impl FreeCameraState {
             self.scene = scene;
             self.reset_with_config(config);
         }
+
+        // The Race Camera window can switch the followed runner (and the mode) without a
+        // scene change, so keep those live rather than only applying them on entry.
+        self.race_target_index = config.race_target_index;
     }
 
     fn update_look_from_angles(&mut self) {
@@ -878,6 +882,34 @@ pub fn scene() -> CameraScene {
     STATE.lock().unwrap().scene
 }
 
+/// Whether race cut-ins and the race multi-camera should be suppressed because the
+/// Race Camera owns the view.
+///
+/// Deliberately does **not** depend on the scene state: cut-ins are queried from several
+/// paths, some of them before the scene has been set for the frame, so a scene check
+/// silently lets them through.
+pub fn should_suppress_race_cutins() -> bool {
+    let config = Hachimi::instance().config.load();
+    config.windows.free_camera.enabled && config.windows.free_camera.race_target_index >= 0
+}
+
+/// True at most once per second. The race-camera diagnostics run every frame; this keeps
+/// the log readable while still showing the live state at least once a second.
+pub fn throttle_1s(last_ms: &std::sync::atomic::AtomicU64) -> bool {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0);
+    let prev = last_ms.load(Ordering::Relaxed);
+    if now.saturating_sub(prev) >= 1000 {
+        last_ms.store(now, Ordering::Relaxed);
+        true
+    }
+    else {
+        false
+    }
+}
+
 pub fn is_scene_enabled(scene: CameraScene) -> bool {
     let config = Hachimi::instance().config.load();
     config.windows.free_camera.enabled &&
@@ -1016,6 +1048,12 @@ pub fn begin_live_director_update() {
 pub fn set_race_active() {
     let config = Hachimi::instance().config.load();
     if !config.windows.free_camera.enabled {
+        return;
+    }
+
+    // `race_target_index < 0` means "off": hand the race back to the game's camera.
+    if config.windows.free_camera.race_target_index < 0 {
+        end_scene(CameraScene::Race);
         return;
     }
 

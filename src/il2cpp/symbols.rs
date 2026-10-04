@@ -114,6 +114,29 @@ pub fn get_method_addr(class: *mut Il2CppClass, name: &CStr, args_count: i32) ->
     }
 }
 
+/// Resolves a method by name, trying each arity in order and returning the first that
+/// matches.
+///
+/// Signatures drift between game builds/regions: `RaceModelController.
+/// GetPrefabAttachTransform` takes a single `CharaAttachTransform` argument on Global
+/// but a `(part, name)` pair on JP. `get_method_addr` matches the parameter count
+/// exactly, so a hardcoded arity silently returns NULL on the other build and the
+/// caller then jumps to a null pointer. Prefer this over region checks when the only
+/// difference is the argument count.
+pub fn get_method_addr_any(class: *mut Il2CppClass, name: &CStr, arities: &[i32]) -> usize {
+    for arity in arities {
+        if let Ok(method) = get_method(class, name, *arity) {
+            unsafe { return (*method).methodPointer; }
+        }
+    }
+    warn!(
+        "get_method_addr_any: {} = NULL (tried {:?})",
+        name.to_str().unwrap_or("<invalid>"),
+        arities
+    );
+    0
+}
+
 pub fn get_method_overload_addr(class: *mut Il2CppClass, name: &str, params: &[Il2CppTypeEnum]) -> usize {
     let res = get_method_overload(class, name, params);
     if let Ok(method) = res {

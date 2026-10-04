@@ -115,6 +115,10 @@ mod RaceModelController;
 #[cfg(target_os = "windows")]
 mod RaceViewBase;
 #[cfg(target_os = "windows")]
+mod RaceViewReplayCutIn;
+#[cfg(target_os = "windows")]
+mod RaceSkillCutInReserveCreator;
+#[cfg(target_os = "windows")]
 mod RaceEffectManager;
 pub mod HorseData;
 pub mod HorseRaceInfo;
@@ -295,6 +299,8 @@ pub fn init() {
         RaceCameraEventBase::init(image);
         RaceModelController::init(image);
         RaceViewBase::init(image);
+        RaceViewReplayCutIn::init(image);
+        RaceSkillCutInReserveCreator::init(image);
         RaceEffectManager::init(image);
         TitleViewController::init(image);
         PartsScheduleBookAutoPlayScreen::init(image);

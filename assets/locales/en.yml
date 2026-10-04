@@ -161,6 +161,9 @@ config_editor:
   general_tab: "\uf013 General"
   graphics_tab: "\uf03e Graphics"
   gameplay_tab: "\uf11b Gameplay"
+  race_tab: "\uf0d1 Race"
+  race_camera: "Camera"
+  race_camera_window_key: "Race Camera window key"
   language: "Language"
   restore_defaults: "Restore Defaults"
   disable_overlay: "Disable overlay (GUI)"
@@ -364,6 +367,7 @@ race_stat_hud:
 
 free_camera:
   settings_title: "Free Camera Settings"
+  enabled: "Enable Race Camera"
   section_general: "General"
   section_live: "Live Theater"
   section_race: "Race"
@@ -397,7 +401,9 @@ free_camera:
   live_follow_smooth_lookat_step: "Live look-at smoothing"
   live_follow_smooth_pos_step: "Live position smoothing"
   live_first_person_offset: "Live first-person offset"
-  race_target_index: "Race target index (-1 = auto)"
+  race_target_index: "Race camera target (-1 = off)"
+  race_target_none: "None (game camera)"
+  race_target_no_race: "No race loaded"
   race_follow_offset: "Race follow offset"
   race_follow_distance: "Race follow distance"
   race_first_person_lookat_offset: "Race look-at offset"

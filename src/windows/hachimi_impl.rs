@@ -67,6 +67,8 @@ pub struct Config {
     pub race_stat_hud_toggle_key: u16,
     #[serde(default = "Config::default_race_playback_key")]
     pub race_playback_key: u16,
+    #[serde(default = "Config::default_race_camera_window_key")]
+    pub race_camera_window_key: u16,
     #[serde(default)]
     pub race_stat_hud_landscapeui_portrait: bool,
     #[serde(default)]
@@ -119,6 +121,7 @@ impl Config {
     fn default_hide_ingame_ui_hotkey_bind() -> u16 { windows::Win32::UI::Input::KeyboardAndMouse::VK_INSERT.0 }
     fn default_race_stat_hud_toggle_key() -> u16 { windows::Win32::UI::Input::KeyboardAndMouse::VK_H.0 }
     fn default_race_playback_key() -> u16 { windows::Win32::UI::Input::KeyboardAndMouse::VK_P.0 }
+    fn default_race_camera_window_key() -> u16 { windows::Win32::UI::Input::KeyboardAndMouse::VK_F9.0 }
     fn default_true() -> bool { true }
     fn default_gui_landscape_ratio() -> f32 { 1.0 }
     fn default_freeform_ui_scale_auto_ratio() -> f32 { 0.55 }

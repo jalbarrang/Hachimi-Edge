@@ -4358,6 +4358,16 @@ impl Gui {
     pub fn show_window(&mut self, window: BoxedWindow) {
         self.windows.push(window);
     }
+
+    /// Opens the Race Camera window, or closes it if it is already open.
+    pub fn toggle_race_camera_window(&mut self) {
+        if let Some(index) = self.windows.iter().position(|window| window.is_race_camera()) {
+            self.windows.remove(index);
+        }
+        else {
+            self.windows.push(Box::new(RaceCameraWindow::new()));
+        }
+    }
 }
 
 struct TweenInOutWithDelay {
@@ -4493,6 +4503,8 @@ impl Notification {
 pub trait Window {
     fn run(&mut self, ctx: &egui::Context) -> bool;
     fn plugin_window_id(&self) -> Option<i32> { None }
+    /// Marks the standalone Race Camera window so the hotkey can toggle it.
+    fn is_race_camera(&self) -> bool { false }
 }
 
 // Shared window creation function
@@ -4998,15 +5010,17 @@ struct ConfigEditor {
 enum ConfigEditorTab {
     General,
     Graphics,
-    Gameplay
+    Gameplay,
+    Race
 }
 
 impl ConfigEditorTab {
-    fn display_list() -> [(ConfigEditorTab, Cow<'static, str>); 3] {
+    fn display_list() -> [(ConfigEditorTab, Cow<'static, str>); 4] {
         [
             (ConfigEditorTab::General, t!("config_editor.general_tab")),
             (ConfigEditorTab::Graphics, t!("config_editor.graphics_tab")),
-            (ConfigEditorTab::Gameplay, t!("config_editor.gameplay_tab"))
+            (ConfigEditorTab::Gameplay, t!("config_editor.gameplay_tab")),
+            (ConfigEditorTab::Race, t!("config_editor.race_tab"))
         ]
     }
 
@@ -5014,15 +5028,17 @@ impl ConfigEditorTab {
         match self {
             ConfigEditorTab::General => ConfigEditorTab::Graphics,
             ConfigEditorTab::Graphics => ConfigEditorTab::Gameplay,
-            ConfigEditorTab::Gameplay => ConfigEditorTab::General,
+            ConfigEditorTab::Gameplay => ConfigEditorTab::Race,
+            ConfigEditorTab::Race => ConfigEditorTab::General,
         }
     }
 
     fn prev(self) -> ConfigEditorTab {
         match self {
-            ConfigEditorTab::General => ConfigEditorTab::Gameplay,
+            ConfigEditorTab::General => ConfigEditorTab::Race,
             ConfigEditorTab::Graphics => ConfigEditorTab::General,
             ConfigEditorTab::Gameplay => ConfigEditorTab::Graphics,
+            ConfigEditorTab::Race => ConfigEditorTab::Gameplay,
         }
     }
 
@@ -5031,6 +5047,7 @@ impl ConfigEditorTab {
             ConfigEditorTab::General => 0,
             ConfigEditorTab::Graphics => 1,
             ConfigEditorTab::Gameplay => 2,
+            ConfigEditorTab::Race => 3,
         }
     }
 
@@ -5039,6 +5056,7 @@ impl ConfigEditorTab {
             ConfigEditorTab::General => "body_scroll_general",
             ConfigEditorTab::Graphics => "body_scroll_graphics",
             ConfigEditorTab::Gameplay => "body_scroll_gameplay",
+            ConfigEditorTab::Race => "body_scroll_race",
         }
     }
 }
@@ -5886,42 +5904,6 @@ impl ConfigEditor {
                 ui.end_row();
             }
 
-            #[cfg(target_os = "windows")]
-            {
-                if should_show_option(search, &t!("config_editor.free_camera")) && Hachimi::instance().game.region != Region::Global {
-                    ui.label(t!("config_editor.free_camera"));
-                    ui.checkbox(&mut config.windows.free_camera.enabled, "");
-                    ui.end_row();
-
-                    if config.windows.free_camera.enabled {
-                        ui.label("");
-                        if ui.button(t!("free_camera.settings_title")).clicked() {
-                            thread::spawn(|| {
-                                Gui::instance().unwrap()
-                                .lock().unwrap()
-                                .show_window(Box::new(FreeCameraSettingsWindow::new()));
-                            });
-                        }
-                        ui.end_row();
-
-                        ui.label("");
-                        if ui.button(t!("free_camera.cheatsheet_title")).clicked() {
-                            thread::spawn(move || {
-                                Gui::instance().unwrap()
-                                .lock().unwrap()
-                                .show_window(Box::new(SimpleMarkdownDialog::new_with_height(
-                                    &t!("free_camera.cheatsheet_title"),
-                                    &t!("free_camera.cheatsheet_contents"),
-                                    400.0,
-                                    500.0
-                                )));
-                            });
-                        }
-                        ui.end_row();
-                    }
-                }
-            }
-
             if should_show_option(search, &t!("config_editor.live_theater_allow_same_chara")) {
                 ui.label(t!("config_editor.live_theater_allow_same_chara"));
                 ui.checkbox(&mut config.live_theater_allow_same_chara, "");
@@ -6341,6 +6323,147 @@ impl ConfigEditor {
             }
         }
         // Gameplay tab end
+
+        // Race tab
+        if show_all || tab == ConfigEditorTab::Race {
+            #[cfg(target_os = "windows")]
+            {
+                if should_show_option(search, &t!("config_editor.race_camera")) {
+                    ui.vertical(|ui| {
+                        ui.heading(t!("config_editor.race_camera"));
+                        ui.separator();
+                    });
+                    ui.end_row();
+                }
+
+                if should_show_option(search, &t!("config_editor.race_camera_window_key")) {
+                    ui.label(t!("config_editor.race_camera_window_key"));
+                    ui.horizontal(|ui| {
+                        if ui.button(t!("bind_key")).clicked() {
+                            std::thread::spawn(|| {
+                                let Some(gui_mutex) = Gui::instance() else { return };
+                                let mut gui = gui_mutex.lock().unwrap();
+                                gui.show_window(Box::new(SetKeybindWindow::new(|result| {
+                                    let Some(raw) = result else { return };
+
+                                    let hachimi = Hachimi::instance();
+                                    let mut new_config = hachimi.config.load().as_ref().clone();
+                                    new_config.windows.race_camera_window_key = raw;
+                                    save_and_reload_config(new_config);
+                                })));
+                            });
+                        }
+                        ui.label(crate::windows::utils::vk_to_display_label(config.windows.race_camera_window_key));
+                    });
+                    ui.end_row();
+                }
+
+                let mode_free = t!("free_camera.mode_free");
+                let mode_first_person = t!("free_camera.mode_first_person");
+                let mode_selfie_stick = t!("free_camera.mode_selfie_stick");
+                let mode_choices = [
+                    (FreeCameraMode::Free, mode_free.as_ref()),
+                    (FreeCameraMode::FirstPerson, mode_first_person.as_ref()),
+                    (FreeCameraMode::SelfieStick, mode_selfie_stick.as_ref()),
+                ];
+
+                if should_show_option(search, &t!("config_editor.free_camera")) {
+                    ui.label(t!("config_editor.free_camera"));
+                    ui.checkbox(&mut config.windows.free_camera.enabled, "");
+                    ui.end_row();
+                }
+
+                if config.windows.free_camera.enabled {
+                    let cfg = &mut config.windows.free_camera;
+
+                    if should_show_option(search, &t!("free_camera.mode")) {
+                        ui.label(t!("free_camera.mode"));
+                        Gui::run_combo(ui, "race_camera_mode", &mut cfg.mode, &mode_choices);
+                        ui.end_row();
+                    }
+
+                    if should_show_option(search, &t!("free_camera.race_target_index")) {
+                        ui.label(t!("free_camera.race_target_index"));
+                        ui.add(egui::DragValue::new(&mut cfg.race_target_index).speed(1.0).range(-1..=17));
+                        ui.end_row();
+                    }
+
+                    if should_show_option(search, &t!("free_camera.race_fov")) {
+                        ui.label(t!("free_camera.race_fov"));
+                        ui.add(egui::DragValue::new(&mut cfg.race_fov).speed(0.5).range(1.0..=120.0));
+                        ui.end_row();
+                    }
+
+                    if should_show_option(search, &t!("free_camera.race_move_step")) {
+                        ui.label(t!("free_camera.race_move_step"));
+                        ui.add(egui::DragValue::new(&mut cfg.race_move_step).speed(0.1).range(0.001..=100.0));
+                        ui.end_row();
+                    }
+
+                    if should_show_option(search, &t!("free_camera.race_follow_distance")) {
+                        ui.label(t!("free_camera.race_follow_distance"));
+                        ui.add(egui::DragValue::new(&mut cfg.race_follow_distance).speed(0.1).range(-100.0..=100.0));
+                        ui.end_row();
+                    }
+
+                    if should_show_option(search, &t!("free_camera.race_follow_offset")) {
+                        ui.label(t!("free_camera.race_follow_offset"));
+                        ui.horizontal(|ui| {
+                            ui.add(egui::DragValue::new(&mut cfg.race_follow_offset.x).speed(0.05).prefix("x "));
+                            ui.add(egui::DragValue::new(&mut cfg.race_follow_offset.y).speed(0.05).prefix("y "));
+                            ui.add(egui::DragValue::new(&mut cfg.race_follow_offset.z).speed(0.05).prefix("z "));
+                        });
+                        ui.end_row();
+                    }
+
+                    if should_show_option(search, &t!("free_camera.race_first_person_lookat_offset")) {
+                        ui.label(t!("free_camera.race_first_person_lookat_offset"));
+                        ui.horizontal(|ui| {
+                            ui.add(egui::DragValue::new(&mut cfg.race_first_person_lookat_offset.x).speed(0.01).prefix("x "));
+                            ui.add(egui::DragValue::new(&mut cfg.race_first_person_lookat_offset.y).speed(0.01).prefix("y "));
+                            ui.add(egui::DragValue::new(&mut cfg.race_first_person_lookat_offset.z).speed(0.01).prefix("z "));
+                        });
+                        ui.end_row();
+                    }
+
+                    if should_show_option(search, &t!("free_camera.remove_camera_effects")) {
+                        ui.label(t!("free_camera.remove_camera_effects"));
+                        ui.checkbox(&mut cfg.remove_camera_effects, "");
+                        ui.end_row();
+                    }
+
+                    if should_show_option(search, &t!("free_camera.show_overlay")) {
+                        ui.label(t!("free_camera.show_overlay"));
+                        ui.checkbox(&mut cfg.show_overlay, "");
+                        ui.end_row();
+                    }
+
+                    if should_show_option(search, &t!("free_camera.settings_title")) {
+                        ui.label("");
+                        ui.horizontal(|ui| {
+                            if ui.button(t!("free_camera.settings_title")).clicked() {
+                                thread::spawn(|| {
+                                    Gui::instance().unwrap().lock().unwrap()
+                                        .show_window(Box::new(FreeCameraSettingsWindow::new()));
+                                });
+                            }
+                            if ui.button(t!("free_camera.cheatsheet_title")).clicked() {
+                                thread::spawn(move || {
+                                    Gui::instance().unwrap().lock().unwrap()
+                                        .show_window(Box::new(SimpleMarkdownDialog::new_with_height(
+                                            &t!("free_camera.cheatsheet_title"),
+                                            &t!("free_camera.cheatsheet_contents"),
+                                            400.0,
+                                            500.0
+                                        )));
+                                });
+                            }
+                        });
+                        ui.end_row();
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -7380,6 +7503,196 @@ impl Window for LiveVocalsSwapWindow {
 }
 
 #[cfg(target_os = "windows")]
+#[derive(Clone, Copy, PartialEq)]
+enum RaceCameraTab {
+    LivePov,
+    Settings,
+}
+
+/// Standalone "Race Camera" window, toggled by `race_camera_window_key`.
+///
+/// Live POV picks which runner the race free camera follows (and enables it); Settings
+/// tunes the race camera offsets. Discrete picks apply immediately; slider edits apply
+/// on Save.
+struct RaceCameraWindow {
+    id: egui::Id,
+    tab: RaceCameraTab,
+    config: hachimi::Config,
+}
+
+impl RaceCameraWindow {
+    fn new() -> RaceCameraWindow {
+        RaceCameraWindow {
+            id: random_id(),
+            tab: RaceCameraTab::LivePov,
+            config: (**Hachimi::instance().config.load()).clone(),
+        }
+    }
+
+    fn live_pov_tab(&mut self, ui: &mut egui::Ui, scale: f32) -> bool {
+        let mut changed = false;
+
+        ui.horizontal(|ui| {
+            ui.label(t!("free_camera.enabled"));
+            if ui.checkbox(&mut self.config.windows.free_camera.enabled, "").changed() {
+                changed = true;
+            }
+        });
+
+        ui.horizontal(|ui| {
+            ui.label(t!("free_camera.mode"));
+            let mode_free = t!("free_camera.mode_free");
+            let mode_first_person = t!("free_camera.mode_first_person");
+            let mode_selfie_stick = t!("free_camera.mode_selfie_stick");
+            let choices = [
+                (FreeCameraMode::Free, mode_free.as_ref()),
+                (FreeCameraMode::FirstPerson, mode_first_person.as_ref()),
+                (FreeCameraMode::SelfieStick, mode_selfie_stick.as_ref()),
+            ];
+            if Gui::run_combo(ui, "race_camera_mode", &mut self.config.windows.free_camera.mode, &choices) {
+                changed = true;
+            }
+        });
+
+        ui.separator();
+        ui.label(t!("free_camera.race_target_index"));
+
+        if ui.selectable_label(self.config.windows.free_camera.race_target_index < 0, t!("free_camera.race_target_none").to_string()).clicked() {
+            self.config.windows.free_camera.race_target_index = -1;
+            changed = true;
+        }
+
+        let runners = HorseRaceInfo::runner_entries();
+        if runners.is_empty() {
+            ui.label(t!("free_camera.race_target_no_race").to_string());
+        }
+
+        egui::ScrollArea::vertical()
+            .id_salt(self.id.with("race_camera_runners"))
+            .max_height(280.0 * scale)
+            .auto_shrink([false, true])
+            .show(ui, |ui| {
+                for runner in runners {
+                    let label = if runner.is_player {
+                        format!("#{} {} (you)", runner.gate_no, runner.name)
+                    }
+                    else {
+                        format!("#{} {}", runner.gate_no, runner.name)
+                    };
+                    if ui.selectable_label(self.config.windows.free_camera.race_target_index == runner.index, label).clicked() {
+                        self.config.windows.free_camera.race_target_index = runner.index;
+                        changed = true;
+                    }
+                }
+            });
+
+        changed
+    }
+
+    fn settings_tab(&mut self, ui: &mut egui::Ui, scale: f32) -> bool {
+        let mut save = false;
+        let cfg = &mut self.config.windows.free_camera;
+
+        egui::Grid::new(self.id.with("race_camera_settings_grid"))
+            .striped(true)
+            .num_columns(2)
+            .spacing([24.0 * scale, 4.0 * scale])
+            .show(ui, |ui| {
+                ui.label(t!("free_camera.race_fov"));
+                ui.add(egui::DragValue::new(&mut cfg.race_fov).speed(0.5).range(1.0..=120.0));
+                ui.end_row();
+
+                ui.label(t!("free_camera.race_move_step"));
+                ui.add(egui::DragValue::new(&mut cfg.race_move_step).speed(0.1).range(0.001..=100.0));
+                ui.end_row();
+
+                ui.label(t!("free_camera.race_follow_distance"));
+                ui.add(egui::DragValue::new(&mut cfg.race_follow_distance).speed(0.1).range(-100.0..=100.0));
+                ui.end_row();
+
+                ui.label(t!("free_camera.race_follow_offset"));
+                ui.horizontal(|ui| {
+                    ui.add(egui::DragValue::new(&mut cfg.race_follow_offset.x).speed(0.05).prefix("x "));
+                    ui.add(egui::DragValue::new(&mut cfg.race_follow_offset.y).speed(0.05).prefix("y "));
+                    ui.add(egui::DragValue::new(&mut cfg.race_follow_offset.z).speed(0.05).prefix("z "));
+                });
+                ui.end_row();
+
+                ui.label(t!("free_camera.race_first_person_lookat_offset"));
+                ui.horizontal(|ui| {
+                    ui.add(egui::DragValue::new(&mut cfg.race_first_person_lookat_offset.x).speed(0.01).prefix("x "));
+                    ui.add(egui::DragValue::new(&mut cfg.race_first_person_lookat_offset.y).speed(0.01).prefix("y "));
+                    ui.add(egui::DragValue::new(&mut cfg.race_first_person_lookat_offset.z).speed(0.01).prefix("z "));
+                });
+                ui.end_row();
+
+                ui.label(t!("free_camera.remove_camera_effects"));
+                ui.checkbox(&mut cfg.remove_camera_effects, "");
+                ui.end_row();
+
+                ui.label(t!("free_camera.show_overlay"));
+                ui.checkbox(&mut cfg.show_overlay, "");
+                ui.end_row();
+            });
+
+        ui.add_space(6.0 * scale);
+        ui.horizontal(|ui| {
+            if ui.button(t!("save")).clicked() {
+                save = true;
+            }
+            if ui.button(t!("free_camera.settings_title")).clicked() {
+                thread::spawn(|| {
+                    Gui::instance().unwrap().lock().unwrap()
+                        .show_window(Box::new(FreeCameraSettingsWindow::new()));
+                });
+            }
+        });
+
+        save
+    }
+}
+
+impl Window for RaceCameraWindow {
+    fn is_race_camera(&self) -> bool {
+        true
+    }
+
+    fn run(&mut self, ctx: &egui::Context) -> bool {
+        let scale = get_scale(ctx);
+        let mut open = true;
+        let mut apply = false;
+
+        new_window(ctx, self.id, "Race Camera")
+            .default_width(360.0 * scale)
+            .max_width(420.0 * scale)
+            .max_height(520.0 * scale)
+            .resizable(true)
+            .open(&mut open)
+            .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    if ui.selectable_label(self.tab == RaceCameraTab::LivePov, "Live POV").clicked() {
+                        self.tab = RaceCameraTab::LivePov;
+                    }
+                    if ui.selectable_label(self.tab == RaceCameraTab::Settings, "Settings").clicked() {
+                        self.tab = RaceCameraTab::Settings;
+                    }
+                });
+                ui.separator();
+
+                match self.tab {
+                    RaceCameraTab::LivePov => apply |= self.live_pov_tab(ui, scale),
+                    RaceCameraTab::Settings => apply |= self.settings_tab(ui, scale),
+                }
+            });
+
+        if apply {
+            save_and_reload_config(self.config.clone());
+        }
+
+        open
+    }
+}
+
 struct FreeCameraSettingsWindow {
     id: egui::Id,
     config: hachimi::Config,
@@ -7593,7 +7906,27 @@ impl Window for FreeCameraSettingsWindow {
                                 ui.end_row();
 
                                 ui.label(t!("free_camera.race_target_index"));
-                                ui.add(egui::DragValue::new(&mut cfg.race_target_index).speed(1.0).range(-1..=17));
+                                ui.vertical(|ui| {
+                                    if ui.selectable_label(cfg.race_target_index < 0, t!("free_camera.race_target_none").to_string()).clicked() {
+                                        cfg.race_target_index = -1;
+                                    }
+
+                                    let runners = HorseRaceInfo::runner_entries();
+                                    if runners.is_empty() {
+                                        ui.label(t!("free_camera.race_target_no_race").to_string());
+                                    }
+                                    for runner in runners {
+                                        let label = if runner.is_player {
+                                            format!("#{} {} (you)", runner.gate_no, runner.name)
+                                        }
+                                        else {
+                                            format!("#{} {}", runner.gate_no, runner.name)
+                                        };
+                                        if ui.selectable_label(cfg.race_target_index == runner.index, label).clicked() {
+                                            cfg.race_target_index = runner.index;
+                                        }
+                                    }
+                                });
                                 ui.end_row();
 
                                 ui.vertical(|ui| {

@@ -1,12 +1,13 @@
 use crate::{
     core::{Hachimi, game::Region},
     il2cpp::{
+        ext::Il2CppStringExt,
         symbols::{get_field_from_name, get_method_addr, Array},
         types::*,
     }
 };
 
-use super::{RaceDefine, RaceInfo, RaceManager, RaceHorseManagerBase};
+use super::{HorseData, RaceDefine, RaceInfo, RaceManager, RaceHorseManagerBase};
 
 def_field_value_accessors!(get__position, set__position, POSITION_FIELD, Vector3_t);
 def_field_value_accessors!(get__rotationOnLane, set__rotationOnLane, ROTATION_ON_LANE_FIELD, Quaternion_t);
@@ -76,6 +77,64 @@ pub fn player_horse_info(horse_manager: *mut Il2CppObject) -> Option<*mut Il2Cpp
     }
 
     Some(player_info)
+}
+
+/// One runner in the current race, for the free camera picker.
+pub struct RunnerEntry {
+    pub index: i32,
+    pub gate_no: i32,
+    pub name: String,
+    pub is_player: bool,
+}
+
+/// Enumerates the current race's runners. Empty when no race is loaded.
+pub fn runner_entries() -> Vec<RunnerEntry> {
+    let race_manager = RaceManager::instance();
+    if race_manager.is_null() {
+        return Vec::new();
+    }
+    let horse_manager = RaceManager::get__horseManager(race_manager);
+    if horse_manager.is_null() {
+        return Vec::new();
+    }
+    let horse_infos = RaceHorseManagerBase::GetHorseRaceInfos(horse_manager);
+    if horse_infos.is_null() {
+        return Vec::new();
+    }
+    let arr: Array<*mut Il2CppObject> = Array::from(horse_infos);
+    let len = arr.len();
+    if len == 0 {
+        return Vec::new();
+    }
+    let player_idx = player_horse_index(horse_manager, len);
+
+    let mut entries = Vec::with_capacity(len);
+    for i in 0..len {
+        let info = unsafe { arr.as_slice()[i] };
+        if info.is_null() {
+            continue;
+        }
+
+        let mut gate_no = 0;
+        let mut name = String::new();
+        let data = get_HorseData(info);
+        if !data.is_null() {
+            gate_no = HorseData::get_GateNo(data);
+            let name_ptr = HorseData::get_charaName(data);
+            if !name_ptr.is_null() {
+                let s = unsafe { (*name_ptr).as_utf16str() };
+                name.extend(s.chars());
+            }
+        }
+
+        entries.push(RunnerEntry {
+            index: i as i32,
+            gate_no,
+            name,
+            is_player: i == player_idx,
+        });
+    }
+    entries
 }
 
 pub fn is_start_dash() -> bool {

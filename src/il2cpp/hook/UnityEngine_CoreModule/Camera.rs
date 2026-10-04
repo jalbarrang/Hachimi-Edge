@@ -1,7 +1,61 @@
 use crate::il2cpp::{api::il2cpp_resolve_icall, types::*};
 
 #[cfg(target_os = "windows")]
+use crate::il2cpp::symbols::get_method_addr;
+#[cfg(target_os = "windows")]
 use crate::windows::free_camera::{self, CameraScene};
+
+// The normalised viewport of a camera. The race free camera needs these to keep itself
+// full-screen when the game splits the view between two race cameras mid-race.
+#[cfg(target_os = "windows")]
+static mut GET_RECT_ADDR: usize = 0;
+#[cfg(target_os = "windows")]
+static mut SET_RECT_ADDR: usize = 0;
+#[cfg(target_os = "windows")]
+static mut GET_TARGET_TEXTURE_ADDR: usize = 0;
+
+#[cfg(target_os = "windows")]
+type CameraRectFn = extern "C" fn(this: *mut Il2CppObject, value: *mut Rect_t);
+
+/// Writes `Camera.rect`. A zero-sized rect makes the camera render nothing.
+#[cfg(target_os = "windows")]
+pub fn set_rect(camera: *mut Il2CppObject, rect: Rect_t) {
+    unsafe {
+        if camera.is_null() || SET_RECT_ADDR == 0 {
+            return;
+        }
+        let set: CameraRectFn = std::mem::transmute(SET_RECT_ADDR);
+        let mut rect = rect;
+        set(camera, &mut rect);
+    }
+}
+
+#[cfg(target_os = "windows")]
+pub fn get_rect(camera: *mut Il2CppObject) -> Option<Rect_t> {
+    unsafe {
+        if camera.is_null() || GET_RECT_ADDR == 0 {
+            return None;
+        }
+        let get: CameraRectFn = std::mem::transmute(GET_RECT_ADDR);
+        let mut rect = Rect_t { x: 0.0, y: 0.0, width: 0.0, height: 0.0 };
+        get(camera, &mut rect);
+        Some(rect)
+    }
+}
+
+/// Whether the camera renders into a `RenderTexture` instead of the display. Those are
+/// off-screen feeds (the racetrack monitor, the cut-in texture) and must not be resized.
+#[cfg(target_os = "windows")]
+pub fn renders_off_screen(camera: *mut Il2CppObject) -> bool {
+    unsafe {
+        if camera.is_null() || GET_TARGET_TEXTURE_ADDR == 0 {
+            return false;
+        }
+        let get: extern "C" fn(this: *mut Il2CppObject) -> *mut Il2CppObject =
+            std::mem::transmute(GET_TARGET_TEXTURE_ADDR);
+        !get(camera).is_null()
+    }
+}
 #[cfg(target_os = "windows")]
 type CameraGetFloatFn = extern "C" fn(this: *mut Il2CppObject) -> f32;
 #[cfg(target_os = "windows")]
@@ -64,6 +118,24 @@ pub fn init(_UnityEngine_CoreModule: *const Il2CppImage) {
 
     #[cfg(target_os = "windows")]
     {
+        unsafe {
+            GET_RECT_ADDR = il2cpp_resolve_icall(c"UnityEngine.Camera::get_rect_Injected(UnityEngine.Rect&)".as_ptr());
+            SET_RECT_ADDR = il2cpp_resolve_icall(c"UnityEngine.Camera::set_rect_Injected(UnityEngine.Rect&)".as_ptr());
+            GET_TARGET_TEXTURE_ADDR = il2cpp_resolve_icall(c"UnityEngine.Camera::get_targetTexture()".as_ptr());
+        }
+
+        if unsafe { GET_TARGET_TEXTURE_ADDR } == 0 {
+            // Some builds only expose it as a normal method on the class.
+            if let Ok(camera_class) = crate::il2cpp::symbols::get_class(
+                _UnityEngine_CoreModule, c"UnityEngine", c"Camera",
+            ) {
+                unsafe {
+                    GET_TARGET_TEXTURE_ADDR =
+                        get_method_addr(camera_class, c"get_targetTexture", 0);
+                }
+            }
+        }
+
         let get_fieldOfView_addr = il2cpp_resolve_icall(c"UnityEngine.Camera::get_fieldOfView()".as_ptr());
         new_hook!(get_fieldOfView_addr, Camera_get_fieldOfView);
 

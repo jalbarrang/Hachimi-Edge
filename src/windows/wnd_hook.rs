@@ -536,6 +536,13 @@ extern "system" fn wnd_proc(hwnd: HWND, umsg: c_uint, wparam: WPARAM, lparam: LP
                     Thread::main_thread().schedule(gui::toggle_race_stat_hud);
                 }
 
+                if current_key == Hachimi::instance().config.load().windows.race_camera_window_key {
+                    if let Some(mut gui) = Gui::instance().map(|m| m.lock().unwrap()) {
+                        gui.toggle_race_camera_window();
+                    }
+                    return LRESULT(0);
+                }
+
                 if matches!(Hachimi::instance().game.region, Region::Japan | Region::Global) && Hachimi::instance().config.load().race_stat_hud {
                     if let Some(i) = Hachimi::instance().config.load().race_stat_hud_clones.iter()
                         .position(|c| c.toggle_key == Some(current_key as i32)) {
